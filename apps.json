@@ -3,18 +3,18 @@
     "file": "3D-SURFACES.html",
     "title": "3D Surface Plotter",
     "category": "Visualization",
-    "description": "∑ 3D Surface Plotter Interactive z = f(x, y) Equation f(x, y) Supports + - * / ^ , sin , cos , exp , sqrt , log , abs , pi , e ."
+    "description": "Interactive 3D surface plotter for z = f(x, y) with presets, domain controls, colorscales and contour lines."
   },
   {
     "file": "EM-VECTOR-CALCULUS.html",
-    "title": "Electromagnetics & Vector Calculus Suite",
+    "title": "EM Vector Calculus",
     "category": "Reference",
-    "description": "EM · Vector Calculus 1 · Reference Cheat Sheet 2 · Point vs Vector Lab 3 · Two-Point Projection 4 · Line Integrals 5 · Surfaces & Volume 6 · Triple Integral Three.js · OrbitControl"
+    "description": "Six-part vector calculus lab: cheat sheet, point vs vector, projections, line integrals, surfaces & volume, triple integrals."
   },
   {
     "file": "maxwell3d.html",
-    "title": "Maxwell's Equations",
+    "title": "Maxwell 3D",
     "category": "Simulation",
-    "description": "Maxwell 3D − Equation / Preset A · Point Charge (+Q / −Q) B · Infinite Line Charge C · Parallel Plate Capacitor D · Magnetic Dipole / Bar Magnet E · Time-Varying Solenoid F · Strai"
+    "description": "Interactive 3D Maxwell's equations explorer with charge, capacitor, dipole and solenoid presets."
   }
 ]

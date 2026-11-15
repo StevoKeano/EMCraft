@@ -2,3 +2,9 @@
 *.bak
 *.bak-*
 .DS_Store
+
+# EMCraft setup artifacts
+.venv/
+vendor/
+__pycache__/
+*.py[cod]
