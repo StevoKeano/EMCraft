@@ -1,0 +1,1085 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>EM-LaunchCraft — Local Workspace Launcher</title>
+<meta name="description" content="Local workspace launcher. Every tool in your directory, unified in one fast interface." />
+<style>
+  /* ============================================================
+     EM-LaunchCraft — ArtCraft-inspired design system
+     ============================================================ */
+  :root {
+    --bg:        #09090B;
+    --surface:   #111114;
+    --hover:     #18181C;
+    --line:      rgba(255,255,255,0.08);
+    --line-hover:rgba(255,255,255,0.18);
+    --ink:       #F4F4F6;
+    --muted:     #8E8E98;
+    --idx:       #52525B;
+    --emerald:   #34D399;
+    --amber:     #FBBF24;
+    --radius:    14px;
+    --sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    --mono: "JetBrains Mono", "Fira Code", ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--sans);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  body {
+    min-height: 100vh;
+    background-image:
+      radial-gradient(900px 420px at 12% -8%, rgba(255,255,255,0.045), transparent 70%),
+      radial-gradient(700px 380px at 92% 0%, rgba(255,255,255,0.025), transparent 70%);
+    background-repeat: no-repeat;
+  }
+
+  a { color: inherit; text-decoration: none; }
+
+  ::selection { background: rgba(255,255,255,0.16); }
+
+  /* ---------- Sticky nav ---------- */
+  .nav {
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    padding: 14px 26px;
+    background: rgba(9,9,11,0.82);
+    backdrop-filter: blur(14px) saturate(140%);
+    -webkit-backdrop-filter: blur(14px) saturate(140%);
+    border-bottom: 1px solid var(--line);
+  }
+
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-weight: 700;
+    letter-spacing: -0.03em;
+    font-size: 15px;
+    white-space: nowrap;
+  }
+  .brand svg { display: block; }
+
+  .nav-spacer { flex: 1; }
+
+  .search-wrap {
+    position: relative;
+    display: flex;
+    align-items: center;
+    min-width: 220px;
+  }
+  .search-wrap input {
+    width: 100%;
+    padding: 9px 12px 9px 34px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    color: var(--ink);
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 0.02em;
+    outline: none;
+    transition: border-color .18s ease, background .18s ease;
+  }
+  .search-wrap input::placeholder { color: var(--idx); }
+  .search-wrap input:focus {
+    border-color: var(--line-hover);
+    background: var(--hover);
+  }
+  .search-wrap .slash {
+    position: absolute;
+    left: 11px;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--idx);
+    pointer-events: none;
+  }
+
+  .path-indicator {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--muted);
+    letter-spacing: 0.03em;
+    padding: 6px 10px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--surface);
+    max-width: 260px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .btn {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 8px 13px;
+    border-radius: 9px;
+    border: 1px solid var(--line);
+    background: var(--surface);
+    color: var(--ink);
+    cursor: pointer;
+    transition: background .16s ease, border-color .16s ease, transform .12s ease;
+    white-space: nowrap;
+  }
+  .btn:hover { background: var(--hover); border-color: var(--line-hover); }
+  .btn:active { transform: translateY(1px); }
+  .btn.primary {
+    background: #FFFFFF;
+    color: #09090B;
+    border-color: #FFFFFF;
+    font-weight: 600;
+  }
+  .btn.primary:hover { background: #E7E7EA; border-color: #E7E7EA; }
+  .btn[aria-pressed="true"] {
+    background: var(--hover);
+    border-color: var(--line-hover);
+    color: var(--ink);
+  }
+
+  /* ---------- Layout ---------- */
+  main {
+    max-width: 1240px;
+    margin: 0 auto;
+    padding: 0 26px 90px;
+  }
+
+  /* ---------- Section dividers ---------- */
+  .divider {
+    display: flex;
+    align-items: baseline;
+    gap: 14px;
+    padding: 34px 0 18px;
+    border-bottom: 1px solid var(--line);
+    margin-bottom: 26px;
+  }
+  .divider .num {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.16em;
+    color: var(--idx);
+    text-transform: uppercase;
+  }
+  .divider .label {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.16em;
+    color: var(--muted);
+    text-transform: uppercase;
+  }
+  .divider .rule { flex: 1; height: 1px; background: var(--line); }
+  .divider .meta {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--idx);
+    letter-spacing: 0.06em;
+  }
+
+  /* ---------- Hero ---------- */
+  .hero { padding: 46px 0 8px; }
+  .hero h1 {
+    margin: 0 0 14px;
+    font-size: clamp(38px, 6.2vw, 62px);
+    font-weight: 700;
+    letter-spacing: -0.03em;
+    line-height: 1.02;
+  }
+  .hero p.lede {
+    margin: 0 0 22px;
+    max-width: 620px;
+    font-size: 15px;
+    line-height: 1.55;
+    color: var(--muted);
+  }
+  .hero .counter {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 20px;
+  }
+  .hero .counter .dot {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--emerald);
+    box-shadow: 0 0 10px rgba(52,211,153,0.55);
+  }
+
+  /* ---------- Quick-jump pill strip ---------- */
+  .pillstrip {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 4px 0 6px;
+  }
+  .pill {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    padding: 7px 13px;
+    border-radius: 9999px;
+    border: 1px solid var(--line);
+    background: var(--surface);
+    color: var(--muted);
+    cursor: pointer;
+    transition: all .16s ease;
+    white-space: nowrap;
+  }
+  .pill:hover { background: var(--hover); border-color: var(--line-hover); color: var(--ink); }
+  .pill.active {
+    background: #FFFFFF;
+    color: #09090B;
+    border-color: #FFFFFF;
+    font-weight: 600;
+  }
+
+  /* ---------- Grid of tiles ---------- */
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+    gap: 20px;
+  }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    transition: border-color .18s ease, background .18s ease, transform .18s ease;
+  }
+  .card:hover {
+    border-color: var(--line-hover);
+    background: var(--hover);
+    transform: translateY(-2px);
+  }
+
+  .card-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 16px 10px;
+  }
+  .card-index {
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 0.12em;
+    color: var(--idx);
+  }
+  .card-cat {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--muted);
+    padding: 4px 9px;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    background: rgba(255,255,255,0.02);
+  }
+
+  /* 16:10 preview window */
+  .preview {
+    position: relative;
+    aspect-ratio: 16 / 10;
+    margin: 0 16px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    overflow: hidden;
+    background: #0C0C0F;
+  }
+  .preview iframe {
+    position: absolute;
+    top: 0; left: 0;
+    width: 400%;
+    height: 400%;
+    border: 0;
+    transform: scale(0.25);
+    transform-origin: top left;
+    pointer-events: none;
+    background: transparent;
+    z-index: 2;
+  }
+  .preview-fallback {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    background:
+      linear-gradient(180deg, rgba(255,255,255,0.035), rgba(255,255,255,0.008)),
+      repeating-linear-gradient(0deg, rgba(255,255,255,0.05) 0 1px, transparent 1px 22px),
+      repeating-linear-gradient(90deg, rgba(255,255,255,0.05) 0 1px, transparent 1px 22px);
+  }
+  .preview-fallback .glyph {
+    font-family: var(--mono);
+    font-size: 20px;
+    letter-spacing: 0.18em;
+    color: rgba(255,255,255,0.42);
+  }
+  .preview-fallback .sub {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--idx);
+  }
+  .preview .badge-live {
+    position: absolute;
+    right: 8px; bottom: 8px;
+    z-index: 3;
+    font-family: var(--mono);
+    font-size: 9px;
+    letter-spacing: 0.14em;
+    padding: 3px 7px;
+    border-radius: 9999px;
+    background: rgba(9,9,11,0.75);
+    border: 1px solid var(--line);
+    color: var(--muted);
+    backdrop-filter: blur(6px);
+  }
+
+  .card-body { padding: 14px 16px 6px; }
+  .card-title {
+    margin: 0 0 6px;
+    font-size: 16px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    line-height: 1.25;
+  }
+  .card-desc {
+    margin: 0;
+    font-size: 12.5px;
+    line-height: 1.5;
+    color: var(--muted);
+    min-height: 38px;
+  }
+
+  .card-footer {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 16px 14px;
+    margin-top: auto;
+    border-top: 1px solid var(--line);
+  }
+  .file-badge {
+    font-family: var(--mono);
+    font-size: 10.5px;
+    color: var(--idx);
+    letter-spacing: 0.02em;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex: 1;
+    min-width: 0;
+  }
+  .status {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    padding: 4px 9px;
+    border-radius: 9999px;
+    border: 1px solid rgba(52,211,153,0.35);
+    color: var(--emerald);
+    background: rgba(52,211,153,0.08);
+    white-space: nowrap;
+  }
+  .status.web {
+    border-color: rgba(251,191,36,0.35);
+    color: var(--amber);
+    background: rgba(251,191,36,0.08);
+  }
+  .launch {
+    font-family: var(--mono);
+    font-size: 10.5px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 7px 12px;
+    border-radius: 8px;
+    background: #FFFFFF;
+    color: #09090B;
+    border: 1px solid #FFFFFF;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background .16s ease;
+  }
+  .launch:hover { background: #E7E7EA; }
+
+  /* ---------- Compact index view ---------- */
+  .index-table {
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    overflow: hidden;
+    background: var(--surface);
+  }
+  .index-row {
+    display: grid;
+    grid-template-columns: 52px 1fr 150px 220px 120px;
+    align-items: center;
+    gap: 14px;
+    padding: 13px 16px;
+    border-bottom: 1px solid var(--line);
+    transition: background .14s ease;
+  }
+  .index-row:last-child { border-bottom: 0; }
+  .index-row:hover { background: var(--hover); }
+  .index-row .kbd {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--idx);
+    letter-spacing: 0.1em;
+  }
+  .index-row .kbd b { color: var(--ink); font-weight: 600; }
+  .index-row .name {
+    font-weight: 600;
+    font-size: 14px;
+    letter-spacing: -0.01em;
+  }
+  .index-row .cat {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .index-row .file {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--idx);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .index-row .go {
+    justify-self: end;
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 6px 10px;
+    border-radius: 7px;
+    border: 1px solid var(--line);
+    background: transparent;
+    color: var(--ink);
+    cursor: pointer;
+  }
+  .index-row .go:hover { background: #FFFFFF; color: #09090B; border-color: #FFFFFF; }
+
+  /* ---------- Principles ---------- */
+  .principles {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 20px;
+  }
+  .principle {
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--surface);
+    padding: 18px 18px 20px;
+  }
+  .principle .pnum {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.16em;
+    color: var(--idx);
+    margin-bottom: 10px;
+  }
+  .principle h3 {
+    margin: 0 0 8px;
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+  }
+  .principle p {
+    margin: 0;
+    font-size: 12.5px;
+    line-height: 1.55;
+    color: var(--muted);
+  }
+
+  /* ---------- Empty state ---------- */
+  .empty {
+    border: 1px dashed var(--line);
+    border-radius: var(--radius);
+    padding: 40px 20px;
+    text-align: center;
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 0.06em;
+  }
+
+  /* ---------- Toast ---------- */
+  .toast {
+    position: fixed;
+    left: 50%;
+    bottom: 26px;
+    transform: translateX(-50%) translateY(12px);
+    background: #FFFFFF;
+    color: #09090B;
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    padding: 10px 16px;
+    border-radius: 9999px;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity .2s ease, transform .2s ease;
+    z-index: 100;
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  .hidden { display: none !important; }
+
+  @media (max-width: 720px) {
+    .nav { flex-wrap: wrap; gap: 10px; padding: 12px 16px; }
+    .path-indicator { display: none; }
+    main { padding: 0 16px 70px; }
+    .index-row { grid-template-columns: 40px 1fr 90px; }
+    .index-row .file, .index-row .cat { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ================= NAV ================= -->
+<header class="nav">
+  <div class="brand">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <rect x="1.5" y="1.5" width="21" height="21" rx="5" stroke="#F4F4F6" stroke-width="1.4"/>
+      <path d="M6 17 L12 6 L18 17" stroke="#F4F4F6" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+      <circle cx="12" cy="14" r="1.6" fill="#F4F4F6"/>
+    </svg>
+    <span>EM-LaunchCraft</span>
+  </div>
+
+  <div class="nav-spacer"></div>
+
+  <div class="search-wrap">
+    <span class="slash">/</span>
+    <input id="search" type="search" placeholder="filter apps…" autocomplete="off" spellcheck="false" aria-label="Filter apps" />
+  </div>
+
+  <div class="path-indicator" id="pathIndicator">./</div>
+
+  <button class="btn" id="rescanBtn" title="Re-scan directory for new apps">↻ Rescan</button>
+  <button class="btn" id="viewBtn" aria-pressed="false" title="Toggle grid / compact index view">◫ Index</button>
+  <button class="btn" id="previewBtn" aria-pressed="true" title="Toggle live iframe previews">◻ Previews</button>
+</header>
+
+<main>
+
+  <!-- ================= 01 / LAUNCHER ================= -->
+  <section class="hero">
+    <div class="divider" style="padding-top:0;border-bottom:0;margin-bottom:22px;">
+      <span class="num">01 / LAUNCHER</span>
+      <span class="rule"></span>
+      <span class="meta" id="heroMeta">—</span>
+    </div>
+
+    <h1>EM-LaunchCraft</h1>
+    <p class="lede">Local workspace launcher. Every tool in your directory, unified in one fast interface.</p>
+
+    <div class="counter">
+      <span class="dot"></span>
+      <span id="appCount">0 apps</span>
+      <span style="color:var(--idx)">·</span>
+      <span>Local Directory</span>
+    </div>
+
+    <div class="pillstrip" id="pillStrip"></div>
+  </section>
+
+  <!-- ================= 02 / THE LINEUP ================= -->
+  <div class="divider">
+    <span class="num">02 / THE LINEUP</span>
+    <span class="label">Apps</span>
+    <span class="rule"></span>
+    <span class="meta" id="lineupMeta">0 results</span>
+  </div>
+
+  <div id="gridView" class="grid"></div>
+  <div id="indexView" class="index-table hidden"></div>
+  <div id="emptyState" class="empty hidden">NO MATCHING APPS — adjust filter or rescan</div>
+
+  <!-- ================= 03 / PRINCIPLES ================= -->
+  <div class="divider">
+    <span class="num">03 / PRINCIPLES</span>
+    <span class="label">Design notes</span>
+    <span class="rule"></span>
+    <span class="meta">zero dependencies</span>
+  </div>
+
+  <div class="principles">
+    <div class="principle">
+      <div class="pnum">01</div>
+      <h3>Zero-config discovery</h3>
+      <p>A baked manifest ships with the page so it works over <code>file://</code>. A runtime scanner merges any new HTML files dropped into the folder.</p>
+    </div>
+    <div class="principle">
+      <div class="pnum">02</div>
+      <h3>One interface, every tool</h3>
+      <p>Each page becomes a tile with a live 16:10 preview, category tag, filename badge and a single launch action.</p>
+    </div>
+    <div class="principle">
+      <div class="pnum">03</div>
+      <h3>Keyboard-first</h3>
+      <p><code>/</code> focuses search, <code>Enter</code> launches the first match, <code>1–9</code> launch rows in index view, <code>Esc</code> clears.</p>
+    </div>
+  </div>
+
+</main>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ============================================================
+   EM-LaunchCraft — vanilla JS, no dependencies
+   ============================================================ */
+
+/* ---------- 1. BAKED MANIFEST (works over file://) ---------- */
+const APPS_MANIFEST = [
+  {
+    file: "3D-SURFACES.html",
+    title: "3D Surface Plotter",
+    category: "Visualization",
+    description: "Interactive 3D surface plotter for z = f(x, y) with presets, domain controls, colorscales and contour lines."
+  },
+  {
+    file: "EM-VECTOR-CALCULUS.html",
+    title: "EM Vector Calculus",
+    category: "Reference",
+    description: "Six-part vector calculus lab: cheat sheet, point vs vector, projections, line integrals, surfaces & volume, triple integrals."
+  },
+  {
+    file: "maxwell3d.html",
+    title: "Maxwell 3D",
+    category: "Simulation",
+    description: "Interactive 3D Maxwell's equations explorer with charge, capacitor, dipole and solenoid presets."
+  }
+];
+
+/* Files that are never treated as apps */
+const EXCLUDE = new Set(["index.html", "em-launchcraft.html", "apps.json"]);
+
+/* ---------- 2. State ---------- */
+const state = {
+  apps: [],
+  query: "",
+  category: "all",
+  view: "grid",
+  previews: true
+};
+
+/* ---------- 3. Helpers ---------- */
+const $ = (sel) => document.querySelector(sel);
+
+function toast(msg) {
+  const t = $("#toast");
+  t.textContent = msg;
+  t.classList.add("show");
+  clearTimeout(toast._t);
+  toast._t = setTimeout(() => t.classList.remove("show"), 1800);
+}
+
+function cleanTitle(raw) {
+  if (!raw) return "";
+  // "3D Surface Plotter — z = f(x, y)" -> "3D Surface Plotter"
+  let t = raw.split(/[—–|·]/)[0].trim();
+  t = t.replace(/\s+/g, " ");
+  return t;
+}
+
+function titleFromFilename(file) {
+  const base = file.replace(/\.html?$/i, "").replace(/\/index$/i, "");
+  const last = base.split("/").filter(Boolean).pop() || base;
+  return last
+    .replace(/[-_]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/\b([a-z])/g, (m) => m.toUpperCase())
+    .replace(/\b([A-Z]{1,3})\b/g, (m) => m.toUpperCase());
+}
+
+function inferCategory(file, title) {
+  const s = (file + " " + title).toLowerCase();
+  if (/maxwell|field|physics|simulat|solenoid|dipole/.test(s)) return "Simulation";
+  if (/calculus|vector|reference|cheat|integral/.test(s)) return "Reference";
+  if (/surface|plot|graph|chart|visual|3d/.test(s)) return "Visualization";
+  if (/editor|craft|studio|canvas|paint/.test(s)) return "Editor";
+  if (/dashboard|admin|panel|stats/.test(s)) return "Dashboard";
+  if (/game|play|arcade/.test(s)) return "Game";
+  if (/tool|util|calc|convert/.test(s)) return "Utility";
+  return "App";
+}
+
+function normalize(app) {
+  const file = app.file;
+  const title = app.title || titleFromFilename(file);
+  return {
+    file,
+    title,
+    category: app.category || inferCategory(file, title),
+    description: app.description || "Local HTML application in this workspace.",
+    status: /^https?:/i.test(file) ? "WEB" : "LOCAL APP"
+  };
+}
+
+function dedupe(list) {
+  const seen = new Map();
+  for (const a of list) {
+    if (!a || !a.file) continue;
+    if (EXCLUDE.has(a.file.split("/").pop())) continue;
+    if (!seen.has(a.file)) seen.set(a.file, normalize(a));
+  }
+  return [...seen.values()];
+}
+
+/* ---------- 4. Dynamic runtime discovery ---------- */
+async function fetchTitleAndDesc(file) {
+  try {
+    const res = await fetch(file, { cache: "no-store" });
+    if (!res.ok) return {};
+    const html = await res.text();
+    const doc = new DOMParser().parseFromString(html, "text/html");
+    const t = doc.querySelector("title");
+    const d = doc.querySelector('meta[name="description"]');
+    return {
+      title: t ? cleanTitle(t.textContent) : "",
+      description: d ? d.getAttribute("content").trim() : ""
+    };
+  } catch (e) {
+    return {};
+  }
+}
+
+async function discoverRuntime() {
+  const found = [];
+
+  /* (a) apps.json if present */
+  try {
+    const r = await fetch("./apps.json", { cache: "no-store" });
+    if (r.ok) {
+      const data = await r.json();
+      const arr = Array.isArray(data) ? data : (data.apps || []);
+      for (const a of arr) {
+        if (a && a.file) found.push({ file: a.file, title: a.title, category: a.category, description: a.description });
+      }
+    }
+  } catch (e) { /* not served / not present */ }
+
+  /* (b) directory listing */
+  try {
+    const r = await fetch("./", { cache: "no-store" });
+    if (r.ok) {
+      const html = await r.text();
+      const doc = new DOMParser().parseFromString(html, "text/html");
+      const links = [...doc.querySelectorAll("a[href]")];
+      for (const a of links) {
+        const href = a.getAttribute("href");
+        if (!href) continue;
+        if (!/\.html?$/i.test(href)) continue;
+        if (href.startsWith("http")) continue;
+        const file = decodeURIComponent(href.replace(/^\.\//, ""));
+        if (EXCLUDE.has(file.split("/").pop())) continue;
+        found.push({ file });
+      }
+    }
+  } catch (e) { /* file:// or no listing */ }
+
+  /* (c) enrich with <title>/<meta description> */
+  const enriched = [];
+  for (const item of found) {
+    if (item.title) { enriched.push(item); continue; }
+    const meta = await fetchTitleAndDesc(item.file);
+    enriched.push({ ...item, ...meta });
+  }
+
+  return enriched;
+}
+
+/* ---------- 5. Rendering ---------- */
+function filtered() {
+  const q = state.query.trim().toLowerCase();
+  return state.apps.filter((a) => {
+    if (state.category !== "all" && a.category !== state.category) return false;
+    if (!q) return true;
+    return (
+      a.title.toLowerCase().includes(q) ||
+      a.category.toLowerCase().includes(q) ||
+      a.file.toLowerCase().includes(q) ||
+      a.description.toLowerCase().includes(q)
+    );
+  });
+}
+
+function pad2(n) { return String(n).padStart(2, "0"); }
+
+function renderPills() {
+  const strip = $("#pillStrip");
+  const cats = ["all", ...new Set(state.apps.map((a) => a.category))];
+  strip.innerHTML = "";
+  for (const c of cats) {
+    const b = document.createElement("button");
+    b.className = "pill" + (state.category === c ? " active" : "");
+    b.textContent = c === "all" ? "ALL APPS" : c.toUpperCase();
+    b.addEventListener("click", () => {
+      state.category = c;
+      render();
+    });
+    strip.appendChild(b);
+  }
+  // quick-jump to individual apps
+  for (const a of state.apps) {
+    const b = document.createElement("button");
+    b.className = "pill";
+    b.textContent = "↗ " + a.title;
+    b.title = a.file;
+    b.addEventListener("click", () => launch(a.file));
+    strip.appendChild(b);
+  }
+}
+
+function renderGrid(list) {
+  const grid = $("#gridView");
+  grid.innerHTML = "";
+  list.forEach((a, i) => {
+    const card = document.createElement("article");
+    card.className = "card";
+
+    const top = document.createElement("div");
+    top.className = "card-top";
+    top.innerHTML = `<span class="card-index">${pad2(i + 1)}</span>
+                     <span class="card-cat">${a.category}</span>`;
+
+    const preview = document.createElement("div");
+    preview.className = "preview";
+
+    const fallback = document.createElement("div");
+    fallback.className = "preview-fallback";
+    const initials = a.title.replace(/[^A-Za-z0-9]/g, "").slice(0, 3).toUpperCase() || "APP";
+    fallback.innerHTML = `<div class="glyph">${initials}</div>
+                          <div class="sub">${a.category} · preview</div>`;
+
+    preview.appendChild(fallback);
+
+    if (state.previews) {
+      const frame = document.createElement("iframe");
+      frame.src = a.file;
+      frame.loading = "lazy";
+      frame.setAttribute("aria-hidden", "true");
+      frame.setAttribute("tabindex", "-1");
+      frame.setAttribute("sandbox", "allow-scripts allow-same-origin");
+      preview.appendChild(frame);
+
+      const badge = document.createElement("div");
+      badge.className = "badge-live";
+      badge.textContent = "LIVE";
+      preview.appendChild(badge);
+    }
+
+    const body = document.createElement("div");
+    body.className = "card-body";
+    body.innerHTML = `<h2 class="card-title">${escapeHtml(a.title)}</h2>
+                      <p class="card-desc">${escapeHtml(a.description)}</p>`;
+
+    const footer = document.createElement("div");
+    footer.className = "card-footer";
+    footer.innerHTML = `<span class="file-badge">./${escapeHtml(a.file)}</span>
+                        <span class="status ${a.status === "WEB" ? "web" : ""}">${a.status}</span>`;
+    const btn = document.createElement("button");
+    btn.className = "launch";
+    btn.textContent = "Launch App ↗";
+    btn.addEventListener("click", () => launch(a.file));
+    footer.appendChild(btn);
+
+    card.appendChild(top);
+    card.appendChild(preview);
+    card.appendChild(body);
+    card.appendChild(footer);
+    grid.appendChild(card);
+  });
+}
+
+function renderIndex(list) {
+  const table = $("#indexView");
+  table.innerHTML = "";
+  list.forEach((a, i) => {
+    const row = document.createElement("div");
+    row.className = "index-row";
+    const key = i < 9 ? `<b>${i + 1}</b>` : "—";
+    row.innerHTML = `<span class="kbd">${key}</span>
+                     <span class="name">${escapeHtml(a.title)}</span>
+                     <span class="cat">${escapeHtml(a.category)}</span>
+                     <span class="file">./${escapeHtml(a.file)}</span>`;
+    const go = document.createElement("button");
+    go.className = "go";
+    go.textContent = "Launch ↗";
+    go.addEventListener("click", () => launch(a.file));
+    row.appendChild(go);
+    table.appendChild(row);
+  });
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, (c) => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+  }[c]));
+}
+
+function render() {
+  const list = filtered();
+
+  $("#appCount").textContent = `${state.apps.length} app${state.apps.length === 1 ? "" : "s"}`;
+  $("#heroMeta").textContent = `${state.apps.length} discovered · ${new Set(state.apps.map(a => a.category)).size} categories`;
+  $("#lineupMeta").textContent = `${list.length} result${list.length === 1 ? "" : "s"}`;
+
+  renderPills();
+
+  const grid = $("#gridView");
+  const index = $("#indexView");
+  const empty = $("#emptyState");
+
+  if (list.length === 0) {
+    grid.classList.add("hidden");
+    index.classList.add("hidden");
+    empty.classList.remove("hidden");
+    return;
+  }
+  empty.classList.add("hidden");
+
+  if (state.view === "grid") {
+    grid.classList.remove("hidden");
+    index.classList.add("hidden");
+    renderGrid(list);
+  } else {
+    grid.classList.add("hidden");
+    index.classList.remove("hidden");
+    renderIndex(list);
+  }
+}
+
+/* ---------- 6. Launch ---------- */
+function launch(file) {
+  toast("Launching ./" + file);
+  window.open(file, "_blank", "noopener");
+}
+
+/* ---------- 7. Keyboard ---------- */
+document.addEventListener("keydown", (e) => {
+  const active = document.activeElement;
+  const inInput = active && (active.tagName === "INPUT" || active.tagName === "TEXTAREA");
+
+  if (e.key === "/" && !inInput) {
+    e.preventDefault();
+    $("#search").focus();
+    return;
+  }
+
+  if (e.key === "Escape" && inInput) {
+    $("#search").value = "";
+    state.query = "";
+    render();
+    $("#search").blur();
+    return;
+  }
+
+  if (e.key === "Enter") {
+    const list = filtered();
+    if (list.length) launch(list[0].file);
+    return;
+  }
+
+  if (state.view === "index" && /^[1-9]$/.test(e.key) && !inInput) {
+    const list = filtered();
+    const idx = parseInt(e.key, 10) - 1;
+    if (list[idx]) launch(list[idx].file);
+  }
+});
+
+/* ---------- 8. Controls ---------- */
+$("#search").addEventListener("input", (e) => {
+  state.query = e.target.value;
+  render();
+});
+
+$("#viewBtn").addEventListener("click", () => {
+  state.view = state.view === "grid" ? "index" : "grid";
+  $("#viewBtn").setAttribute("aria-pressed", state.view === "index");
+  $("#viewBtn").textContent = state.view === "grid" ? "◫ Index" : "▦ Grid";
+  render();
+});
+
+$("#previewBtn").addEventListener("click", () => {
+  state.previews = !state.previews;
+  $("#previewBtn").setAttribute("aria-pressed", state.previews);
+  $("#previewBtn").textContent = state.previews ? "◻ Previews" : "◻ No previews";
+  render();
+});
+
+$("#rescanBtn").addEventListener("click", async () => {
+  $("#rescanBtn").textContent = "↻ Scanning…";
+  const found = await discoverRuntime();
+  const before = state.apps.length;
+  state.apps = dedupe([...APPS_MANIFEST, ...found]);
+  render();
+  $("#rescanBtn").textContent = "↻ Rescan";
+  const added = state.apps.length - before;
+  toast(added > 0 ? `+${added} new app${added === 1 ? "" : "s"} found` : "No new apps found");
+});
+
+/* ---------- 9. Boot ---------- */
+function setPathIndicator() {
+  try {
+    const p = decodeURIComponent(new URL(".", location.href).pathname);
+    $("#pathIndicator").textContent = p || "./";
+    $("#pathIndicator").title = p;
+  } catch (e) {
+    $("#pathIndicator").textContent = "./";
+  }
+}
+
+async function boot() {
+  setPathIndicator();
+  state.apps = dedupe(APPS_MANIFEST);
+  render();
+
+  // Runtime discovery (silently merges new files when served over HTTP)
+  const found = await discoverRuntime();
+  if (found.length) {
+    state.apps = dedupe([...APPS_MANIFEST, ...found]);
+    render();
+  }
+}
+
+boot();
+</script>
+</body>
+</html>

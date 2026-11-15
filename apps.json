@@ -1,0 +1,20 @@
+[
+  {
+    "file": "3D-SURFACES.html",
+    "title": "3D Surface Plotter",
+    "category": "Visualization",
+    "description": "∑ 3D Surface Plotter Interactive z = f(x, y) Equation f(x, y) Supports + - * / ^ , sin , cos , exp , sqrt , log , abs , pi , e ."
+  },
+  {
+    "file": "EM-VECTOR-CALCULUS.html",
+    "title": "Electromagnetics & Vector Calculus Suite",
+    "category": "Reference",
+    "description": "EM · Vector Calculus 1 · Reference Cheat Sheet 2 · Point vs Vector Lab 3 · Two-Point Projection 4 · Line Integrals 5 · Surfaces & Volume 6 · Triple Integral Three.js · OrbitControl"
+  },
+  {
+    "file": "maxwell3d.html",
+    "title": "Maxwell's Equations",
+    "category": "Simulation",
+    "description": "Maxwell 3D − Equation / Preset A · Point Charge (+Q / −Q) B · Infinite Line Charge C · Parallel Plate Capacitor D · Magnetic Dipole / Bar Magnet E · Time-Varying Solenoid F · Strai"
+  }
+]

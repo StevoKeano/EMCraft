@@ -1,0 +1,1060 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Electromagnetics & Vector Calculus Suite</title>
+<style>
+  :root{
+    --bg:#0b0f14; --panel:#121821; --panel2:#0f151d; --border:#243040;
+    --text:#e6edf3; --muted:#8b98a8; --accent:#7cc4ff; --gold:#ffd166;
+    --red:#ff5555; --green:#55ff88; --blue:#5599ff; --mag:#ff4fd8;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--text);
+    font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;overflow:hidden}
+  #app{display:grid;grid-template-columns:230px 1fr 420px;height:100vh}
+
+  /* ---------- Sidebar ---------- */
+  #sidebar{background:var(--panel);border-right:1px solid var(--border);
+    display:flex;flex-direction:column;padding:14px;gap:10px;overflow-y:auto}
+  #sidebar h1{font-size:14px;letter-spacing:.06em;text-transform:uppercase;
+    color:var(--accent);margin:0 0 6px}
+  #sidebar nav{display:flex;flex-direction:column;gap:6px}
+  #sidebar button{background:var(--panel2);border:1px solid var(--border);color:var(--text);
+    padding:10px 12px;border-radius:8px;text-align:left;font-size:12.5px;cursor:pointer;
+    transition:background .15s,border-color .15s}
+  #sidebar button:hover{background:#182230}
+  #sidebar button.active{background:#1d2a3a;border-color:var(--accent);color:var(--accent)}
+  #sidebar .foot{margin-top:auto;font-size:11px;color:var(--muted)}
+
+  /* ---------- Viewport ---------- */
+  #viewport{position:relative;overflow:hidden}
+  #c{display:block;width:100%;height:100%}
+  #labels{position:absolute;inset:0;pointer-events:none}
+  .lbl{position:absolute;transform:translate(-50%,-50%);font-size:12px;font-weight:600;
+    white-space:nowrap;text-shadow:0 0 5px #000,0 0 2px #000}
+  #legend{position:absolute;left:12px;bottom:12px;font-size:11px;color:var(--muted);
+    background:rgba(18,24,33,.8);padding:6px 10px;border-radius:8px;border:1px solid var(--border)}
+  #hint{position:absolute;right:12px;bottom:12px;font-size:11px;color:var(--muted);
+    background:rgba(18,24,33,.8);padding:6px 10px;border-radius:8px;border:1px solid var(--border)}
+
+  /* ---------- HUD ---------- */
+  #hud{background:var(--panel);border-left:1px solid var(--border);
+    padding:16px;overflow-y:auto;font-size:13px;line-height:1.55}
+  #hud h2{font-size:15px;margin:0 0 4px;color:var(--accent)}
+  #hud h3{font-size:12.5px;margin:16px 0 6px;color:var(--gold);text-transform:uppercase;letter-spacing:.05em}
+  #hud .sub{color:var(--muted);font-size:12px;margin:0 0 12px}
+  #hud .row{display:grid;grid-template-columns:110px 1fr 62px;gap:8px;align-items:center;margin:6px 0}
+  #hud .row label{font-size:12px;color:var(--muted)}
+  #hud input[type=range]{width:100%;accent-color:var(--accent)}
+  #hud .val{font-size:12px;color:var(--gold);text-align:right;font-variant-numeric:tabular-nums}
+  #hud .readout{background:var(--panel2);border:1px solid var(--border);border-radius:8px;
+    padding:10px 12px;margin:10px 0;font-size:12.5px}
+  #hud .readout b{color:var(--accent)}
+  #hud .formula{background:var(--panel2);border:1px solid var(--border);border-radius:6px;
+    padding:7px 10px;margin:5px 0;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px}
+  #hud .callout{background:#1a2230;border-left:3px solid var(--gold);border-radius:6px;
+    padding:10px 12px;margin:10px 0;font-size:12px;color:#d7e2ee}
+  #hud .callout b{color:var(--gold)}
+  #hud .btns{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0}
+  #hud .btns button{background:var(--panel2);border:1px solid var(--border);color:var(--text);
+    padding:7px 10px;border-radius:7px;font-size:12px;cursor:pointer}
+  #hud .btns button.on{background:#1d2a3a;border-color:var(--accent);color:var(--accent)}
+  #hud .chk{display:flex;align-items:center;gap:8px;font-size:12px;margin:4px 0;color:var(--muted)}
+  #hud .chk input{accent-color:var(--accent)}
+  #hud .swatch{width:12px;height:12px;border-radius:3px;display:inline-block}
+
+  /* ---------- Matrices ---------- */
+  .matwrap{margin:8px 0}
+  .mattitle{font-size:11.5px;color:var(--muted);margin-bottom:4px}
+  .mat{display:inline-grid;grid-template-columns:auto auto auto auto;gap:4px;
+    background:var(--panel2);border:1px solid var(--border);border-radius:6px;padding:8px}
+  .mat .mrow{display:contents}
+  .mat .cell{padding:4px 8px;font-family:ui-monospace,Menlo,Consolas,monospace;
+    font-size:11.5px;text-align:center;border-radius:4px;background:#0d131b}
+  .mat .cell.lbl{color:var(--muted);background:transparent}
+  .mat .cell.head{color:var(--accent);background:transparent;font-weight:600}
+  .mat .cell.hl{background:#2a1d3a;color:var(--mag);border:1px solid #4a2d5e}
+
+  /* ---------- Responsive ---------- */
+  @media (max-width:1100px){
+    #app{grid-template-columns:1fr;grid-template-rows:auto 1fr auto}
+    #sidebar{flex-direction:row;flex-wrap:wrap;border-right:none;border-bottom:1px solid var(--border)}
+    #sidebar nav{flex-direction:row;flex-wrap:wrap}
+    #hud{border-left:none;border-top:1px solid var(--border);max-height:42vh}
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <aside id="sidebar">
+    <h1>EM · Vector Calculus</h1>
+    <nav>
+      <button data-mod="1" class="active">1 · Reference Cheat Sheet</button>
+      <button data-mod="2">2 · Point vs Vector Lab</button>
+      <button data-mod="3">3 · Two-Point Projection</button>
+      <button data-mod="4">4 · Line Integrals</button>
+      <button data-mod="5">5 · Surfaces & Volume</button>
+      <button data-mod="6">6 · Triple Integral</button>
+    </nav>
+    <div class="foot">Three.js · OrbitControls · z-up</div>
+  </aside>
+
+  <main id="viewport">
+    <canvas id="c"></canvas>
+    <div id="labels"></div>
+    <div id="legend">x̂ red · ŷ green · ẑ blue</div>
+    <div id="hint">drag = orbit · scroll = zoom · right-drag = pan</div>
+  </main>
+
+  <aside id="hud"></aside>
+</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+/* ============================================================
+   CORE SETUP
+   ============================================================ */
+const D = Math.PI / 180;
+
+const canvas = document.getElementById('c');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0b0f14);
+
+const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 4000);
+camera.up.set(0, 0, 1);
+camera.position.set(14, -16, 12);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.08;
+controls.target.set(0, 0, 2);
+
+const labelsEl = document.getElementById('labels');
+const labels = [];
+
+/* ---------- math helpers ---------- */
+function sph(r, th, ph) {
+  const t = th * D, p = ph * D;
+  return new THREE.Vector3(
+    r * Math.sin(t) * Math.cos(p),
+    r * Math.sin(t) * Math.sin(p),
+    r * Math.cos(t)
+  );
+}
+function cyl(r, ph, z) {
+  const p = ph * D;
+  return new THREE.Vector3(r * Math.cos(p), r * Math.sin(p), z);
+}
+function triad(th, ph) {
+  const t = th * D, p = ph * D;
+  return {
+    r: new THREE.Vector3(Math.sin(t) * Math.cos(p), Math.sin(t) * Math.sin(p), Math.cos(t)),
+    th: new THREE.Vector3(Math.cos(t) * Math.cos(p), Math.cos(t) * Math.sin(p), -Math.sin(t)),
+    ph: new THREE.Vector3(-Math.sin(p), Math.cos(p), 0)
+  };
+}
+
+/* ---------- scene helpers ---------- */
+function clearScene() {
+  for (let i = scene.children.length - 1; i >= 0; i--) scene.remove(scene.children[i]);
+  labels.forEach(l => l.el.remove());
+  labels.length = 0;
+}
+
+function addBase() {
+  scene.add(new THREE.AmbientLight(0xffffff, 0.75));
+  const dl = new THREE.DirectionalLight(0xffffff, 1.1);
+  dl.position.set(10, 12, 15);
+  scene.add(dl);
+  const dl2 = new THREE.DirectionalLight(0x88aaff, 0.45);
+  dl2.position.set(-10, -8, -6);
+  scene.add(dl2);
+
+  const axes = new THREE.AxesHelper(9);
+  scene.add(axes);
+
+  const grid = new THREE.GridHelper(24, 24, 0x2a3542, 0x1a222c);
+  grid.rotation.x = Math.PI / 2;
+  scene.add(grid);
+}
+
+function addArrow(dir, len, color, origin) {
+  origin = origin || new THREE.Vector3();
+  const d = dir.clone().normalize();
+  const a = new THREE.ArrowHelper(d, origin, len, color,
+    Math.min(0.35, len * 0.18), Math.min(0.2, len * 0.1));
+  scene.add(a);
+  return a;
+}
+
+function addSignedArrow(dir, len, color, origin) {
+  const d = dir.clone().normalize();
+  if (len < 0) { d.negate(); len = -len; }
+  return addArrow(d, len, color, origin);
+}
+
+function addLine(pts, color, dashed) {
+  const g = new THREE.BufferGeometry().setFromPoints(pts);
+  const m = dashed
+    ? new THREE.LineDashedMaterial({ color, dashSize: 0.3, gapSize: 0.18 })
+    : new THREE.LineBasicMaterial({ color });
+  const l = new THREE.Line(g, m);
+  if (dashed) l.computeLineDistances();
+  scene.add(l);
+  return l;
+}
+
+function addPoint(p, color, radius) {
+  const m = new THREE.Mesh(
+    new THREE.SphereGeometry(radius || 0.12, 16, 16),
+    new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 0.45 })
+  );
+  m.position.copy(p);
+  scene.add(m);
+  return m;
+}
+
+function addLabel(text, pos, color) {
+  const el = document.createElement('div');
+  el.className = 'lbl';
+  el.textContent = text;
+  el.style.color = color || '#e6edf3';
+  labelsEl.appendChild(el);
+  labels.push({ el, pos: pos.clone() });
+  return el;
+}
+
+function makeSurface(fn, nu, nv) {
+  const pos = [], idx = [];
+  for (let i = 0; i <= nu; i++)
+    for (let j = 0; j <= nv; j++) {
+      const p = fn(i / nu, j / nv);
+      pos.push(p.x, p.y, p.z);
+    }
+  for (let i = 0; i < nu; i++)
+    for (let j = 0; j < nv; j++) {
+      const a = i * (nv + 1) + j;
+      const b = a + 1;
+      const c = (i + 1) * (nv + 1) + j;
+      const d = c + 1;
+      idx.push(a, c, b, b, c, d);
+    }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setIndex(idx);
+  g.computeVertexNormals();
+  return g;
+}
+
+function arcBetween(u, v, radius, color) {
+  const qa = new THREE.Quaternion().setFromUnitVectors(u.clone().normalize(), v.clone().normalize());
+  const pts = [];
+  for (let i = 0; i <= 32; i++) {
+    const t = i / 32;
+    const q = new THREE.Quaternion().identity().slerp(qa, t);
+    pts.push(u.clone().normalize().applyQuaternion(q).multiplyScalar(radius));
+  }
+  addLine(pts, color);
+}
+
+/* ---------- label projection ---------- */
+function updateLabels() {
+  const w = canvas.clientWidth, h = canvas.clientHeight;
+  const v = new THREE.Vector3();
+  for (const l of labels) {
+    v.copy(l.pos).project(camera);
+    const x = (v.x * 0.5 + 0.5) * w;
+    const y = (-v.y * 0.5 + 0.5) * h;
+    l.el.style.left = x + 'px';
+    l.el.style.top = y + 'px';
+    l.el.style.display = (v.z < 1) ? 'block' : 'none';
+  }
+}
+
+function resize() {
+  const w = canvas.clientWidth, h = canvas.clientHeight;
+  renderer.setSize(w, h, false);
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+}
+new ResizeObserver(resize).observe(document.getElementById('viewport'));
+resize();
+
+function animate() {
+  requestAnimationFrame(animate);
+  controls.update();
+  renderer.render(scene, camera);
+  updateLabels();
+}
+animate();
+
+/* ============================================================
+   HUD HELPERS
+   ============================================================ */
+const hud = document.getElementById('hud');
+
+function sliderHTML(id, label, min, max, val, step, unit) {
+  return '<div class="row"><label for="' + id + '">' + label + '</label>'
+    + '<input type="range" id="' + id + '" min="' + min + '" max="' + max + '" step="' + step + '" value="' + val + '">'
+    + '<span class="val" id="' + id + 'v">' + val + (unit || '') + '</span></div>';
+}
+
+function matrixHTML(title, rows, colLabels, hl) {
+  let h = '<div class="matwrap"><div class="mattitle">' + title + '</div><div class="mat">';
+  h += '<div class="mrow"><span class="cell lbl"></span>';
+  colLabels.forEach((c, i) => {
+    h += '<span class="cell ' + (i === hl ? 'hl' : 'head') + '">' + c + '</span>';
+  });
+  h += '</div>';
+  rows.forEach(r => {
+    h += '<div class="mrow"><span class="cell lbl">' + r[0] + '</span>';
+    r.slice(1).forEach((c, i) => {
+      h += '<span class="cell ' + (i === hl ? 'hl' : '') + '">' + c + '</span>';
+    });
+    h += '</div>';
+  });
+  h += '</div></div>';
+  return h;
+}
+
+function fmt(n, d) { return n.toFixed(d === undefined ? 3 : d); }
+
+/* ============================================================
+   MODULE 1 — REFERENCE CHEAT SHEET
+   ============================================================ */
+function buildModule1() {
+  const st = { r: 5, th: 60, ph: 45 };
+
+  hud.innerHTML = `
+    <h2>1 · Coordinate Conventions</h2>
+    <p class="sub">Live spherical point with its local orthonormal triad.</p>
+    ${sliderHTML('m1r', 'r (radius)', 1, 8, 5, 0.1, '')}
+    ${sliderHTML('m1th', 'θ (polar, °)', 0, 180, 60, 1, '°')}
+    ${sliderHTML('m1ph', 'φ (azimuth, °)', 0, 360, 45, 1, '°')}
+    <div class="readout" id="m1out"></div>
+
+    <h3>Point Transformations</h3>
+    <div class="formula">Cylindrical → Rectangular</div>
+    <div class="formula">x = r·cos(φ)   y = r·sin(φ)   z = z</div>
+    <div class="formula">Spherical → Rectangular</div>
+    <div class="formula">x = r·sin(θ)·cos(φ)   y = r·sin(θ)·sin(φ)   z = r·cos(θ)</div>
+
+    <h3>Unit Vector Basis (explicit 1, −1, 0)</h3>
+    <div class="formula">r̂ = 1·cos(φ) x̂ + 1·sin(φ) ŷ + 0 ẑ</div>
+    <div class="formula">φ̂ = −1·sin(φ) x̂ + 1·cos(φ) ŷ + 0 ẑ</div>
+    <div class="formula">ẑ = 0 x̂ + 0 ŷ + 1 ẑ</div>
+    <div class="formula">r̂ = 1·sin(θ)·cos(φ) x̂ + 1·sin(θ)·sin(φ) ŷ + 1·cos(θ) ẑ</div>
+    <div class="formula">θ̂ = 1·cos(θ)·cos(φ) x̂ + 1·cos(θ)·sin(φ) ŷ − 1·sin(θ) ẑ</div>
+    <div class="formula">φ̂ = −1·sin(φ) x̂ + 1·cos(φ) ŷ + 0 ẑ</div>
+
+    <h3>Full 3×3 Matrices</h3>
+    ${matrixHTML('Cylindrical → Rectangular', [
+      ['A_x', 'cos(φ)', '−sin(φ)', '0'],
+      ['A_y', 'sin(φ)', 'cos(φ)', '0'],
+      ['A_z', '0', '0', '1']
+    ], ['A_r', 'A_φ', 'A_z'], 1)}
+    ${matrixHTML('Spherical → Rectangular', [
+      ['A_x', 'sin(θ)cos(φ)', 'cos(θ)cos(φ)', '−sin(φ)'],
+      ['A_y', 'sin(θ)sin(φ)', 'cos(θ)sin(φ)', 'cos(φ)'],
+      ['A_z', 'cos(θ)', '−sin(θ)', '0']
+    ], ['A_r', 'A_θ', 'A_φ'], 2)}
+  `;
+
+  const upd = () => {
+    st.r = +document.getElementById('m1r').value;
+    st.th = +document.getElementById('m1th').value;
+    st.ph = +document.getElementById('m1ph').value;
+    document.getElementById('m1rv').textContent = st.r.toFixed(1);
+    document.getElementById('m1thv').textContent = st.th + '°';
+    document.getElementById('m1phv').textContent = st.ph + '°';
+    scene1(st);
+    out1(st);
+  };
+  ['m1r', 'm1th', 'm1ph'].forEach(id => document.getElementById(id).addEventListener('input', upd));
+  upd();
+}
+
+function out1(st) {
+  const P = sph(st.r, st.th, st.ph);
+  const rho = Math.hypot(P.x, P.y);
+  document.getElementById('m1out').innerHTML =
+    '<b>Rectangular:</b> x = ' + fmt(P.x) + ' · y = ' + fmt(P.y) + ' · z = ' + fmt(P.z) + '<br>'
+    + '<b>Cylindrical:</b> ρ = ' + fmt(rho) + ' · φ = ' + st.ph + '° · z = ' + fmt(P.z) + '<br>'
+    + '<b>Spherical:</b> r = ' + fmt(st.r) + ' · θ = ' + st.th + '° · φ = ' + st.ph + '°';
+}
+
+function scene1(st) {
+  clearScene();
+  addBase();
+
+  const P = sph(st.r, st.th, st.ph);
+
+  const sg = new THREE.Mesh(
+    new THREE.SphereGeometry(st.r, 32, 20),
+    new THREE.MeshBasicMaterial({ color: 0x2a3542, wireframe: true, transparent: true, opacity: 0.18 })
+  );
+  scene.add(sg);
+
+  addArrow(P, P.length(), 0xffd166);
+  addPoint(P, 0xffd166, 0.14);
+  addLabel('P', P.clone().multiplyScalar(1.06), '#ffd166');
+
+  const t = triad(st.th, st.ph);
+  addArrow(t.r, 1.6, 0xff5555, P);
+  addLabel('r̂', P.clone().add(t.r.clone().multiplyScalar(1.9)), '#ff5555');
+  addArrow(t.th, 1.6, 0x55ff88, P);
+  addLabel('θ̂', P.clone().add(t.th.clone().multiplyScalar(1.9)), '#55ff88');
+  addArrow(t.ph, 1.6, 0x5599ff, P);
+  addLabel('φ̂', P.clone().add(t.ph.clone().multiplyScalar(1.9)), '#5599ff');
+
+  const proj = new THREE.Vector3(P.x, P.y, 0);
+  addLine([P, proj], 0x8899aa, true);
+  addLine([new THREE.Vector3(0, 0, 0), proj], 0x8899aa, true);
+  addPoint(proj, 0x8899aa, 0.08);
+  addLabel('ρ', proj.clone().multiplyScalar(0.55), '#8899aa');
+}
+
+/* ============================================================
+   MODULE 2 — POINT vs VECTOR LAB (Ex. 1-7-19)
+   ============================================================ */
+function buildModule2() {
+  const st = { Ar: 4, Ath: 1, Aph: 6, r: 5, th: 45, ph: 45 };
+
+  hud.innerHTML = `
+    <h2>2 · Point vs Vector Lab</h2>
+    <div class="callout"><b>Teaching moment:</b> A point transform (x = r·sin(θ)·cos(φ)) only locates a point from the origin. A vector transform must sum projections from all three basis vectors — θ̂ and φ̂ also carry x̂, ŷ, ẑ components. Note the <b>−A_φ·sin(φ)</b> term in A_x.</div>
+    ${sliderHTML('m2Ar', 'A_r', -10, 10, 4, 0.1, '')}
+    ${sliderHTML('m2Ath', 'A_θ', -10, 10, 1, 0.1, '')}
+    ${sliderHTML('m2Aph', 'A_φ', -10, 10, 6, 0.1, '')}
+    ${sliderHTML('m2r', 'r', 1, 8, 5, 0.1, '')}
+    ${sliderHTML('m2th', 'θ (°)', 0, 180, 45, 1, '°')}
+    ${sliderHTML('m2ph', 'φ (°)', 0, 360, 45, 1, '°')}
+    <div class="readout" id="m2out"></div>
+    <h3>Explicit Breakdown</h3>
+    <div class="formula" id="m2brk"></div>
+  `;
+
+  const upd = () => {
+    st.Ar = +document.getElementById('m2Ar').value;
+    st.Ath = +document.getElementById('m2Ath').value;
+    st.Aph = +document.getElementById('m2Aph').value;
+    st.r = +document.getElementById('m2r').value;
+    st.th = +document.getElementById('m2th').value;
+    st.ph = +document.getElementById('m2ph').value;
+    document.getElementById('m2Arv').textContent = st.Ar.toFixed(1);
+    document.getElementById('m2Athv').textContent = st.Ath.toFixed(1);
+    document.getElementById('m2Aphv').textContent = st.Aph.toFixed(1);
+    document.getElementById('m2rv').textContent = st.r.toFixed(1);
+    document.getElementById('m2thv').textContent = st.th + '°';
+    document.getElementById('m2phv').textContent = st.ph + '°';
+    scene2(st);
+    out2(st);
+  };
+  ['m2Ar', 'm2Ath', 'm2Aph', 'm2r', 'm2th', 'm2ph'].forEach(id =>
+    document.getElementById(id).addEventListener('input', upd));
+  upd();
+}
+
+function vec2cart(st) {
+  const t = st.th * D, p = st.ph * D;
+  const s = Math.sin(t), c = Math.cos(t), sp = Math.sin(p), cp = Math.cos(p);
+  return new THREE.Vector3(
+    st.Ar * s * cp + st.Ath * c * cp + st.Aph * (-sp),
+    st.Ar * s * sp + st.Ath * c * sp + st.Aph * cp,
+    st.Ar * c + st.Ath * (-s)
+  );
+}
+
+function out2(st) {
+  const A = vec2cart(st);
+  const t = st.th * D, p = st.ph * D;
+  const s = Math.sin(t), c = Math.cos(t), sp = Math.sin(p), cp = Math.cos(p);
+  document.getElementById('m2out').innerHTML =
+    '<b>A_x</b> = ' + fmt(A.x) + ' · <b>A_y</b> = ' + fmt(A.y) + ' · <b>A_z</b> = ' + fmt(A.z) + '<br>'
+    + '<b>|A|</b> = ' + fmt(A.length()) + ' · |A|² = ' + fmt(A.lengthSq(), 2);
+  document.getElementById('m2brk').innerHTML =
+    'A_x = ' + fmt(st.Ar) + '·' + fmt(s * cp) + ' + ' + fmt(st.Ath) + '·' + fmt(c * cp) + ' + ' + fmt(st.Aph) + '·(' + fmt(-sp) + ')<br>'
+    + 'A_y = ' + fmt(st.Ar) + '·' + fmt(s * sp) + ' + ' + fmt(st.Ath) + '·' + fmt(c * sp) + ' + ' + fmt(st.Aph) + '·(' + fmt(cp) + ')<br>'
+    + 'A_z = ' + fmt(st.Ar) + '·' + fmt(c) + ' + ' + fmt(st.Ath) + '·(' + fmt(-s) + ') + ' + fmt(st.Aph) + '·0';
+}
+
+function scene2(st) {
+  clearScene();
+  addBase();
+
+  const P = sph(st.r, st.th, st.ph);
+  const t = triad(st.th, st.ph);
+  const A = vec2cart(st);
+
+  addArrow(P, P.length(), 0x8899aa);
+  addPoint(P, 0x8899aa, 0.12);
+  addLabel('P', P.clone().multiplyScalar(1.06), '#8899aa');
+
+  addArrow(t.r, 1.4, 0xff5555, P);
+  addLabel('r̂', P.clone().add(t.r.clone().multiplyScalar(1.7)), '#ff5555');
+  addArrow(t.th, 1.4, 0x55ff88, P);
+  addLabel('θ̂', P.clone().add(t.th.clone().multiplyScalar(1.7)), '#55ff88');
+  addArrow(t.ph, 1.4, 0x5599ff, P);
+  addLabel('φ̂', P.clone().add(t.ph.clone().multiplyScalar(1.7)), '#5599ff');
+
+  addSignedArrow(t.r, st.Ar, 0xff8888);
+  addSignedArrow(t.th, st.Ath, 0x88ffaa);
+  addSignedArrow(t.ph, st.Aph, 0x88bbff);
+
+  addArrow(A, A.length(), 0xffd166);
+  addPoint(A, 0xffd166, 0.14);
+  addLabel('A', A.clone().multiplyScalar(1.08), '#ffd166');
+}
+
+/* ============================================================
+   MODULE 3 — TWO-POINT PROJECTION (Ex. 1-7-24)
+   ============================================================ */
+function buildModule3() {
+  const st = { r1: 5, th1: 25, ph1: 55, r2: 8, th2: 5, ph2: 75 };
+
+  hud.innerHTML = `
+    <h2>3 · Two-Point Projection</h2>
+    <p class="sub">Displacement A = P₂ − P₁ and its local spherical projections at P₁.</p>
+    ${sliderHTML('m3r1', 'r₁', 1, 10, 5, 0.1, '')}
+    ${sliderHTML('m3th1', 'θ₁ (°)', 0, 180, 25, 1, '°')}
+    ${sliderHTML('m3ph1', 'φ₁ (°)', 0, 360, 55, 1, '°')}
+    ${sliderHTML('m3r2', 'r₂', 1, 10, 8, 0.1, '')}
+    ${sliderHTML('m3th2', 'θ₂ (°)', 0, 180, 5, 1, '°')}
+    ${sliderHTML('m3ph2', 'φ₂ (°)', 0, 360, 75, 1, '°')}
+    <div class="readout" id="m3out"></div>
+    <h3>3-Step Derivation</h3>
+    <div class="formula" id="m3step1"></div>
+    <div class="formula" id="m3step2"></div>
+    <div class="formula" id="m3step3"></div>
+  `;
+
+  const upd = () => {
+    ['r1', 'th1', 'ph1', 'r2', 'th2', 'ph2'].forEach(k => {
+      st[k] = +document.getElementById('m3' + k).value;
+      document.getElementById('m3' + k + 'v').textContent =
+        (k === 'r1' || k === 'r2') ? st[k].toFixed(1) : st[k] + '°';
+    });
+    scene3(st);
+    out3(st);
+  };
+  ['r1', 'th1', 'ph1', 'r2', 'th2', 'ph2'].forEach(k =>
+    document.getElementById('m3' + k).addEventListener('input', upd));
+  upd();
+}
+
+function out3(st) {
+  const P1 = sph(st.r1, st.th1, st.ph1);
+  const P2 = sph(st.r2, st.th2, st.ph2);
+  const A = P2.clone().sub(P1);
+  const mag = A.length();
+  const t1 = triad(st.th1, st.ph1);
+  const Ar = A.dot(t1.r), Ath = A.dot(t1.th), Aph = A.dot(t1.ph);
+  const ax = Math.acos(A.x / mag) / D;
+  const ay = Math.acos(A.y / mag) / D;
+  const az = Math.acos(A.z / mag) / D;
+
+  document.getElementById('m3out').innerHTML =
+    '<b>|A|</b> = ' + fmt(mag) + '<br>'
+    + '<b>A_r</b> = ' + fmt(Ar) + ' · <b>A_θ</b> = ' + fmt(Ath) + ' · <b>A_φ</b> = ' + fmt(Aph) + '<br>'
+    + '<b>α_x</b> = ' + fmt(ax, 2) + '° · <b>α_y</b> = ' + fmt(ay, 2) + '° · <b>α_z</b> = ' + fmt(az, 2) + '°';
+
+  document.getElementById('m3step1').innerHTML =
+    'Step 1 — Cartesian: P₁(' + fmt(P1.x) + ', ' + fmt(P1.y) + ', ' + fmt(P1.z) + ') · P₂(' + fmt(P2.x) + ', ' + fmt(P2.y) + ', ' + fmt(P2.z) + ')';
+  document.getElementById('m3step2').innerHTML =
+    'Step 2 — A = ' + fmt(A.x) + ' x̂ ' + (A.y < 0 ? '− ' : '+ ') + fmt(Math.abs(A.y)) + ' ŷ ' + (A.z < 0 ? '− ' : '+ ') + fmt(Math.abs(A.z)) + ' ẑ · |A| = ' + fmt(mag);
+  document.getElementById('m3step3').innerHTML =
+    'Step 3 — Local projections at P₁: A_r = ' + fmt(Ar) + ' · A_θ = ' + fmt(Ath) + ' · A_φ = ' + fmt(Aph) + '<br>'
+    + 'Axis angles: α_x = ' + fmt(ax, 2) + '° · α_y = ' + fmt(ay, 2) + '° · α_z = ' + fmt(az, 2) + '°';
+}
+
+function scene3(st) {
+  clearScene();
+  addBase();
+
+  const P1 = sph(st.r1, st.th1, st.ph1);
+  const P2 = sph(st.r2, st.th2, st.ph2);
+  const A = P2.clone().sub(P1);
+  const t1 = triad(st.th1, st.ph1);
+
+  addArrow(P1, P1.length(), 0x8899aa);
+  addPoint(P1, 0x8899aa, 0.12);
+  addLabel('P₁', P1.clone().multiplyScalar(1.06), '#8899aa');
+
+  addArrow(P2, P2.length(), 0x66ccff);
+  addPoint(P2, 0x66ccff, 0.12);
+  addLabel('P₂', P2.clone().multiplyScalar(1.06), '#66ccff');
+
+  addArrow(t1.r, 1.3, 0xff5555, P1);
+  addLabel('r̂₁', P1.clone().add(t1.r.clone().multiplyScalar(1.6)), '#ff5555');
+  addArrow(t1.th, 1.3, 0x55ff88, P1);
+  addLabel('θ̂₁', P1.clone().add(t1.th.clone().multiplyScalar(1.6)), '#55ff88');
+  addArrow(t1.ph, 1.3, 0x5599ff, P1);
+  addLabel('φ̂₁', P1.clone().add(t1.ph.clone().multiplyScalar(1.6)), '#5599ff');
+
+  addArrow(A, A.length(), 0xffd166);
+  addLabel('A', P1.clone().add(A.clone().multiplyScalar(0.55)), '#ffd166');
+
+  const mag = A.length();
+  const ax = Math.acos(A.x / mag) / D;
+  const ay = Math.acos(A.y / mag) / D;
+  const az = Math.acos(A.z / mag) / D;
+  arcBetween(new THREE.Vector3(1, 0, 0), A, 1.6, 0xff5555);
+  arcBetween(new THREE.Vector3(0, 1, 0), A, 1.6, 0x55ff88);
+  arcBetween(new THREE.Vector3(0, 0, 1), A, 1.6, 0x5599ff);
+  addLabel('α_x=' + fmt(ax, 1) + '°', new THREE.Vector3(1.9, 0.4, 0.4), '#ff5555');
+  addLabel('α_y=' + fmt(ay, 1) + '°', new THREE.Vector3(0.4, 1.9, 0.4), '#55ff88');
+  addLabel('α_z=' + fmt(az, 1) + '°', new THREE.Vector3(0.4, 0.4, 1.9), '#5599ff');
+}
+
+/* ============================================================
+   MODULE 4 — LINE INTEGRALS
+   ============================================================ */
+function buildModule4() {
+  const st = { preset: 'A' };
+
+  hud.innerHTML = `
+    <h2>4 · Line Integrals</h2>
+    <div class="callout"><b>Teaching moment:</b> For a purely radial field F = f(r) r̂, F · dl = f(r) dr — the angular differentials dθ, dφ, dz vanish because r̂ is orthogonal to θ̂, φ̂, ẑ. A 3D path collapses to a 1D radial integral.</div>
+    <div class="btns">
+      <button id="m4A" class="on">Preset A · Cylindrical</button>
+      <button id="m4B">Preset B · Spherical</button>
+    </div>
+    <div class="readout" id="m4out"></div>
+    <h3>Derivation</h3>
+    <div class="formula" id="m4brk"></div>
+  `;
+
+  document.getElementById('m4A').addEventListener('click', () => {
+    st.preset = 'A';
+    document.getElementById('m4A').classList.add('on');
+    document.getElementById('m4B').classList.remove('on');
+    scene4(st); out4(st);
+  });
+  document.getElementById('m4B').addEventListener('click', () => {
+    st.preset = 'B';
+    document.getElementById('m4B').classList.add('on');
+    document.getElementById('m4A').classList.remove('on');
+    scene4(st); out4(st);
+  });
+  scene4(st); out4(st);
+}
+
+function out4(st) {
+  if (st.preset === 'A') {
+    document.getElementById('m4out').innerHTML =
+      '<b>F = r⁻³ᐟ² r̂</b> from (4, 25°, 2) to (1, 10°, 4)<br>'
+      + '<b>∫ F · dl = −1</b>';
+    document.getElementById('m4brk').innerHTML =
+      '∫ F·dl = ∫ r⁻³ᐟ² dr = [−2 r⁻¹ᐟ²] from 4 to 1<br>'
+      + '= −2(1) − (−2·0.5) = −2 + 1 = −1';
+  } else {
+    document.getElementById('m4out').innerHTML =
+      '<b>F = r⁻² r̂</b> from (3, 50°, 20°) to (2, 75°, 80°)<br>'
+      + '<b>∫ F · dl = −1/6 ≈ −0.167</b>';
+    document.getElementById('m4brk').innerHTML =
+      '∫ F·dl = ∫ r⁻² dr = [−r⁻¹] from 3 to 2<br>'
+      + '= −1/2 − (−1/3) = −1/6 ≈ −0.167';
+  }
+}
+
+function scene4(st) {
+  clearScene();
+  addBase();
+
+  let P1, P2, fieldFn, color;
+  if (st.preset === 'A') {
+    P1 = cyl(4, 25, 2);
+    P2 = cyl(1, 10, 4);
+    fieldFn = (r) => Math.pow(r, -1.5);
+    color = 0x5599ff;
+  } else {
+    P1 = sph(3, 50, 20);
+    P2 = sph(2, 75, 80);
+    fieldFn = (r) => Math.pow(r, -2);
+    color = 0xff4fd8;
+  }
+
+  // field arrows along radial directions at several radii
+  for (let i = 0; i < 8; i++) {
+    const ang = i * 45 * D;
+    const dir = new THREE.Vector3(Math.cos(ang), Math.sin(ang), 0.15).normalize();
+    for (let r = 1.5; r <= 6; r += 1.5) {
+      const len = fieldFn(r) * 3;
+      addArrow(dir, len, color, dir.clone().multiplyScalar(r));
+    }
+  }
+
+  addPoint(P1, 0x55ff88, 0.13);
+  addLabel('start', P1.clone().multiplyScalar(1.08), '#55ff88');
+  addPoint(P2, 0xff5555, 0.13);
+  addLabel('end', P2.clone().multiplyScalar(1.08), '#ff5555');
+
+  // 3D curve connecting them
+  const pts = [];
+  for (let i = 0; i <= 60; i++) {
+    const t = i / 60;
+    pts.push(P1.clone().lerp(P2, t));
+  }
+  addLine(pts, 0xffd166);
+
+  // radial projection path (straight radial line)
+  const r1 = P1.length(), r2 = P2.length();
+  const u1 = P1.clone().normalize(), u2 = P2.clone().normalize();
+  const rp = [];
+  for (let i = 0; i <= 40; i++) {
+    const t = i / 40;
+    const r = r1 + (r2 - r1) * t;
+    const u = u1.clone().lerp(u2, t).normalize();
+    rp.push(u.multiplyScalar(r));
+  }
+  addLine(rp, 0x8899aa, true);
+}
+
+/* ============================================================
+   MODULE 5 — SURFACES & VOLUME
+   ============================================================ */
+function buildModule5() {
+  const st = { preset: 'A', faces: { r1: true, r7: true, th10: true, th80: true, ph20: true, ph180: true } };
+
+  hud.innerHTML = `
+    <h2>5 · Surfaces & Volume</h2>
+    <div class="callout"><b>Where dS comes from:</b> dl = dr r̂ + r·dθ θ̂ + r·sin(θ)·dφ φ̂. Hold one coordinate constant and multiply the two varying orthogonal lengths.</div>
+    <div class="formula">Cap (r = const): dS = r²·sin(θ)·dθ·dφ</div>
+    <div class="formula">Cone (θ = const): dS = r·sin(θ)·dr·dφ</div>
+    <div class="formula">Wedge (φ = const): dS = r·dr·dθ</div>
+    <div class="formula">Convert limits: Δφ = 160° = 8π/9 rad · Δθ = 70° = 7π/18 rad</div>
+    <div class="btns">
+      <button id="m5A" class="on">A · Spherical Wedge</button>
+      <button id="m5B">B · Cyl. Patch Flux</button>
+      <button id="m5C">C · Sph. Patch Flux</button>
+    </div>
+    <div id="m5faces"></div>
+    <div class="readout" id="m5out"></div>
+  `;
+
+  const setPreset = (p) => {
+    st.preset = p;
+    ['A', 'B', 'C'].forEach(x => document.getElementById('m5' + x).classList.toggle('on', x === p));
+    scene5(st); out5(st);
+  };
+  document.getElementById('m5A').addEventListener('click', () => setPreset('A'));
+  document.getElementById('m5B').addEventListener('click', () => setPreset('B'));
+  document.getElementById('m5C').addEventListener('click', () => setPreset('C'));
+  scene5(st); out5(st);
+}
+
+function out5(st) {
+  const facesEl = document.getElementById('m5faces');
+  if (st.preset === 'A') {
+    facesEl.innerHTML = `
+      <h3>Bounding Faces</h3>
+      <div class="chk"><input type="checkbox" id="f_r1" checked><span class="swatch" style="background:#ff5555"></span> S_(r=1) = 2.27</div>
+      <div class="chk"><input type="checkbox" id="f_r7" checked><span class="swatch" style="background:#ff8888"></span> S_(r=7) = 110.99</div>
+      <div class="chk"><input type="checkbox" id="f_th10" checked><span class="swatch" style="background:#55ff88"></span> S_(θ=10°) = 11.64</div>
+      <div class="chk"><input type="checkbox" id="f_th80" checked><span class="swatch" style="background:#88ffaa"></span> S_(θ=80°) = 66.00</div>
+      <div class="chk"><input type="checkbox" id="f_ph20" checked><span class="swatch" style="background:#5599ff"></span> S_(φ=20°) = 29.32</div>
+      <div class="chk"><input type="checkbox" id="f_ph180" checked><span class="swatch" style="background:#88bbff"></span> S_(φ=180°) = 29.32</div>
+    `;
+    ['r1', 'r7', 'th10', 'th80', 'ph20', 'ph180'].forEach(k => {
+      const cb = document.getElementById('f_' + k);
+      cb.checked = st.faces[k];
+      cb.addEventListener('change', () => { st.faces[k] = cb.checked; scene5(st); });
+    });
+    document.getElementById('m5out').innerHTML =
+      '<b>r ∈ [1, 7] · θ ∈ [10°, 80°] · φ ∈ [20°, 180°]</b><br>'
+      + '<b>Volume V = 258.23</b><br>'
+      + '<b>Total surface S_total = 249.54</b>';
+  } else if (st.preset === 'B') {
+    facesEl.innerHTML = '';
+    document.getElementById('m5out').innerHTML =
+      '<b>F = r⁻³ r̂ · r = 5 · φ ∈ [0°, 45°] · z ∈ [2, 6]</b><br>'
+      + '<b>Flux = π/25 ≈ 0.1257</b>';
+  } else {
+    facesEl.innerHTML = '';
+    document.getElementById('m5out').innerHTML =
+      '<b>F = r⁻³ r̂ · r = 4 · θ ∈ [45°, 125°] · φ ∈ [20°, 180°]</b><br>'
+      + '<b>Flux ≈ 0.894</b>';
+  }
+}
+
+function scene5(st) {
+  clearScene();
+  addBase();
+
+  if (st.preset === 'A') {
+    const r1 = 1, r2 = 7, th1 = 10, th2 = 80, ph1 = 20, ph2 = 180;
+
+    // volume fill (semi-transparent)
+    const volGeo = makeSurface((u, v) => {
+      const r = r1 + (r2 - r1) * u;
+      const th = th1 + (th2 - th1) * v;
+      return sph(r, th, ph1);
+    }, 20, 20);
+    // build a proper wedge volume via lathe-like sampling
+    const volPos = [], volIdx = [];
+    const NU = 16, NV = 16, NW = 16;
+    for (let i = 0; i <= NU; i++) {
+      const r = r1 + (r2 - r1) * (i / NU);
+      for (let j = 0; j <= NV; j++) {
+        const th = th1 + (th2 - th1) * (j / NV);
+        for (let k = 0; k <= NW; k++) {
+          const ph = ph1 + (ph2 - ph1) * (k / NW);
+          const p = sph(r, th, ph);
+          volPos.push(p.x, p.y, p.z);
+        }
+      }
+    }
+    const idxOf = (i, j, k) => i * (NV + 1) * (NW + 1) + j * (NW + 1) + k;
+    for (let i = 0; i < NU; i++)
+      for (let j = 0; j < NV; j++)
+        for (let k = 0; k < NW; k++) {
+          const a = idxOf(i, j, k), b = idxOf(i + 1, j, k);
+          const c = idxOf(i, j + 1, k), d = idxOf(i, j, k + 1);
+          volIdx.push(a, b, c, a, c, d);
+        }
+    const vg = new THREE.BufferGeometry();
+    vg.setAttribute('position', new THREE.Float32BufferAttribute(volPos, 3));
+    vg.setIndex(volIdx);
+    vg.computeVertexNormals();
+    const volMesh = new THREE.Mesh(vg, new THREE.MeshStandardMaterial({
+      color: 0x7cc4ff, transparent: true, opacity: 0.12, side: THREE.DoubleSide,
+      depthWrite: false
+    }));
+    scene.add(volMesh);
+
+    // Face r = r1 (red)
+    if (st.faces.r1) {
+      const g = makeSurface((u, v) => sph(r1, th1 + (th2 - th1) * u, ph1 + (ph2 - ph1) * v), 20, 20);
+      scene.add(new THREE.Mesh(g, new THREE.MeshStandardMaterial({
+        color: 0xff5555, transparent: true, opacity: 0.35, side: THREE.DoubleSide
+      })));
+    }
+    // Face r = r2 (light red)
+    if (st.faces.r7) {
+      const g = makeSurface((u, v) => sph(r2, th1 + (th2 - th1) * u, ph1 + (ph2 - ph1) * v), 20, 20);
+      scene.add(new THREE.Mesh(g, new THREE.MeshStandardMaterial({
+        color: 0xff8888, transparent: true, opacity: 0.35, side: THREE.DoubleSide
+      })));
+    }
+    // Face θ = th1 (green)
+    if (st.faces.th10) {
+      const g = makeSurface((u, v) => sph(r1 + (r2 - r1) * u, th1, ph1 + (ph2 - ph1) * v), 20, 20);
+      scene.add(new THREE.Mesh(g, new THREE.MeshStandardMaterial({
+        color: 0x55ff88, transparent: true, opacity: 0.35, side: THREE.DoubleSide
+      })));
+    }
+    // Face θ = th2 (light green)
+    if (st.faces.th80) {
+      const g = makeSurface((u, v) => sph(r1 + (r2 - r1) * u, th2, ph1 + (ph2 - ph1) * v), 20, 20);
+      scene.add(new THREE.Mesh(g, new THREE.MeshStandardMaterial({
+        color: 0x88ffaa, transparent: true, opacity: 0.35, side: THREE.DoubleSide
+      })));
+    }
+    // Face φ = ph1 (blue)
+    if (st.faces.ph20) {
+      const g = makeSurface((u, v) => sph(r1 + (r2 - r1) * u, th1 + (th2 - th1) * v, ph1), 20, 20);
+      scene.add(new THREE.Mesh(g, new THREE.MeshStandardMaterial({
+        color: 0x5599ff, transparent: true, opacity: 0.35, side: THREE.DoubleSide
+      })));
+    }
+    // Face φ = ph2 (light blue)
+    if (st.faces.ph180) {
+      const g = makeSurface((u, v) => sph(r1 + (r2 - r1) * u, th1 + (th2 - th1) * v, ph2), 20, 20);
+      scene.add(new THREE.Mesh(g, new THREE.MeshStandardMaterial({
+        color: 0x88bbff, transparent: true, opacity: 0.35, side: THREE.DoubleSide
+      })));
+    }
+
+    addLabel('r=1', sph(r1, (th1 + th2) / 2, (ph1 + ph2) / 2).multiplyScalar(1.1), '#ff5555');
+    addLabel('r=7', sph(r2, (th1 + th2) / 2, (ph1 + ph2) / 2).multiplyScalar(1.05), '#ff8888');
+  } else if (st.preset === 'B') {
+    const r = 5, ph1 = 0, ph2 = 45, z1 = 2, z2 = 6;
+    const g = makeSurface((u, v) => cyl(r, ph1 + (ph2 - ph1) * u, z1 + (z2 - z1) * v), 20, 20);
+    scene.add(new THREE.Mesh(g, new THREE.MeshStandardMaterial({
+      color: 0x5599ff, transparent: true, opacity: 0.4, side: THREE.DoubleSide
+    })));
+    // field arrows
+    for (let i = 0; i <= 4; i++)
+      for (let j = 0; j <= 3; j++) {
+        const ph = ph1 + (ph2 - ph1) * (i / 4);
+        const z = z1 + (z2 - z1) * (j / 3);
+        const p = cyl(r, ph, z);
+        addArrow(p.clone().normalize(), Math.pow(r, -3) * 40, 0xff4fd8, p);
+      }
+    addLabel('Flux = π/25', cyl(r, (ph1 + ph2) / 2, (z1 + z2) / 2).multiplyScalar(1.15), '#5599ff');
+  } else {
+    const r = 4, th1 = 45, th2 = 125, ph1 = 20, ph2 = 180;
+    const g = makeSurface((u, v) => sph(r, th1 + (th2 - th1) * u, ph1 + (ph2 - ph1) * v), 24, 24);
+    scene.add(new THREE.Mesh(g, new THREE.MeshStandardMaterial({
+      color: 0xff4fd8, transparent: true, opacity: 0.4, side: THREE.DoubleSide
+    })));
+    for (let i = 0; i <= 4; i++)
+      for (let j = 0; j <= 4; j++) {
+        const th = th1 + (th2 - th1) * (i / 4);
+        const ph = ph1 + (ph2 - ph1) * (j / 4);
+        const p = sph(r, th, ph);
+        addArrow(p.clone().normalize(), Math.pow(r, -3) * 40, 0xffd166, p);
+      }
+    addLabel('Flux ≈ 0.894', sph(r, (th1 + th2) / 2, (ph1 + ph2) / 2).multiplyScalar(1.15), '#ff4fd8');
+  }
+}
+
+/* ============================================================
+   MODULE 6 — TRIPLE INTEGRAL (Ex. 1-7-28)
+   ============================================================ */
+function buildModule6() {
+  const st = { x: 6, y: 0, z: 4 };
+
+  hud.innerHTML = `
+    <h2>6 · Triple Volume Integral</h2>
+    <p class="sub">∭ 5·x²·y⁴·z⁵ dx dy dz over x ∈ [5, 7], y ∈ [−3, 3], z ∈ [2, 6].</p>
+    ${sliderHTML('m6x', 'X slice', 5, 7, 6, 0.05, '')}
+    ${sliderHTML('m6y', 'Y slice', -3, 3, 0, 0.05, '')}
+    ${sliderHTML('m6z', 'Z slice', 2, 6, 4, 0.05, '')}
+    <div class="readout" id="m6out"></div>
+    <h3>Separable Breakdown</h3>
+    <div class="formula">5 × (218/3) × (486/5) × (23296/3) = 274,240,512</div>
+    <div class="formula">∫₅⁷ x² dx = 218/3 · ∫₋₃³ y⁴ dy = 486/5 · ∫₂⁶ z⁵ dz = 23296/3</div>
+  `;
+
+  const upd = () => {
+    st.x = +document.getElementById('m6x').value;
+    st.y = +document.getElementById('m6y').value;
+    st.z = +document.getElementById('m6z').value;
+    document.getElementById('m6xv').textContent = st.x.toFixed(2);
+    document.getElementById('m6yv').textContent = st.y.toFixed(2);
+    document.getElementById('m6zv').textContent = st.z.toFixed(2);
+    scene6(st);
+    out6(st);
+  };
+  ['m6x', 'm6y', 'm6z'].forEach(id => document.getElementById(id).addEventListener('input', upd));
+  upd();
+}
+
+function f6(x, y, z) { return 5 * x * x * Math.pow(y, 4) * Math.pow(z, 5); }
+
+function out6(st) {
+  const val = f6(st.x, st.y, st.z);
+  document.getElementById('m6out').innerHTML =
+    '<b>Slice point:</b> (' + st.x.toFixed(2) + ', ' + st.y.toFixed(2) + ', ' + st.z.toFixed(2) + ')<br>'
+    + '<b>f(x,y,z) = 5·x²·y⁴·z⁵ = ' + val.toLocaleString('en-US', { maximumFractionDigits: 0 }) + '</b><br>'
+    + '<b>f_max at (7, ±3, 6) = 154,314,720</b><br>'
+    + '<b>Total integral = 274,240,512</b>';
+}
+
+function scene6(st) {
+  clearScene();
+  addBase();
+
+  const x1 = 5, x2 = 7, y1 = -3, y2 = 3, z1 = 2, z2 = 6;
+  const fmax = f6(7, 3, 6);
+
+  // wireframe box
+  const boxGeo = new THREE.BoxGeometry(x2 - x1, y2 - y1, z2 - z1);
+  const box = new THREE.Mesh(boxGeo, new THREE.MeshBasicMaterial({
+    color: 0x7cc4ff, wireframe: true, transparent: true, opacity: 0.35
+  }));
+  box.position.set((x1 + x2) / 2, (y1 + y2) / 2, (z1 + z2) / 2);
+  scene.add(box);
+
+  // 8 corner labels
+  const corners = [
+    [x1, y1, z1], [x2, y1, z1], [x1, y2, z1], [x2, y2, z1],
+    [x1, y1, z2], [x2, y1, z2], [x1, y2, z2], [x2, y2, z2]
+  ];
+  corners.forEach(c => {
+    const p = new THREE.Vector3(c[0], c[1], c[2]);
+    addPoint(p, 0x7cc4ff, 0.07);
+    addLabel('(' + c[0] + ',' + c[1] + ',' + c[2] + ')', p.clone().multiplyScalar(1.02), '#7cc4ff');
+  });
+
+  // volumetric heatmap point cloud
+  const N = 14;
+  const pts = [], cols = [];
+  const cLow = new THREE.Color(0x1a3a8f);
+  const cHigh = new THREE.Color(0xff4fd8);
+  for (let i = 0; i <= N; i++)
+    for (let j = 0; j <= N; j++)
+      for (let k = 0; k <= N; k++) {
+        const x = x1 + (x2 - x1) * (i / N);
+        const y = y1 + (y2 - y1) * (j / N);
+        const z = z1 + (z2 - z1) * (k / N);
+        const v = f6(x, y, z);
+        const t = Math.min(1, Math.max(0, v / fmax));
+        const col = cLow.clone().lerp(cHigh, Math.pow(t, 0.35));
+        pts.push(x, y, z);
+        cols.push(col.r, col.g, col.b);
+      }
+  const pg = new THREE.BufferGeometry();
+  pg.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
+  pg.setAttribute('color', new THREE.Float32BufferAttribute(cols, 3));
+  const cloud = new THREE.Points(pg, new THREE.PointsMaterial({
+    size: 0.16, vertexColors: true, transparent: true, opacity: 0.85
+  }));
+  scene.add(cloud);
+
+  // cross-section slice planes
+  const sliceMat = new THREE.MeshBasicMaterial({
+    color: 0xffd166, transparent: true, opacity: 0.22, side: THREE.DoubleSide
+  });
+  const sx = new THREE.Mesh(new THREE.PlaneGeometry(y2 - y1, z2 - z1), sliceMat);
+  sx.position.set(st.x, (y1 + y2) / 2, (z1 + z2) / 2);
+  sx.rotation.y = Math.PI / 2;
+  scene.add(sx);
+
+  const sy = new THREE.Mesh(new THREE.PlaneGeometry(x2 - x1, z2 - z1), sliceMat);
+  sy.position.set((x1 + x2) / 2, st.y, (z1 + z2) / 2);
+  sy.rotation.x = Math.PI / 2;
+  scene.add(sy);
+
+  const sz = new THREE.Mesh(new THREE.PlaneGeometry(x2 - x1, y2 - y1), sliceMat);
+  sz.position.set((x1 + x2) / 2, (y1 + y2) / 2, st.z);
+  scene.add(sz);
+
+  // slice point marker
+  const sp = new THREE.Vector3(st.x, st.y, st.z);
+  addPoint(sp, 0xffd166, 0.1);
+  addLabel('f = ' + f6(st.x, st.y, st.z).toLocaleString('en-US', { maximumFractionDigits: 0 }),
+    sp.clone().multiplyScalar(1.05), '#ffd166');
+}
+
+/* ============================================================
+   MODULE SWITCHING
+   ============================================================ */
+const builders = {
+  '1': buildModule1,
+  '2': buildModule2,
+  '3': buildModule3,
+  '4': buildModule4,
+  '5': buildModule5,
+  '6': buildModule6
+};
+
+document.querySelectorAll('#sidebar nav button').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('#sidebar nav button').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    builders[btn.dataset.mod]();
+  });
+});
+
+buildModule1();
+</script>
+</body>
+</html>
