@@ -2,9 +2,13 @@
 
 <h2 align="center"><a href="https://stevokeano.github.io/EMCraft/">https://stevokeano.github.io/EMCraft/</a></h2>
 
-**Electromagnetics, visualized.** A zero-build collection of interactive 3D demos for electromagnetics and vector calculus, plus a fast local launcher that indexes every tool in the folder.
+**EMCraft by stevokeano** — electromagnetics, visualized. A zero-build collection of interactive 3D demos for electromagnetics and vector calculus, plus a fast local launcher that indexes every tool in the folder.
 
 > **Prefer the hosted app:** [https://stevokeano.github.io/EMCraft/](https://stevokeano.github.io/EMCraft/) — no install needed.
+
+**Description:** EMCraft by stevokeano — interactive 3D visualizations for electromagnetics and vector calculus, hosted at https://stevokeano.github.io/EMCraft/.
+
+**Topics:** `EMCraft` · `stevokeano` · `electromagnetics` · `vector-calculus` · `maxwells-equations` · `threejs` · `webgl` · `physics` · `visualization` · `github-pages`
 
 ![status](https://img.shields.io/badge/build-none-brightgreen) ![stack](https://img.shields.io/badge/stack-HTML%20%2B%20Three.js-blue) ![license](https://img.shields.io/badge/license-not%20specified-lightgrey)
 
