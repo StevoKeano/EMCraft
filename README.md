@@ -12,6 +12,20 @@
 
 ![status](https://img.shields.io/badge/build-none-brightgreen) ![stack](https://img.shields.io/badge/stack-HTML%20%2B%20Three.js-blue) ![license](https://img.shields.io/badge/license-not%20specified-lightgrey)
 
+## Quick install
+
+```bash
+# macOS / Linux / WSL / Git Bash
+curl -fsSL https://raw.githubusercontent.com/StevoKeano/EMCraft/main/setup.sh | bash
+```
+
+```powershell
+# Windows PowerShell
+irm https://raw.githubusercontent.com/StevoKeano/EMCraft/main/setup.ps1 | iex
+```
+
+Both commands download EMCraft to `~/EMCraft` (`%USERPROFILE%\EMCraft` on Windows), create the virtual environment, and fetch the pinned libraries. See [Setup](#setup) for options.
+
 ## What's inside
 
 | App | Category | Description |

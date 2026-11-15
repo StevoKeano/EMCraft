@@ -29,9 +29,10 @@ function Die($msg)  { Write-Host "ERROR: $msg" -ForegroundColor Red; throw $msg 
 function Test-ProjectDir([string]$path) {
     if ([string]::IsNullOrWhiteSpace($path)) { return $false }
     if (-not (Test-Path -LiteralPath $path -PathType Container)) { return $false }
-    return (Test-Path -LiteralPath (Join-Path $path "index.html")) -and
-           (Test-Path -LiteralPath (Join-Path $path "vendor_assets.py")) -and
-           (Test-Path -LiteralPath (Join-Path $path "setup.ps1"))
+    $hasIndex = Test-Path -LiteralPath (Join-Path $path "index.html")
+    $hasVendor = Test-Path -LiteralPath (Join-Path $path "vendor_assets.py")
+    $hasSetup = Test-Path -LiteralPath (Join-Path $path "setup.ps1")
+    return ($hasIndex -and $hasVendor -and $hasSetup)
 }
 
 # ------------------------------------------------------------- bootstrap ----
@@ -47,6 +48,9 @@ if (Test-ProjectDir $scriptDir) {
 }
 
 if (-not (Test-ProjectDir $target)) {
+    if ((Test-Path -LiteralPath $target) -and -not (Test-Path -LiteralPath $target -PathType Container)) {
+        Die "Target '$target' exists and is not a directory. Set EMCRAFT_DIR to another path."
+    }
     if ((Test-Path -LiteralPath $target) -and (Get-ChildItem -LiteralPath $target -Force | Select-Object -First 1)) {
         Die "Target '$target' exists but is not an EMCraft checkout. Set EMCRAFT_DIR to another path."
     }
