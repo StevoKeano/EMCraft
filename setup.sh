@@ -2,23 +2,91 @@
 # EMCraft setup — idempotent, cross-platform (Linux, macOS, Windows via
 # Git Bash / MSYS2 / WSL). Native Windows PowerShell users can run setup.ps1.
 #
-#   ./setup.sh              create .venv, install deps, cache browser libs
-#   ./setup.sh --offline    ...and rewrite HTML to use the cached local copies
-#   ./setup.sh --no-vendor  skip downloading the pinned browser libraries
-#   ./setup.sh --check      verify the environment without changing anything
+# Run from a checkout:
+#   ./setup.sh [--offline|--no-vendor|--check]
+#
+# Or install with one command from anywhere (clones into ~/EMCraft):
+#   curl -fsSL https://raw.githubusercontent.com/StevoKeano/EMCraft/main/setup.sh | bash
+#   curl -fsSL .../setup.sh | bash -s -- --offline
+#
+# Set EMCRAFT_DIR to choose the install directory.
 set -euo pipefail
+
+REPO_URL="${EMCRAFT_REPO:-https://github.com/StevoKeano/EMCraft.git}"
+TARBALL_URL="${EMCRAFT_TARBALL:-https://github.com/StevoKeano/EMCraft/archive/refs/heads/main.tar.gz}"
+
+say()  { printf '==> %s\n' "$*"; }
+warn() { printf '!!  %s\n' "$*" >&2; }
+die()  { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
+
+is_project_dir() {
+  [ -n "${1:-}" ] && [ -f "$1/index.html" ] && [ -f "$1/vendor_assets.py" ] && [ -f "$1/setup.sh" ]
+}
+
+fetch() {
+  if command -v curl >/dev/null 2>&1; then
+    curl -fsSL "$1" -o "$2"
+  elif command -v wget >/dev/null 2>&1; then
+    wget -qO "$2" "$1"
+  else
+    die "Need curl or wget to download EMCraft"
+  fi
+}
+
+# ------------------------------------------------------------- bootstrap ----
+# When piped (`curl ... | bash`), BASH_SOURCE is empty and there is no
+# checkout yet, so clone or download one before doing anything else.
+SCRIPT_DIR=""
+if [ -n "${BASH_SOURCE[0]:-}" ] && [ -f "${BASH_SOURCE[0]}" ]; then
+  SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+fi
+
+if is_project_dir "$SCRIPT_DIR"; then
+  TARGET="$SCRIPT_DIR"
+elif is_project_dir "${PWD:-}"; then
+  TARGET="$PWD"
+else
+  TARGET="${EMCRAFT_DIR:-$HOME/EMCraft}"
+fi
+
+if ! is_project_dir "$TARGET"; then
+  if [ -e "$TARGET" ] && [ -n "$(ls -A "$TARGET" 2>/dev/null || true)" ]; then
+    die "Target '$TARGET' exists but is not an EMCraft checkout. Set EMCRAFT_DIR to another path."
+  fi
+  if command -v git >/dev/null 2>&1; then
+    say "Cloning EMCraft into $TARGET"
+    git clone --depth 1 "$REPO_URL" "$TARGET" || die "git clone failed"
+  else
+    say "git not found; downloading EMCraft archive"
+    TMP="$(mktemp -d)"
+    trap 'rm -rf "$TMP"' EXIT
+    fetch "$TARBALL_URL" "$TMP/emcraft.tar.gz" || die "Download failed"
+    tar -xzf "$TMP/emcraft.tar.gz" -C "$TMP" || die "Extraction failed"
+    mkdir -p "$TARGET"
+    cp -R "$TMP"/EMCraft-main/. "$TARGET"/ || die "Copy failed"
+  fi
+fi
+cd "$TARGET"
 
 MIN_MAJOR=3
 MIN_MINOR=8
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-cd "$ROOT"
-
 OFFLINE=0
 NO_VENDOR=0
 CHECK=0
 
 usage() {
-  sed -n '2,8p' "$0" | sed 's/^# \{0,1\}//'
+  cat <<'EOF'
+EMCraft setup — idempotent, cross-platform (Linux, macOS, Windows Git Bash/MSYS/WSL).
+
+  ./setup.sh              create .venv, install deps, cache browser libs
+  ./setup.sh --offline    ...and rewrite HTML to use the cached local copies
+  ./setup.sh --no-vendor  skip downloading the pinned browser libraries
+  ./setup.sh --check      verify the environment without changing anything
+
+One-command install (from anywhere):
+  curl -fsSL https://raw.githubusercontent.com/StevoKeano/EMCraft/main/setup.sh | bash
+  curl -fsSL .../setup.sh | EMCRAFT_DIR=~/src/EMCraft bash -s -- --offline
+EOF
 }
 
 for arg in "$@"; do
@@ -48,6 +116,7 @@ case "$OS" in
   *)                                 PLATFORM="$OS" ;;
 esac
 info "Platform: $PLATFORM"
+info "Project:  $TARGET"
 
 # ---------------------------------------------------------------- Python ----
 find_python() {
@@ -70,7 +139,7 @@ info "Python: $PY_VERSION ($PY_BIN)"
   || die "Python ${MIN_MAJOR}.${MIN_MINOR}+ required, found $PY_VERSION"
 
 # --------------------------------------------------------------- venv ----
-VENV="$ROOT/.venv"
+VENV="$TARGET/.venv"
 venv_python() {
   if [ -x "$VENV/bin/python" ]; then
     printf '%s' "$VENV/bin/python"
@@ -143,6 +212,7 @@ info "Setup complete."
 printf '\nNext steps:\n'
 printf '  source .venv/bin/activate        # Windows Git Bash: source .venv/Scripts/activate\n'
 printf '  python -m http.server 8000       # then open http://localhost:8000\n'
+printf '\nProject directory: %s\n' "$TARGET"
 if [ "$OFFLINE" -eq 1 ]; then
-  printf '\nHTML now points at ./vendor. Serve over HTTP (file:// blocks ES modules).\n'
+  printf 'HTML now points at ./vendor. Serve over HTTP (file:// blocks ES modules).\n'
 fi

@@ -37,23 +37,51 @@ The setup script is idempotent — run it as often as you like. It will:
 4. Download the exact, version-pinned browser libraries into `vendor/` if they are missing.
 5. Verify the result.
 
-### macOS and Linux
+### One command (any OS)
+
+The setup scripts bootstrap themselves: if they are not already inside an EMCraft checkout, they download one to `~/EMCraft` (`%USERPROFILE%\EMCraft` on Windows) and then set it up.
+
+**macOS, Linux, WSL, or Git Bash**
 
 ```bash
-chmod +x setup.sh
-./setup.sh
+curl -fsSL https://raw.githubusercontent.com/StevoKeano/EMCraft/main/setup.sh | bash
 ```
 
-### Windows (PowerShell)
+**Windows PowerShell**
 
 ```powershell
+irm https://raw.githubusercontent.com/StevoKeano/EMCraft/main/setup.ps1 | iex
+```
+
+Choose a different install directory with `EMCRAFT_DIR`:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/StevoKeano/EMCraft/main/setup.sh | EMCRAFT_DIR=~/src/EMCraft bash -s -- --offline
+```
+
+```powershell
+$env:EMCRAFT_DIR = "$HOME\src\EMCraft"
+irm https://raw.githubusercontent.com/StevoKeano/EMCraft/main/setup.ps1 | iex
+```
+
+> The one-liners run code downloaded from GitHub. Prefer the clone-then-run flow below if you want to inspect the scripts first.
+
+### From an existing checkout
+
+```bash
+# macOS / Linux / WSL / Git Bash
+./setup.sh
+
+# Windows PowerShell
 powershell -ExecutionPolicy Bypass -File setup.ps1
 ```
 
-### Windows (Git Bash, MSYS2, or WSL)
+`powershell -File setup.ps1` needs `setup.ps1` to already exist in the current directory — that is why it is not a one-command install on a fresh machine. Use the one-liner above, or clone first:
 
 ```bash
-bash setup.sh
+git clone https://github.com/StevoKeano/EMCraft.git
+cd EMCraft
+./setup.sh        # Windows: powershell -ExecutionPolicy Bypass -File setup.ps1
 ```
 
 ### Setup options
