@@ -1,6 +1,10 @@
-# EMCraft
+<h1 align="center"><a href="https://stevokeano.github.io/EMCraft/">EMCraft — Open the live app</a></h1>
+
+<h2 align="center"><a href="https://stevokeano.github.io/EMCraft/">https://stevokeano.github.io/EMCraft/</a></h2>
 
 **Electromagnetics, visualized.** A zero-build collection of interactive 3D demos for electromagnetics and vector calculus, plus a fast local launcher that indexes every tool in the folder.
+
+> **Prefer the hosted app:** [https://stevokeano.github.io/EMCraft/](https://stevokeano.github.io/EMCraft/) — no install needed.
 
 ![status](https://img.shields.io/badge/build-none-brightgreen) ![stack](https://img.shields.io/badge/stack-HTML%20%2B%20Three.js-blue) ![license](https://img.shields.io/badge/license-not%20specified-lightgrey)
 
