@@ -1,0 +1,3181 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>
+      EMFCraft — Interactive Electric &amp; Magnetic Fields Laboratory
+    </title>
+    <meta
+      name="description"
+      content="EMFCraft is a single-file interactive 3D laboratory for classical electromagnetics: curl and divergence visualizers, Gaussian surfaces, Amperian loops, live numerical flux/circulation integrators, a spinning paddlewheel probe, Maxwell's equations in integral/differential and time-domain/phasor form, an electric-magnetic duality table, and a coordinate/superposition sandbox."
+    />
+
+    <style>
+      :root {
+        --bg: #090d16;
+        --panel: rgba(15, 23, 42, 0.72);
+        --border: rgba(56, 189, 248, 0.18);
+        --border-strong: rgba(56, 189, 248, 0.45);
+        --text: #e2e8f0;
+        --muted: #94a3b8;
+        --accent: #38bdf8;
+        --accent-soft: rgba(56, 189, 248, 0.16);
+        --x: #ef4444;
+        --y: #22c55e;
+        --z: #3b82f6;
+        --e: #38bdf8;
+        --b: #f472b6;
+        --j: #fbbf24;
+        --d: #34d399;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        overflow: hidden;
+        background: var(--bg);
+        color: var(--text);
+        font-family:
+          ui-sans-serif,
+          system-ui,
+          -apple-system,
+          "Segoe UI",
+          Roboto,
+          sans-serif;
+        -webkit-font-smoothing: antialiased;
+      }
+      #app {
+        position: fixed;
+        inset: 0;
+      }
+      canvas {
+        display: block;
+      }
+
+      /* ---------------- Top bar ---------------- */
+      #topbar {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 58px;
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        padding: 0 16px;
+        background: rgba(9, 13, 22, 0.86);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        border-bottom: 1px solid var(--border);
+        z-index: 30;
+      }
+      .brand {
+        font-weight: 700;
+        letter-spacing: 0.05em;
+        font-size: 16px;
+        color: #f1f5f9;
+        white-space: nowrap;
+      }
+      .brand span {
+        color: var(--accent);
+      }
+      .tabs {
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap;
+      }
+      .tab {
+        padding: 6px 11px;
+        border-radius: 8px;
+        cursor: pointer;
+        border: 1px solid rgba(56, 189, 248, 0.18);
+        background: transparent;
+        color: var(--muted);
+        font-size: 11.5px;
+        font-weight: 600;
+        letter-spacing: 0.02em;
+        transition:
+          background 0.15s,
+          color 0.15s,
+          border-color 0.15s;
+      }
+      .tab:hover {
+        color: #e0f2fe;
+        border-color: rgba(56, 189, 248, 0.4);
+      }
+      .tab.active {
+        background: var(--accent-soft);
+        color: #e0f2fe;
+        border-color: var(--border-strong);
+      }
+      .spacer {
+        flex: 1;
+      }
+      .pill {
+        padding: 7px 12px;
+        border-radius: 8px;
+        cursor: pointer;
+        border: 1px solid var(--border-strong);
+        background: rgba(56, 189, 248, 0.12);
+        color: var(--accent);
+        font-size: 12px;
+        font-weight: 600;
+      }
+      .pill:hover {
+        background: rgba(56, 189, 248, 0.22);
+      }
+      .pill.active {
+        background: rgba(56, 189, 248, 0.28);
+        color: #f0f9ff;
+      }
+      .omega-wrap {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 11px;
+        color: var(--muted);
+      }
+      .omega-wrap input[type="range"] {
+        width: 110px;
+      }
+      .omega-wrap .val {
+        color: var(--accent);
+        font-variant-numeric: tabular-nums;
+        min-width: 38px;
+      }
+
+      /* ---------------- Left panel ---------------- */
+      #left {
+        position: fixed;
+        top: 70px;
+        left: 14px;
+        width: 300px;
+        max-height: calc(100vh - 300px);
+        overflow-y: auto;
+        background: var(--panel);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        padding: 12px 14px 16px;
+        font-size: 12px;
+        z-index: 20;
+        box-shadow: 0 14px 40px rgba(0, 0, 0, 0.5);
+      }
+      #left::-webkit-scrollbar,
+      #drawer::-webkit-scrollbar {
+        width: 8px;
+      }
+      #left::-webkit-scrollbar-thumb,
+      #drawer::-webkit-scrollbar-thumb {
+        background: rgba(56, 189, 248, 0.25);
+        border-radius: 4px;
+      }
+      .sec {
+        margin-bottom: 14px;
+      }
+      .sec:last-child {
+        margin-bottom: 0;
+      }
+      .sec-title {
+        font-size: 10px;
+        text-transform: uppercase;
+        letter-spacing: 0.13em;
+        color: var(--muted);
+        margin-bottom: 6px;
+        font-weight: 700;
+      }
+      .hint {
+        color: var(--muted);
+        font-size: 10.5px;
+        line-height: 1.45;
+        margin-top: 6px;
+      }
+      select {
+        width: 100%;
+        padding: 8px 10px;
+        border-radius: 8px;
+        background: rgba(2, 6, 23, 0.75);
+        color: var(--text);
+        border: 1px solid rgba(56, 189, 248, 0.25);
+        font-size: 12px;
+        outline: none;
+      }
+      select:focus {
+        border-color: var(--accent);
+      }
+      .row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin: 8px 0 3px;
+        font-size: 11px;
+        color: var(--muted);
+      }
+      .row .val {
+        color: var(--accent);
+        font-variant-numeric: tabular-nums;
+      }
+      input[type="range"] {
+        width: 100%;
+        height: 4px;
+        border-radius: 2px;
+        background: rgba(56, 189, 248, 0.2);
+        outline: none;
+        -webkit-appearance: none;
+        appearance: none;
+      }
+      input[type="range"]::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        width: 14px;
+        height: 14px;
+        border-radius: 50%;
+        background: var(--accent);
+        cursor: pointer;
+        box-shadow: 0 0 8px rgba(56, 189, 248, 0.6);
+      }
+      input[type="range"]::-moz-range-thumb {
+        width: 14px;
+        height: 14px;
+        border-radius: 50%;
+        background: var(--accent);
+        cursor: pointer;
+        border: none;
+      }
+      .check {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        color: var(--muted);
+        font-size: 11px;
+        margin-top: 8px;
+        cursor: pointer;
+      }
+      .check input[type="checkbox"] {
+        accent-color: var(--accent);
+      }
+      .readout {
+        margin-top: 8px;
+        padding: 8px 10px;
+        border-radius: 8px;
+        background: rgba(2, 6, 23, 0.6);
+        border: 1px solid rgba(56, 189, 248, 0.15);
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 10.5px;
+        line-height: 1.55;
+        color: #cbd5e1;
+        white-space: pre-wrap;
+      }
+
+      /* ---------------- HUD ---------------- */
+      #hud {
+        position: fixed;
+        left: 14px;
+        bottom: 14px;
+        width: 400px;
+        background: var(--panel);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        padding: 12px 14px;
+        font-size: 12px;
+        z-index: 20;
+        box-shadow: 0 14px 40px rgba(0, 0, 0, 0.5);
+      }
+      .hud-title {
+        font-weight: 700;
+        color: #f1f5f9;
+        font-size: 12.5px;
+        margin-bottom: 6px;
+      }
+      .eq {
+        margin: 4px 0;
+        color: #cbd5e1;
+        min-height: 20px;
+        overflow-x: auto;
+      }
+      .eq .katex {
+        font-size: 1em;
+      }
+      .hud-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 6px;
+        margin-top: 8px;
+        padding-top: 8px;
+        border-top: 1px solid rgba(56, 189, 248, 0.15);
+      }
+      .hud-grid .k {
+        color: var(--muted);
+        font-size: 10px;
+        display: block;
+      }
+      .hud-grid .v {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 11px;
+        color: #e0f2fe;
+        font-variant-numeric: tabular-nums;
+      }
+      .hud-value-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-top: 8px;
+        padding-top: 8px;
+        border-top: 1px solid rgba(56, 189, 248, 0.15);
+      }
+      .hud-value-row .k {
+        color: var(--muted);
+        font-size: 11px;
+      }
+      .value {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 17px;
+        color: var(--accent);
+        font-variant-numeric: tabular-nums;
+      }
+      .badge {
+        padding: 2px 8px;
+        border-radius: 999px;
+        font-size: 9.5px;
+        font-weight: 700;
+        letter-spacing: 0.07em;
+        text-transform: uppercase;
+      }
+      .badge.zero {
+        background: rgba(148, 163, 184, 0.2);
+        color: #cbd5e1;
+      }
+      .badge.pos {
+        background: rgba(52, 211, 153, 0.2);
+        color: #34d399;
+      }
+      .badge.neg {
+        background: rgba(248, 113, 113, 0.2);
+        color: #f87171;
+      }
+      .note {
+        margin-top: 7px;
+        color: var(--muted);
+        font-size: 10.5px;
+        line-height: 1.45;
+      }
+      .legend {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-top: 7px;
+        font-size: 10px;
+        color: var(--muted);
+      }
+      .legend .dot {
+        display: inline-block;
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        margin-right: 4px;
+      }
+
+      /* ---------------- Right drawer ---------------- */
+      #drawer {
+        position: fixed;
+        top: 70px;
+        right: 14px;
+        width: 380px;
+        max-height: calc(100vh - 90px);
+        overflow-y: auto;
+        background: var(--panel);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        font-size: 12px;
+        z-index: 20;
+        box-shadow: 0 14px 40px rgba(0, 0, 0, 0.5);
+        transition: width 0.2s ease;
+      }
+      #drawer.collapsed {
+        width: 46px;
+        overflow: hidden;
+      }
+      .drawer-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 10px 12px;
+        border-bottom: 1px solid rgba(56, 189, 248, 0.15);
+      }
+      .drawer-title {
+        font-weight: 700;
+        color: #f1f5f9;
+        font-size: 12px;
+        letter-spacing: 0.02em;
+      }
+      #drawer.collapsed .drawer-title {
+        display: none;
+      }
+      #drawer-toggle {
+        background: transparent;
+        border: 1px solid var(--border-strong);
+        color: var(--accent);
+        width: 26px;
+        height: 26px;
+        border-radius: 7px;
+        cursor: pointer;
+        font-size: 14px;
+        line-height: 1;
+        padding: 0;
+      }
+      #drawer-toggle:hover {
+        background: var(--accent-soft);
+      }
+      #drawer-body {
+        padding: 12px;
+      }
+      #drawer.collapsed #drawer-body {
+        display: none;
+      }
+      .drawer-tabs {
+        display: flex;
+        gap: 6px;
+        margin-bottom: 12px;
+      }
+      .dtab {
+        flex: 1;
+        padding: 7px 8px;
+        border-radius: 8px;
+        cursor: pointer;
+        border: 1px solid rgba(56, 189, 248, 0.18);
+        background: transparent;
+        color: var(--muted);
+        font-size: 11px;
+        font-weight: 600;
+      }
+      .dtab:hover {
+        color: #e0f2fe;
+      }
+      .dtab.active {
+        background: var(--accent-soft);
+        color: #e0f2fe;
+        border-color: var(--border-strong);
+      }
+      .dpanel {
+        display: none;
+      }
+      .dpanel.active {
+        display: block;
+      }
+      .toggle-row {
+        display: flex;
+        gap: 8px;
+        margin-bottom: 10px;
+        flex-wrap: wrap;
+      }
+      .seg {
+        display: flex;
+        border: 1px solid rgba(56, 189, 248, 0.22);
+        border-radius: 8px;
+        overflow: hidden;
+      }
+      .seg button {
+        padding: 6px 10px;
+        border: none;
+        background: transparent;
+        color: var(--muted);
+        font-size: 10.5px;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      .seg button.active {
+        background: var(--accent-soft);
+        color: #e0f2fe;
+      }
+      .card {
+        background: rgba(2, 6, 23, 0.55);
+        border: 1px solid rgba(56, 189, 248, 0.14);
+        border-radius: 10px;
+        padding: 10px 12px;
+        margin-bottom: 10px;
+      }
+      .card .card-title {
+        font-size: 10.5px;
+        font-weight: 700;
+        color: var(--accent);
+        letter-spacing: 0.04em;
+        margin-bottom: 6px;
+      }
+      .card .eq {
+        margin: 3px 0;
+      }
+      .card .eq .katex {
+        font-size: 0.95em;
+      }
+      .bridge {
+        font-size: 10px;
+        color: var(--muted);
+        margin-top: 4px;
+      }
+      .constitutive {
+        margin-top: 10px;
+      }
+      .eq-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+      }
+      .eq-row .eq {
+        margin: 0;
+      }
+
+      table.duality {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 11px;
+      }
+      table.duality th,
+      table.duality td {
+        padding: 7px 8px;
+        border-bottom: 1px solid rgba(56, 189, 248, 0.12);
+        text-align: left;
+        vertical-align: top;
+      }
+      table.duality th {
+        color: var(--muted);
+        font-size: 10px;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+      }
+      table.duality td.e {
+        color: var(--e);
+      }
+      table.duality td.m {
+        color: var(--b);
+      }
+      table.duality td.k {
+        color: var(--muted);
+      }
+      table.duality .katex {
+        font-size: 0.95em;
+      }
+
+      .conv-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr 1fr;
+        gap: 6px;
+        margin-bottom: 8px;
+      }
+      .conv-grid input,
+      .conv-grid select {
+        width: 100%;
+        padding: 7px 8px;
+        border-radius: 7px;
+        background: rgba(2, 6, 23, 0.75);
+        color: var(--text);
+        border: 1px solid rgba(56, 189, 248, 0.22);
+        font-size: 11px;
+        outline: none;
+      }
+      .conv-grid input:focus {
+        border-color: var(--accent);
+      }
+      .conv-label {
+        font-size: 10px;
+        color: var(--muted);
+        margin-bottom: 3px;
+      }
+      .conv-out {
+        background: rgba(2, 6, 23, 0.55);
+        border: 1px solid rgba(56, 189, 248, 0.14);
+        border-radius: 9px;
+        padding: 9px 10px;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 10.5px;
+        line-height: 1.6;
+        color: #cbd5e1;
+        white-space: pre-wrap;
+        margin-bottom: 8px;
+      }
+      .charge-row {
+        display: grid;
+        grid-template-columns: 62px 1fr 1fr 1fr;
+        gap: 6px;
+        margin-bottom: 6px;
+        align-items: center;
+      }
+      .charge-row input {
+        width: 100%;
+        padding: 6px 7px;
+        border-radius: 6px;
+        background: rgba(2, 6, 23, 0.75);
+        color: var(--text);
+        border: 1px solid rgba(56, 189, 248, 0.2);
+        font-size: 10.5px;
+        outline: none;
+      }
+      .charge-row input:focus {
+        border-color: var(--accent);
+      }
+      .btn-small {
+        padding: 7px 10px;
+        border-radius: 7px;
+        cursor: pointer;
+        border: 1px solid var(--border-strong);
+        background: rgba(56, 189, 248, 0.12);
+        color: var(--accent);
+        font-size: 11px;
+        font-weight: 600;
+      }
+      .btn-small:hover {
+        background: rgba(56, 189, 248, 0.22);
+      }
+
+      @media (max-width: 900px) {
+        #left {
+          width: 250px;
+        }
+        #hud {
+          width: calc(100% - 28px);
+        }
+        #drawer {
+          width: 300px;
+        }
+      }
+    </style>
+
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+          "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+        }
+      }
+    </script>
+
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css"
+    />
+    <script
+      defer
+      src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"
+    ></script>
+  </head>
+  <body>
+    <div id="app"></div>
+
+    <!-- ================= TOP BAR ================= -->
+    <div id="topbar">
+      <div class="brand">EMF<span>Craft</span></div>
+      <div class="tabs">
+        <button class="tab active" data-cat="Vector Calculus">
+          Vector Calculus
+        </button>
+        <button class="tab" data-cat="Electrostatics">Electrostatics</button>
+        <button class="tab" data-cat="Magnetostatics">Magnetostatics</button>
+        <button class="tab" data-cat="Dynamic Maxwell">Dynamic Maxwell</button>
+      </div>
+      <div class="spacer"></div>
+      <button id="btn-play" class="pill active">Pause</button>
+      <div class="omega-wrap">
+        <span>&omega;</span>
+        <input
+          type="range"
+          id="omega"
+          min="0.2"
+          max="6"
+          step="0.05"
+          value="1.5"
+        />
+        <span class="val" id="omega-val">1.50</span>
+      </div>
+      <button id="btn-reset-cam" class="pill">Reset Camera</button>
+    </div>
+
+    <!-- ================= LEFT PANEL ================= -->
+    <div id="left">
+      <div class="sec">
+        <div class="sec-title">Field Preset</div>
+        <select id="preset-select"></select>
+        <div class="hint" id="preset-hint"></div>
+      </div>
+
+      <div class="sec">
+        <div class="sec-title">Display Layer</div>
+        <select id="layer-select"></select>
+      </div>
+
+      <div class="sec">
+        <div class="sec-title">Field Density</div>
+        <div class="row">
+          <span>Grid samples per axis</span
+          ><span class="val" id="density-val">7</span>
+        </div>
+        <input type="range" id="density" min="3" max="10" step="1" value="7" />
+      </div>
+
+      <div class="sec">
+        <div class="sec-title">Probe / Paddlewheel</div>
+        <div class="row">
+          <span>X</span><span class="val" id="probe-x-val">1.20</span>
+        </div>
+        <input
+          type="range"
+          id="probe-x"
+          min="-2.5"
+          max="2.5"
+          step="0.01"
+          value="1.2"
+        />
+        <div class="row">
+          <span>Y</span><span class="val" id="probe-y-val">1.00</span>
+        </div>
+        <input
+          type="range"
+          id="probe-y"
+          min="-2.5"
+          max="2.5"
+          step="0.01"
+          value="1.0"
+        />
+        <div class="row">
+          <span>Z</span><span class="val" id="probe-z-val">0.80</span>
+        </div>
+        <input
+          type="range"
+          id="probe-z"
+          min="-2.5"
+          max="2.5"
+          step="0.01"
+          value="0.8"
+        />
+        <div class="row"><span>Spin axis</span></div>
+        <select id="axis-select">
+          <option value="x">x&#770; (red)</option>
+          <option value="y">y&#770; (green)</option>
+          <option value="z" selected>z&#770; (blue)</option>
+        </select>
+        <div class="readout" id="paddle-readout">&mdash;</div>
+      </div>
+
+      <div class="sec">
+        <div class="sec-title">Integration Geometry</div>
+        <select id="surface-select">
+          <option value="none">None &mdash; field only</option>
+          <option value="sphere">Closed Gaussian Sphere</option>
+          <option value="cylinder">Closed Cylinder / Pillbox</option>
+          <option value="cube">Closed Cube / Box</option>
+          <option value="sheet">Open Rectangular Sheet</option>
+          <option value="loop-circle">Circular Amperian Loop</option>
+          <option value="loop-rect">Rectangular Amperian Loop</option>
+        </select>
+        <div class="row">
+          <span>Scale / Radius R</span><span class="val" id="R-val">1.20</span>
+        </div>
+        <input
+          type="range"
+          id="R"
+          min="0.4"
+          max="2.5"
+          step="0.01"
+          value="1.2"
+        />
+        <div class="row">
+          <span>Position X</span><span class="val" id="sx-val">0.00</span>
+        </div>
+        <input
+          type="range"
+          id="sx"
+          min="-2.5"
+          max="2.5"
+          step="0.01"
+          value="0"
+        />
+        <div class="row">
+          <span>Position Y</span><span class="val" id="sy-val">0.00</span>
+        </div>
+        <input
+          type="range"
+          id="sy"
+          min="-2.5"
+          max="2.5"
+          step="0.01"
+          value="0"
+        />
+        <div class="row">
+          <span>Position Z</span><span class="val" id="sz-val">0.00</span>
+        </div>
+        <input
+          type="range"
+          id="sz"
+          min="-2.5"
+          max="2.5"
+          step="0.01"
+          value="0"
+        />
+        <div class="row">
+          <span>Tilt (&deg;)</span><span class="val" id="tilt-val">0</span>
+        </div>
+        <input type="range" id="tilt" min="-180" max="180" step="1" value="0" />
+        <div class="row">
+          <span>Spin (&deg;)</span><span class="val" id="spin-val">0</span>
+        </div>
+        <input type="range" id="spin" min="-180" max="180" step="1" value="0" />
+        <label class="check"
+          ><input type="checkbox" id="chk-normals" /> Show outward normals
+          (d&#1202;)</label
+        >
+        <label class="check"
+          ><input type="checkbox" id="chk-arrows" checked /> Show field
+          arrows</label
+        >
+        <label class="check"
+          ><input type="checkbox" id="chk-stream" /> Show curl
+          streamlines</label
+        >
+      </div>
+
+      <div class="sec" id="extra-sec" style="display: none">
+        <div class="sec-title">Preset Control</div>
+        <div class="row">
+          <span id="extra-label">&Delta;&phi;</span
+          ><span class="val" id="extra-val">60&deg;</span>
+        </div>
+        <input
+          type="range"
+          id="extra-slider"
+          min="10"
+          max="180"
+          step="1"
+          value="60"
+        />
+      </div>
+
+      <div class="sec">
+        <div class="sec-title">Coordinate Grid</div>
+        <select id="grid-select">
+          <option value="cartesian">Cartesian (x, y, z)</option>
+          <option value="cylindrical">Cylindrical (r, &phi;, z)</option>
+          <option value="spherical">Spherical (r, &theta;, &phi;)</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- ================= HUD ================= -->
+    <div id="hud">
+      <div class="hud-title" id="hud-title">&mdash;</div>
+      <div class="eq" id="hud-integral"></div>
+      <div class="eq" id="hud-differential"></div>
+      <div class="hud-grid">
+        <div>
+          <span class="k">&#8711; &times; F (curl)</span
+          ><span class="v" id="hud-curl">&mdash;</span>
+        </div>
+        <div>
+          <span class="k">&#8711; &middot; F (divergence)</span
+          ><span class="v" id="hud-div">&mdash;</span>
+        </div>
+      </div>
+      <div class="hud-value-row">
+        <span class="k" id="hud-qty">&Phi;</span>
+        <span class="value" id="hud-value">&mdash;</span>
+        <span class="badge zero" id="hud-badge">&mdash;</span>
+      </div>
+      <div class="note" id="hud-note"></div>
+      <div class="legend" id="hud-legend"></div>
+    </div>
+
+    <!-- ================= RIGHT DRAWER ================= -->
+    <div id="drawer">
+      <div class="drawer-head">
+        <div class="drawer-title">Reference Drawer</div>
+        <button id="drawer-toggle" aria-label="Collapse drawer">&rang;</button>
+      </div>
+      <div id="drawer-body">
+        <div class="drawer-tabs">
+          <button class="dtab active" data-panel="maxwell">Maxwell</button>
+          <button class="dtab" data-panel="duality">Duality</button>
+          <button class="dtab" data-panel="converter">Converter</button>
+        </div>
+
+        <div class="dpanel active" id="panel-maxwell">
+          <div class="toggle-row">
+            <div class="seg" id="seg-form">
+              <button data-form="integral" class="active">Integral</button>
+              <button data-form="differential">Differential</button>
+            </div>
+            <div class="seg" id="seg-time">
+              <button data-time="td" class="active">Time-domain</button>
+              <button data-time="phasor">Phasor (j&omega;)</button>
+            </div>
+          </div>
+          <div id="maxwell-cards"></div>
+          <div class="constitutive">
+            <div class="sec-title">Constitutive Relations</div>
+            <div class="eq-row" id="constitutive"></div>
+          </div>
+        </div>
+
+        <div class="dpanel" id="panel-duality">
+          <table class="duality">
+            <thead>
+              <tr>
+                <th>Concept</th>
+                <th>Electric</th>
+                <th>Magnetic</th>
+              </tr>
+            </thead>
+            <tbody id="duality-body"></tbody>
+          </table>
+        </div>
+
+        <div class="dpanel" id="panel-converter">
+          <div class="sec-title">Coordinate System</div>
+          <select id="conv-system">
+            <option value="rect">Rectangular (x, y, z)</option>
+            <option value="cyl">Cylindrical (r, &phi;, z)</option>
+            <option value="sph">Spherical (r, &theta;, &phi;)</option>
+          </select>
+
+          <div class="sec-title" style="margin-top: 10px">Probe Coordinate</div>
+          <div class="conv-grid">
+            <div>
+              <div class="conv-label" id="conv-l1">x</div>
+              <input id="conv-a" type="number" value="2" step="0.1" />
+            </div>
+            <div>
+              <div class="conv-label" id="conv-l2">y</div>
+              <input id="conv-b" type="number" value="1" step="0.1" />
+            </div>
+            <div>
+              <div class="conv-label" id="conv-l3">z</div>
+              <input id="conv-c" type="number" value="0.5" step="0.1" />
+            </div>
+          </div>
+          <div class="conv-out" id="conv-out">&mdash;</div>
+          <button class="btn-small" id="conv-jump">
+            Jump camera &amp; probe to this point
+          </button>
+
+          <div class="sec-title" style="margin-top: 14px">
+            Superposition Sandbox &mdash; Point Charges
+          </div>
+          <div class="charge-row">
+            <input id="q1" type="number" value="30" step="1" title="Q1 (nC)" />
+            <input id="c1a" type="number" value="0" step="0.1" />
+            <input id="c1b" type="number" value="2" step="0.1" />
+            <input id="c1c" type="number" value="0" step="0.1" />
+          </div>
+          <div class="charge-row">
+            <input id="q2" type="number" value="-30" step="1" title="Q2 (nC)" />
+            <input id="c2a" type="number" value="0" step="0.1" />
+            <input id="c2b" type="number" value="-2" step="0.1" />
+            <input id="c2c" type="number" value="0" step="0.1" />
+          </div>
+          <div class="charge-row">
+            <input id="q3" type="number" value="0" step="1" title="Q3 (nC)" />
+            <input id="c3a" type="number" value="0" step="0.1" />
+            <input id="c3b" type="number" value="0" step="0.1" />
+            <input id="c3c" type="number" value="0" step="0.1" />
+          </div>
+          <div class="conv-out" id="charge-out">&mdash;</div>
+        </div>
+      </div>
+    </div>
+
+    <script type="module">
+import * as THREE from "three";
+import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+
+/* ============================================================
+   CONSTANTS
+   ============================================================ */
+const KE = 8.9875517923e9;
+const EPS0 = 8.8541878128e-12;
+const MU0 = 1.25663706212e-6;
+const V = (x, y, z) => new THREE.Vector3(x, y, z);
+const deg = THREE.MathUtils.degToRad;
+
+/* ============================================================
+   STATE
+   ============================================================ */
+const state = {
+  preset: "1A",
+  layer: "v",
+  density: 7,
+  probe: { x: 1.2, y: 1.0, z: 0.8 },
+  axis: "z",
+  surface: "none",
+  R: 1.2,
+  spos: { x: 0, y: 0, z: 0 },
+  tilt: 0,
+  spin: 0,
+  showNormals: false,
+  showArrows: true,
+  showStream: false,
+  omega: 1.5,
+  playing: true,
+  t: 0,
+  grid: "cartesian",
+  cat: "Vector Calculus",
+};
+
+/* ============================================================
+   RENDERER / SCENE / CAMERA
+   ============================================================ */
+const container = document.getElementById("app");
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setClearColor(0x090d16, 1);
+container.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.fog = new THREE.FogExp2(0x090d16, 0.03);
+
+const camera = new THREE.PerspectiveCamera(
+  50,
+  window.innerWidth / window.innerHeight,
+  0.1,
+  100,
+);
+camera.position.set(4.8, 3.8, 5.8);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.08;
+controls.target.set(0, 0, 0);
+controls.minDistance = 2;
+controls.maxDistance = 24;
+
+/* ============================================================
+   LIGHTING
+   ============================================================ */
+scene.add(new THREE.AmbientLight(0xffffff, 0.55));
+const dirLight = new THREE.DirectionalLight(0xffffff, 0.85);
+dirLight.position.set(5, 8, 6);
+scene.add(dirLight);
+const rimLight = new THREE.DirectionalLight(0x38bdf8, 0.35);
+rimLight.position.set(-6, -3, -5);
+scene.add(rimLight);
+
+/* ============================================================
+   HELPERS
+   ============================================================ */
+function line(color, a, b, opacity = 0.85) {
+  const geo = new THREE.BufferGeometry().setFromPoints([a, b]);
+  const mat = new THREE.LineBasicMaterial({
+    color,
+    transparent: true,
+    opacity,
+  });
+  return new THREE.Line(geo, mat);
+}
+
+function makeLabel(text, color) {
+  const canvas = document.createElement("canvas");
+  canvas.width = 128;
+  canvas.height = 64;
+  const ctx = canvas.getContext("2d");
+  ctx.clearRect(0, 0, 128, 64);
+  ctx.fillStyle = color;
+  ctx.font = "bold 44px ui-sans-serif, system-ui, sans-serif";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(text, 64, 34);
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.needsUpdate = true;
+  const mat = new THREE.SpriteMaterial({
+    map: tex,
+    transparent: true,
+    depthTest: false,
+    depthWrite: false,
+  });
+  const sprite = new THREE.Sprite(mat);
+  sprite.scale.set(0.55, 0.275, 1);
+  return sprite;
+}
+
+function disposeGroup(g) {
+  g.traverse((o) => {
+    if (o.geometry) o.geometry.dispose();
+    if (o.material) {
+      if (Array.isArray(o.material)) o.material.forEach((m) => m.dispose());
+      else o.material.dispose();
+    }
+  });
+  while (g.children.length) g.remove(g.children[0]);
+}
+
+function fmtNum(v) {
+  if (!isFinite(v)) return "—";
+  const a = Math.abs(v);
+  if (a === 0) return "0";
+  if (a >= 1e4 || a < 1e-3) return v.toExponential(2);
+  return v.toFixed(3);
+}
+function fmtVec(v) {
+  return `(${fmtNum(v.x)}, ${fmtNum(v.y)}, ${fmtNum(v.z)})`;
+}
+
+/* ============================================================
+   COORDINATE GRIDS
+   ============================================================ */
+const gridGroups = {
+  cartesian: new THREE.Group(),
+  cylindrical: new THREE.Group(),
+  spherical: new THREE.Group(),
+};
+Object.values(gridGroups).forEach((g) => scene.add(g));
+
+(function buildCartesian() {
+  const g = gridGroups.cartesian;
+  const floor = new THREE.GridHelper(8, 16, 0x1e293b, 0x1e293b);
+  floor.position.y = -2.4;
+  g.add(floor);
+  g.add(line(0xef4444, V(-3.2, 0, 0), V(3.2, 0, 0)));
+  g.add(line(0x22c55e, V(0, -3.2, 0), V(0, 3.2, 0)));
+  g.add(line(0x3b82f6, V(0, 0, -3.2), V(0, 0, 3.2)));
+  const lx = makeLabel("X", "#ef4444");
+  lx.position.set(3.45, 0, 0);
+  g.add(lx);
+  const ly = makeLabel("Y", "#22c55e");
+  ly.position.set(0, 3.45, 0);
+  g.add(ly);
+  const lz = makeLabel("Z", "#3b82f6");
+  lz.position.set(0, 0, 3.45);
+  g.add(lz);
+})();
+
+(function buildCylindrical() {
+  const g = gridGroups.cylindrical;
+  const ringMat = new THREE.LineBasicMaterial({ color: 0x1e293b });
+  for (const r of [0.5, 1, 1.5, 2, 2.5]) {
+    const pts = [];
+    for (let i = 0; i <= 64; i++) {
+      const a = (i / 64) * Math.PI * 2;
+      pts.push(V(r * Math.cos(a), 0, r * Math.sin(a)));
+    }
+    g.add(
+      new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), ringMat),
+    );
+  }
+  for (let i = 0; i < 12; i++) {
+    const a = (i / 12) * Math.PI * 2;
+    g.add(
+      line(0x1e293b, V(0, 0, 0), V(2.5 * Math.cos(a), 0, 2.5 * Math.sin(a))),
+    );
+  }
+  g.add(line(0x3b82f6, V(0, -2.5, 0), V(0, 2.5, 0)));
+  const lr = makeLabel("r", "#38bdf8");
+  lr.position.set(2.65, 0, 0);
+  g.add(lr);
+  const lp = makeLabel("φ", "#fbbf24");
+  lp.position.set(0, 0, 2.65);
+  g.add(lp);
+})();
+
+(function buildSpherical() {
+  const g = gridGroups.spherical;
+  const R = 2.5;
+  const ringMat = new THREE.LineBasicMaterial({ color: 0x1e293b });
+  for (const th of [30, 60, 90, 120, 150]) {
+    const t = deg(th);
+    const r = R * Math.sin(t);
+    const y = R * Math.cos(t);
+    const pts = [];
+    for (let i = 0; i <= 64; i++) {
+      const a = (i / 64) * Math.PI * 2;
+      pts.push(V(r * Math.cos(a), y, r * Math.sin(a)));
+    }
+    g.add(
+      new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), ringMat),
+    );
+  }
+  for (let i = 0; i < 12; i++) {
+    const a = (i / 12) * Math.PI * 2;
+    const pts = [];
+    for (let j = 0; j <= 64; j++) {
+      const t = (j / 64) * Math.PI;
+      pts.push(
+        V(
+          R * Math.sin(t) * Math.cos(a),
+          R * Math.cos(t),
+          R * Math.sin(t) * Math.sin(a),
+        ),
+      );
+    }
+    g.add(
+      new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), ringMat),
+    );
+  }
+  const lt = makeLabel("θ", "#22c55e");
+  lt.position.set(0, 2.65, 0);
+  g.add(lt);
+})();
+
+function setGrid(name) {
+  state.grid = name;
+  for (const k in gridGroups) gridGroups[k].visible = k === name;
+}
+
+/* ============================================================
+   FIELD FUNCTIONS
+   ============================================================ */
+const K = 1.0;
+
+function shearFn(x, y, z, t) {
+  if (y < -1 || y > 1) return V(0, 0, 0);
+  return V(K * Math.sin((Math.PI * (y + 1)) / 2), 0, 0);
+}
+function shearCurlFn(x, y, z, t) {
+  if (y < -1 || y > 1) return V(0, 0, 0);
+  return V(0, 0, -((Math.PI * K) / 2) * Math.cos((Math.PI * (y + 1)) / 2));
+}
+
+const FIELD_FN = {
+  uniform: (x, y, z, t) => V(K, 0, 0),
+  shear: shearFn,
+  shearCurl: shearCurlFn,
+  irrot: (x, y, z, t) => V(y, x, 0),
+  rot: (x, y, z, t) => V(x * x, 2 * y * z, -x * x),
+  rotCurl: (x, y, z, t) => V(-2 * y, 2 * x, 0),
+  doubleCurl: (x, y, z, t) => V(2 * x, 4 * x * y * y * z, 0),
+  doubleCurl1: (x, y, z, t) => V(-4 * x * y * y, 0, 4 * y * y * z),
+  doubleCurl2: (x, y, z, t) => V(8 * y * z, 0, 8 * x * y),
+};
+
+function makePointChargeField(charges) {
+  return (x, y, z, t) => {
+    const P = V(x, y, z);
+    const E = V(0, 0, 0);
+    for (const c of charges) {
+      const R = new THREE.Vector3().subVectors(P, c.p);
+      const r = R.length();
+      if (r < 1e-6) continue;
+      E.add(R.multiplyScalar((KE * c.q) / (r * r * r)));
+    }
+    return E;
+  };
+}
+
+function sphToCart(r, thetaDeg, phiDeg) {
+  const th = deg(thetaDeg);
+  const ph = deg(phiDeg);
+  return V(
+    r * Math.sin(th) * Math.cos(ph),
+    r * Math.cos(th),
+    r * Math.sin(th) * Math.sin(ph),
+  );
+}
+
+const CH2B = [
+  { q: 30e-9, p: V(0, 2, 0) },
+  { q: -30e-9, p: V(0, -2, 0) },
+];
+const CH2C = [
+  { q: -7e-9, p: sphToCart(1, 75, 10) },
+  { q: 3e-9, p: sphToCart(5, 30, 90) },
+];
+
+const LAMBDA = 1e-9;
+function lineChargeField(x, y, z, t) {
+  const r = Math.hypot(x, y);
+  if (r < 0.05) return V(0, 0, 0);
+  const mag = (2 * KE * LAMBDA) / r;
+  return V(x / r, y / r, 0).multiplyScalar(mag);
+}
+
+function hCart(x, y, z, t) {
+  return V(3, 7 * y, 2 * x);
+}
+function hCyl(x, y, z, t) {
+  const r = Math.hypot(x, z);
+  if (r < 1e-6) return V(0, 5, 0);
+  const c = x / r,
+    s = z / r;
+  // H = 6r r̂ + 2r φ̂ + 5 ẑ_cyl ; φ̂ = (s, 0, -c) for a right-handed frame about +y
+  return V(6 * r * c + 2 * r * s, 5, 6 * r * s - 2 * r * c);
+}
+
+const SOL_R = 0.7;
+const B0 = 1.0;
+function solenoidB(x, y, z, t) {
+  const r = Math.hypot(x, z);
+  if (r > SOL_R) return V(0, 0, 0);
+  return V(0, B0 * Math.cos(state.omega * t), 0);
+}
+function solenoidE(x, y, z, t) {
+  const r = Math.hypot(x, z);
+  if (r < 0.05) return V(0, 0, 0);
+  const dBdt = -B0 * state.omega * Math.sin(state.omega * t);
+  const Ephi = -dBdt * (r < SOL_R ? r / 2 : (SOL_R * SOL_R) / (2 * r));
+  const c = x / r,
+    s = z / r;
+  return V(s * Ephi, 0, -c * Ephi);
+}
+
+const CAP_D = 0.55;
+const CAP_HW = 0.9;
+const E0 = 1.0;
+function capE(x, y, z, t) {
+  const ay = Math.abs(y),
+    ax = Math.abs(x),
+    az = Math.abs(z);
+  if (ay < CAP_D && ax < CAP_HW && az < CAP_HW) {
+    return V(0, E0 * Math.sin(state.omega * t), 0);
+  }
+  return V(0, 0, 0);
+}
+function capDdt(x, y, z, t) {
+  const ay = Math.abs(y),
+    ax = Math.abs(x),
+    az = Math.abs(z);
+  if (ay < CAP_D && ax < CAP_HW && az < CAP_HW) {
+    return V(0, EPS0 * E0 * state.omega * Math.cos(state.omega * t), 0);
+  }
+  return V(0, 0, 0);
+}
+function capJ(x, y, z, t) {
+  const r = Math.hypot(x, z);
+  if (r < 0.07 && Math.abs(y) > CAP_D) {
+    return V(0, 1.0 * Math.sin(state.omega * t), 0);
+  }
+  return V(0, 0, 0);
+}
+function capH(x, y, z, t) {
+  const r = Math.hypot(x, z);
+  if (r < 0.05) return V(0, 0, 0);
+  const c = x / r,
+    s = z / r;
+  let Hphi;
+  if (Math.abs(y) < CAP_D && r < CAP_HW) {
+    Hphi = (r / 2) * EPS0 * E0 * state.omega * Math.cos(state.omega * t);
+  } else {
+    Hphi = 0.35 / r;
+  }
+  return V(s * Hphi, 0, -c * Hphi);
+}
+
+/* ============================================================
+   PRESETS
+   ============================================================ */
+const PRESETS = {
+  "1A": {
+    cat: "Vector Calculus",
+    label: "1A · Uniform Flow (Water Trough)",
+    hint: "v = x̂ K. Parallel uniform arrows; ∇ × v = 0 everywhere.",
+    law: "curl",
+    layers: [
+      { key: "v", label: "v = x̂ K", color: 0x38bdf8, fn: FIELD_FN.uniform },
+    ],
+    primary: "v",
+    units: { field: "m/s", curl: "1/s", div: "1/s" },
+    integralUnit: "m²/s",
+    dynamic: false,
+    extras: buildTroughWalls,
+  },
+  "1B": {
+    cat: "Vector Calculus",
+    label: "1B · Sinusoidal Shear Flow",
+    hint: "v = x̂ K sin(πy/b), walls at y = ±1. ∇ × v = -ẑ (πK/b) cos(πy/b): clockwise on the left half, zero at the centre, counter-clockwise on the right half.",
+    law: "curl",
+    layers: [
+      {
+        key: "v",
+        label: "v = x̂ K sin(πy/b)",
+        color: 0x38bdf8,
+        fn: FIELD_FN.shear,
+      },
+      { key: "curl", label: "∇ × v", color: 0x34d399, fn: FIELD_FN.shearCurl },
+    ],
+    primary: "v",
+    units: { field: "m/s", curl: "1/s", div: "1/s" },
+    integralUnit: "m²/s",
+    dynamic: false,
+    extras: buildTroughWalls,
+  },
+  "1C": {
+    cat: "Vector Calculus",
+    label: "1C · Irrotational Shear Field",
+    hint: "F = x̂ y + ŷ x. ∂Fy/∂x = 1 and ∂Fx/∂y = 1 produce equal and opposite torques → ∇ × F = 0.",
+    law: "curl",
+    layers: [
+      { key: "F", label: "F = x̂ y + ŷ x", color: 0x38bdf8, fn: FIELD_FN.irrot },
+    ],
+    primary: "F",
+    units: { field: "m/s", curl: "1/s", div: "1/s" },
+    integralUnit: "m²/s",
+    dynamic: false,
+    extras: null,
+  },
+  "1D": {
+    cat: "Vector Calculus",
+    label: "1D · Rotational Curl Field",
+    hint: "F = x̂ x² + ŷ 2yz - ẑ x². Curl streamlines form concentric circles x² + y² = R².",
+    law: "curl",
+    layers: [
+      {
+        key: "F",
+        label: "F = x̂ x² + ŷ 2yz - ẑ x²",
+        color: 0x38bdf8,
+        fn: FIELD_FN.rot,
+      },
+      {
+        key: "curl",
+        label: "∇ × F = -x̂ 2y + ŷ 2x",
+        color: 0x34d399,
+        fn: FIELD_FN.rotCurl,
+      },
+    ],
+    primary: "F",
+    units: { field: "m/s", curl: "1/s", div: "1/s" },
+    integralUnit: "m²/s",
+    dynamic: false,
+    extras: null,
+  },
+  "1E": {
+    cat: "Vector Calculus",
+    label: "1E · Double Curl / Wave Operator",
+    hint: "F = x̂ 2x + ŷ 4xy²z. Toggle F, ∇ × F, and ∇ × ∇ × F.",
+    law: "curl",
+    layers: [
+      {
+        key: "F",
+        label: "F = x̂ 2x + ŷ 4xy²z",
+        color: 0x38bdf8,
+        fn: FIELD_FN.doubleCurl,
+      },
+      {
+        key: "curl",
+        label: "∇ × F = -x̂ 4xy² + ẑ 4y²z",
+        color: 0x34d399,
+        fn: FIELD_FN.doubleCurl1,
+      },
+      {
+        key: "curl2",
+        label: "∇ × ∇ × F = x̂ 8yz + ẑ 8xy",
+        color: 0xfbbf24,
+        fn: FIELD_FN.doubleCurl2,
+      },
+    ],
+    primary: "F",
+    units: { field: "m/s", curl: "1/s", div: "1/s" },
+    integralUnit: "m²/s",
+    dynamic: false,
+    extras: null,
+  },
+  "2A": {
+    cat: "Electrostatics",
+    label: "2A · Infinite Line Charge & Strip Flux",
+    hint: "λ = 1 nC/m along ẑ. Flux per unit length through a strip subtending Δφ is Ψ/L = λ Δφ / (2πε₀).",
+    law: "gaussE",
+    layers: [
+      {
+        key: "E",
+        label: "E = (λ / 2πε₀ r) r̂",
+        color: 0x38bdf8,
+        fn: lineChargeField,
+      },
+    ],
+    primary: "E",
+    units: { field: "V/m", curl: "V/m²", div: "V/m²" },
+    integralUnit: "V·m",
+    dynamic: false,
+    extras: buildLineChargeExtras,
+  },
+  "2B": {
+    cat: "Electrostatics",
+    label: "2B · Rectangular Two-Charge Dipole",
+    hint: "Q₁ = +30 nC at (0, 2, 0), Q₂ = -30 nC at (0, -2, 0). Probe shows E₁, E₂, R₁, R₂ and the resultant E.",
+    law: "gaussE",
+    layers: [
+      {
+        key: "E",
+        label: "E = Σ k Q R / |R|³",
+        color: 0x38bdf8,
+        fn: makePointChargeField(CH2B),
+      },
+    ],
+    primary: "E",
+    units: { field: "V/m", curl: "V/m²", div: "V/m²" },
+    integralUnit: "V·m",
+    dynamic: false,
+    extras: buildDipoleExtras,
+  },
+  "2C": {
+    cat: "Electrostatics",
+    label: "2C · Spherical Two-Charge System",
+    hint: "Q₁ = -7 nC at (1 m, 75°, 10°), Q₂ = +3 nC at (5 m, 30°, 90°), probe at (2 m, 45°, 45°). Shows Cartesian and local spherical components.",
+    law: "gaussE",
+    layers: [
+      {
+        key: "E",
+        label: "E = Σ k Q R / |R|³",
+        color: 0x38bdf8,
+        fn: makePointChargeField(CH2C),
+      },
+    ],
+    primary: "E",
+    units: { field: "V/m", curl: "V/m²", div: "V/m²" },
+    integralUnit: "V·m",
+    dynamic: false,
+    extras: buildSphericalChargesExtras,
+  },
+  "2D": {
+    cat: "Magnetostatics",
+    label: "2D · Current Density J = ∇ × H",
+    hint: "Cartesian H = x̂ 3 + ŷ 7y + ẑ 2x → J_y = -2 A/m². Cylindrical H = r̂ 6r + φ̂ 2r + ẑ 5 → J_z = 4 A/m².",
+    law: "ampere",
+    layers: [
+      {
+        key: "Hcart",
+        label: "H = x̂ 3 + ŷ 7y + ẑ 2x",
+        color: 0xf472b6,
+        fn: hCart,
+      },
+      {
+        key: "Hcyl",
+        label: "H = r̂ 6r + φ̂ 2r + ẑ 5",
+        color: 0xfbbf24,
+        fn: hCyl,
+      },
+    ],
+    primary: "Hcart",
+    units: { field: "A/m", curl: "A/m²", div: "A/m²" },
+    integralUnit: "A",
+    dynamic: false,
+    extras: buildCurrentExtras,
+  },
+  "3A": {
+    cat: "Dynamic Maxwell",
+    label: "3A · Faraday's Law Solenoid",
+    hint: "B(t) = B₀ cos(ωt) ẑ inside the coil. Circulating E lags B by 90°: ∇ × E = -∂B/∂t = -jωμH.",
+    law: "faraday",
+    layers: [
+      {
+        key: "B",
+        label: "B(t) = B₀ cos(ωt) ẑ",
+        color: 0xf472b6,
+        fn: solenoidB,
+      },
+      { key: "E", label: "E_φ = -(r/2) dB/dt", color: 0x38bdf8, fn: solenoidE },
+    ],
+    primary: "E",
+    units: { field: "V/m", curl: "V/m²", div: "V/m²" },
+    integralUnit: "V",
+    dynamic: true,
+    extras: buildSolenoidExtras,
+  },
+  "3B": {
+    cat: "Dynamic Maxwell",
+    label: "3B · Ampère–Maxwell Charging Capacitor",
+    hint: "Conduction current J = σE in the wires becomes displacement current ∂D/∂t = jωεE between the plates; H rings around both.",
+    law: "ampere",
+    layers: [
+      { key: "E", label: "E (gap field)", color: 0x38bdf8, fn: capE },
+      { key: "J", label: "J = σE (wires)", color: 0xfbbf24, fn: capJ },
+      { key: "Ddt", label: "∂D/∂t = jωεE (gap)", color: 0x34d399, fn: capDdt },
+      { key: "H", label: "H (rings)", color: 0xf472b6, fn: capH },
+    ],
+    primary: "H",
+    units: { field: "A/m", curl: "A/m²", div: "A/m²" },
+    integralUnit: "A",
+    dynamic: true,
+    extras: buildCapacitorExtras,
+  },
+};
+
+/* ============================================================
+   LAW METADATA
+   ============================================================ */
+const LAWS = {
+  curl: {
+    name: "Curl & Circulation (Stokes)",
+    integral:
+      "\\oint_{\\partial S}\\mathbf{F}\\cdot d\\mathbf{L} = \\int_S (\\nabla\\times\\mathbf{F})\\cdot d\\mathbf{s}",
+    differential:
+      "\\nabla\\times\\mathbf{F} = \\left(\\partial_y F_z-\\partial_z F_y,\\; \\partial_z F_x-\\partial_x F_z,\\; \\partial_x F_y-\\partial_y F_x\\right)",
+    qtyText: "Γ_F",
+    kind: "circulation",
+  },
+  gaussE: {
+    name: "Gauss's Law for Electricity",
+    integral:
+      "\\oint_{\\partial V}\\mathbf{D}\\cdot d\\mathbf{s} = Q_{\\text{enc}} = \\varepsilon_0\\oint_{\\partial V}\\mathbf{E}\\cdot d\\mathbf{s}",
+    differential: "\\nabla\\cdot\\mathbf{D} = \\rho",
+    qtyText: "Φ_E",
+    kind: "flux",
+  },
+  gaussB: {
+    name: "Gauss's Law for Magnetism",
+    integral: "\\oint_{\\partial V}\\mathbf{B}\\cdot d\\mathbf{s} = 0",
+    differential: "\\nabla\\cdot\\mathbf{B} = 0",
+    qtyText: "Φ_B",
+    kind: "flux",
+  },
+  faraday: {
+    name: "Faraday's Law",
+    integral:
+      "\\oint_{\\partial S}\\mathbf{E}\\cdot d\\mathbf{L} = -\\dfrac{d\\Phi_B}{dt}",
+    differential:
+      "\\nabla\\times\\mathbf{E} = -\\dfrac{\\partial\\mathbf{B}}{\\partial t}",
+    qtyText: "Γ_E",
+    kind: "circulation",
+  },
+  ampere: {
+    name: "Ampère–Maxwell Law",
+    integral:
+      "\\oint_{\\partial S}\\mathbf{H}\\cdot d\\mathbf{L} = I_{\\text{enc}} + \\dfrac{d\\Phi_D}{dt}",
+    differential:
+      "\\nabla\\times\\mathbf{H} = \\mathbf{J} + \\dfrac{\\partial\\mathbf{D}}{\\partial t}",
+    qtyText: "Γ_H",
+    kind: "circulation",
+  },
+};
+
+/* ============================================================
+   EXTRA GEOMETRY BUILDERS
+   ============================================================ */
+function buildTroughWalls() {
+  const g = new THREE.Group();
+  const mat = new THREE.MeshStandardMaterial({
+    color: 0x38bdf8,
+    transparent: true,
+    opacity: 0.1,
+    side: THREE.DoubleSide,
+    roughness: 0.7,
+    metalness: 0.1,
+    depthWrite: false,
+  });
+  for (const y of [-1, 1]) {
+    const wall = new THREE.Mesh(new THREE.PlaneGeometry(4.4, 4.4), mat);
+    wall.rotation.x = -Math.PI / 2;
+    wall.position.y = y;
+    g.add(wall);
+    const edge = new THREE.LineSegments(
+      new THREE.EdgesGeometry(new THREE.PlaneGeometry(4.4, 4.4)),
+      new THREE.LineBasicMaterial({
+        color: 0x7dd3fc,
+        transparent: true,
+        opacity: 0.5,
+      }),
+    );
+    edge.rotation.x = -Math.PI / 2;
+    edge.position.y = y;
+    g.add(edge);
+  }
+  return g;
+}
+
+function chargeSphere(color, radius = 0.16) {
+  const g = new THREE.Group();
+  const mat = new THREE.MeshStandardMaterial({
+    color,
+    emissive: color,
+    emissiveIntensity: 0.65,
+    roughness: 0.35,
+    metalness: 0.1,
+  });
+  g.add(new THREE.Mesh(new THREE.SphereGeometry(radius, 24, 16), mat));
+  const glow = new THREE.Mesh(
+    new THREE.SphereGeometry(radius * 1.7, 24, 16),
+    new THREE.MeshBasicMaterial({
+      color,
+      transparent: true,
+      opacity: 0.14,
+      depthWrite: false,
+    }),
+  );
+  g.add(glow);
+  return g;
+}
+
+function buildLineChargeExtras() {
+  const g = new THREE.Group();
+  const wire = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.045, 0.045, 4.4, 16),
+    new THREE.MeshStandardMaterial({
+      color: 0xfbbf24,
+      emissive: 0xfbbf24,
+      emissiveIntensity: 0.45,
+      roughness: 0.45,
+      metalness: 0.5,
+    }),
+  );
+  wire.rotation.x = Math.PI / 2;
+  g.add(wire);
+  return g;
+}
+
+function buildDipoleExtras() {
+  const g = new THREE.Group();
+  const a = chargeSphere(0xef4444);
+  a.position.set(0, 2, 0);
+  const b = chargeSphere(0x3b82f6);
+  b.position.set(0, -2, 0);
+  g.add(a, b);
+  return g;
+}
+
+function buildSphericalChargesExtras() {
+  const g = new THREE.Group();
+  const a = chargeSphere(0x3b82f6);
+  a.position.copy(CH2C[0].p);
+  const b = chargeSphere(0xef4444);
+  b.position.copy(CH2C[1].p);
+  g.add(a, b);
+  return g;
+}
+
+function buildCurrentExtras() {
+  const g = new THREE.Group();
+  const wire = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.04, 0.04, 4.0, 14),
+    new THREE.MeshStandardMaterial({
+      color: 0xfbbf24,
+      emissive: 0xfbbf24,
+      emissiveIntensity: 0.4,
+      roughness: 0.45,
+      metalness: 0.6,
+    }),
+  );
+  g.add(wire);
+  const arrow = new THREE.Mesh(
+    new THREE.ConeGeometry(0.08, 0.2, 12),
+    new THREE.MeshStandardMaterial({
+      color: 0xfbbf24,
+      emissive: 0xfbbf24,
+      emissiveIntensity: 0.5,
+    }),
+  );
+  arrow.position.y = 2.1;
+  g.add(arrow);
+  return g;
+}
+
+function buildSolenoidExtras() {
+  const g = new THREE.Group();
+  const pts = [];
+  const turns = 8;
+  const H = 1.6;
+  for (let i = 0; i <= 240; i++) {
+    const a = (i / 240) * Math.PI * 2 * turns;
+    const y = (i / 240 - 0.5) * H;
+    pts.push(V(Math.cos(a) * SOL_R, y, Math.sin(a) * SOL_R));
+  }
+  const curve = new THREE.CatmullRomCurve3(pts);
+  const tube = new THREE.TubeGeometry(curve, 240, 0.025, 8, false);
+  g.add(
+    new THREE.Mesh(
+      tube,
+      new THREE.MeshStandardMaterial({
+        color: 0xfbbf24,
+        emissive: 0xfbbf24,
+        emissiveIntensity: 0.35,
+        roughness: 0.4,
+        metalness: 0.6,
+      }),
+    ),
+  );
+  return g;
+}
+
+function buildCapacitorExtras() {
+  const g = new THREE.Group();
+  const posMat = new THREE.MeshStandardMaterial({
+    color: 0xef4444,
+    emissive: 0xef4444,
+    emissiveIntensity: 0.25,
+    roughness: 0.5,
+    metalness: 0.3,
+  });
+  const negMat = new THREE.MeshStandardMaterial({
+    color: 0x3b82f6,
+    emissive: 0x3b82f6,
+    emissiveIntensity: 0.25,
+    roughness: 0.5,
+    metalness: 0.3,
+  });
+  const top = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.06, 1.8), posMat);
+  top.position.y = CAP_D;
+  const bottom = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.06, 1.8), negMat);
+  bottom.position.y = -CAP_D;
+  g.add(top, bottom);
+
+  const wireMat = new THREE.MeshStandardMaterial({
+    color: 0xfbbf24,
+    emissive: 0xfbbf24,
+    emissiveIntensity: 0.35,
+    roughness: 0.45,
+    metalness: 0.6,
+  });
+  const topWire = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.035, 0.035, 1.8, 12),
+    wireMat,
+  );
+  topWire.position.y = CAP_D + 0.9;
+  const botWire = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.035, 0.035, 1.8, 12),
+    wireMat,
+  );
+  botWire.position.y = -CAP_D - 0.9;
+  g.add(topWire, botWire);
+
+  return g;
+}
+
+/* ============================================================
+   NUMERICAL VECTOR CALCULUS (CURL & DIVERGENCE)
+   ============================================================ */
+function computeCurl(fn, x, y, z, t) {
+  const h = 1e-3;
+  const dFz_dy = (fn(x, y + h, z, t).z - fn(x, y - h, z, t).z) / (2 * h);
+  const dFy_dz = (fn(x, y, z + h, t).y - fn(x, y, z - h, t).y) / (2 * h);
+  const dFx_dz = (fn(x, y, z + h, t).x - fn(x, y, z - h, t).x) / (2 * h);
+  const dFz_dx = (fn(x + h, y, z, t).z - fn(x - h, y, z, t).z) / (2 * h);
+  const dFy_dx = (fn(x + h, y, z, t).y - fn(x - h, y, z, t).y) / (2 * h);
+  const dFx_dy = (fn(x, y + h, z, t).x - fn(x, y - h, z, t).x) / (2 * h);
+  return V(dFz_dy - dFy_dz, dFx_dz - dFz_dx, dFy_dx - dFx_dy);
+}
+
+function computeDiv(fn, x, y, z, t) {
+  const h = 1e-3;
+  const dFx_dx = (fn(x + h, y, z, t).x - fn(x - h, y, z, t).x) / (2 * h);
+  const dFy_dy = (fn(x, y + h, z, t).y - fn(x, y - h, z, t).y) / (2 * h);
+  const dFz_dz = (fn(x, y, z + h, t).z - fn(x, y, z - h, t).z) / (2 * h);
+  return dFx_dx + dFy_dy + dFz_dz;
+}
+
+function getActiveLayer() {
+  const p = PRESETS[state.preset];
+  return p.layers.find((l) => l.key === state.layer) || p.layers[0];
+}
+
+function getPrimaryLayer() {
+  const p = PRESETS[state.preset];
+  return p.layers.find((l) => l.key === p.primary) || p.layers[0];
+}
+
+/* ============================================================
+   SCENE GROUPS (EXTRAS, ARROWS, STREAMLINES, PROBE, SURFACE)
+   ============================================================ */
+const extrasGroup = new THREE.Group();
+const arrowsGroup = new THREE.Group();
+const streamGroup = new THREE.Group();
+const surfaceGroup = new THREE.Group();
+scene.add(extrasGroup, arrowsGroup, streamGroup, surfaceGroup);
+
+/* --- Instanced 3D Vector Field Arrows --- */
+let arrowShaftMesh = null;
+let arrowHeadMesh = null;
+let arrowSamplePts = [];
+
+function rebuildFieldGrid() {
+  disposeGroup(arrowsGroup);
+  arrowSamplePts = [];
+  const N = state.density;
+  const span = 2.2;
+  const step = N > 1 ? (2 * span) / (N - 1) : 0;
+
+  for (let i = 0; i < N; i++) {
+    for (let j = 0; j < N; j++) {
+      for (let k = 0; k < N; k++) {
+        arrowSamplePts.push(
+          V(-span + i * step, -span + j * step, -span + k * step),
+        );
+      }
+    }
+  }
+
+  const count = arrowSamplePts.length;
+  const shaftGeo = new THREE.CylinderGeometry(0.016, 0.016, 0.65, 8);
+  shaftGeo.translate(0, 0.325, 0);
+  const headGeo = new THREE.ConeGeometry(0.048, 0.22, 10);
+  headGeo.translate(0, 0.76, 0);
+
+  const mat = new THREE.MeshStandardMaterial({
+    color: 0xffffff,
+    emissive: 0x111827,
+    roughness: 0.35,
+    metalness: 0.2,
+  });
+
+  arrowShaftMesh = new THREE.InstancedMesh(shaftGeo, mat, count);
+  arrowHeadMesh = new THREE.InstancedMesh(headGeo, mat.clone(), count);
+  arrowShaftMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+  arrowHeadMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+
+  arrowsGroup.add(arrowShaftMesh, arrowHeadMesh);
+  updateFieldArrows();
+}
+
+const _up = new THREE.Vector3(0, 1, 0);
+const _quat = new THREE.Quaternion();
+const _mat4 = new THREE.Matrix4();
+const _scale = new THREE.Vector3();
+const _color = new THREE.Color();
+
+function updateFieldArrows() {
+  arrowsGroup.visible = state.showArrows;
+  if (!state.showArrows || !arrowShaftMesh) return;
+
+  const layer = getActiveLayer();
+  const fn = layer.fn;
+  const baseColor = new THREE.Color(layer.color);
+
+  const vals = new Array(arrowSamplePts.length);
+  let maxMag = 1e-12;
+  for (let i = 0; i < arrowSamplePts.length; i++) {
+    const p = arrowSamplePts[i];
+    const f = fn(p.x, p.y, p.z, state.t);
+    vals[i] = f;
+    const m = f.length();
+    if (m > maxMag && isFinite(m)) maxMag = m;
+  }
+
+  for (let i = 0; i < arrowSamplePts.length; i++) {
+    const p = arrowSamplePts[i];
+    const f = vals[i];
+    const m = f.length();
+
+    if (m < 1e-12 || !isFinite(m)) {
+      _scale.set(0, 0, 0);
+      _mat4.compose(p, _quat, _scale);
+      arrowShaftMesh.setMatrixAt(i, _mat4);
+      arrowHeadMesh.setMatrixAt(i, _mat4);
+      continue;
+    }
+
+    const norm = Math.min(1, Math.pow(m / maxMag, 0.45));
+    const len = 0.18 + 0.58 * norm;
+    const thick = 0.65 + 0.55 * norm;
+
+    const dir = f.clone().divideScalar(m);
+    _quat.setFromUnitVectors(_up, dir);
+    _scale.set(thick, len, thick);
+    _mat4.compose(p, _quat, _scale);
+    arrowShaftMesh.setMatrixAt(i, _mat4);
+    arrowHeadMesh.setMatrixAt(i, _mat4);
+
+    _color.copy(baseColor).lerp(new THREE.Color(0xffffff), norm * 0.35);
+    arrowShaftMesh.setColorAt(i, _color);
+    arrowHeadMesh.setColorAt(i, _color);
+  }
+
+  arrowShaftMesh.instanceMatrix.needsUpdate = true;
+  arrowHeadMesh.instanceMatrix.needsUpdate = true;
+  if (arrowShaftMesh.instanceColor)
+    arrowShaftMesh.instanceColor.needsUpdate = true;
+  if (arrowHeadMesh.instanceColor)
+    arrowHeadMesh.instanceColor.needsUpdate = true;
+}
+
+/* --- Curl / Field Streamlines --- */
+function rebuildStreamlines() {
+  disposeGroup(streamGroup);
+  streamGroup.visible = state.showStream;
+  if (!state.showStream) return;
+
+  const layer = getActiveLayer();
+  const fn = layer.fn;
+  const isCurlTrace = state.preset === "1D" && layer.key === "F";
+  const traceFn = isCurlTrace ? FIELD_FN.rotCurl : fn;
+  const streamColor = isCurlTrace ? 0x34d399 : layer.color;
+
+  const seeds = [];
+  for (const r of [0.55, 1.15, 1.75]) {
+    for (let a = 0; a < 8; a++) {
+      const ang = (a / 8) * Math.PI * 2;
+      seeds.push(V(r * Math.cos(ang), 0.35, r * Math.sin(ang)));
+      seeds.push(V(r * Math.cos(ang), -0.65, r * Math.sin(ang)));
+    }
+  }
+
+  const mat = new THREE.LineBasicMaterial({
+    color: streamColor,
+    transparent: true,
+    opacity: 0.45,
+  });
+
+  const dt = 0.06;
+  const steps = 65;
+
+  for (const seed of seeds) {
+    const pts = [seed.clone()];
+    let cur = seed.clone();
+    for (let s = 0; s < steps; s++) {
+      const k1 = traceFn(cur.x, cur.y, cur.z, state.t);
+      if (k1.length() < 1e-10) break;
+      k1.normalize();
+      const mid = cur.clone().addScaledVector(k1, dt * 0.5);
+      const k2 = traceFn(mid.x, mid.y, mid.z, state.t);
+      if (k2.length() < 1e-10) break;
+      k2.normalize();
+      cur = cur.clone().addScaledVector(k2, dt);
+      if (
+        Math.abs(cur.x) > 2.8 ||
+        Math.abs(cur.y) > 2.8 ||
+        Math.abs(cur.z) > 2.8
+      )
+        break;
+      pts.push(cur.clone());
+    }
+    if (pts.length > 3) {
+      streamGroup.add(
+        new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), mat),
+      );
+    }
+  }
+}
+
+/* ============================================================
+   PADDLEWHEEL PROBE
+   ============================================================ */
+const probeGroup = new THREE.Group();
+const rotorGroup = new THREE.Group();
+probeGroup.add(rotorGroup);
+scene.add(probeGroup);
+
+(function buildPaddlewheel() {
+  const hub = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.055, 0.055, 0.36, 16),
+    new THREE.MeshStandardMaterial({
+      color: 0xe2e8f0,
+      metalness: 0.6,
+      roughness: 0.3,
+    }),
+  );
+  rotorGroup.add(hub);
+
+  const bladeMat = new THREE.MeshStandardMaterial({
+    color: 0x38bdf8,
+    emissive: 0x0284c7,
+    emissiveIntensity: 0.35,
+    roughness: 0.35,
+    metalness: 0.25,
+    side: THREE.DoubleSide,
+  });
+
+  for (let i = 0; i < 6; i++) {
+    const a = (i / 6) * Math.PI * 2;
+    const blade = new THREE.Mesh(
+      new THREE.BoxGeometry(0.24, 0.16, 0.016),
+      bladeMat,
+    );
+    blade.position.set(Math.cos(a) * 0.14, 0, Math.sin(a) * 0.14);
+    blade.rotation.y = -a;
+    rotorGroup.add(blade);
+  }
+
+  const tip = new THREE.Mesh(
+    new THREE.ConeGeometry(0.045, 0.14, 12),
+    new THREE.MeshStandardMaterial({
+      color: 0xfbbf24,
+      emissive: 0xfbbf24,
+      emissiveIntensity: 0.4,
+    }),
+  );
+  tip.position.y = 0.26;
+  probeGroup.add(tip);
+})();
+
+function orientProbe() {
+  probeGroup.position.set(state.probe.x, state.probe.y, state.probe.z);
+  probeGroup.rotation.set(0, 0, 0);
+  if (state.axis === "x") probeGroup.rotation.z = -Math.PI / 2;
+  else if (state.axis === "z") probeGroup.rotation.x = Math.PI / 2;
+}
+
+function updateProbeReadout(dt) {
+  orientProbe();
+  const { x, y, z } = state.probe;
+  const p = PRESETS[state.preset];
+  const layer = getActiveLayer();
+  const fVal = layer.fn(x, y, z, state.t);
+  const curl = computeCurl(layer.fn, x, y, z, state.t);
+  const div = computeDiv(layer.fn, x, y, z, state.t);
+
+  const nHat =
+    state.axis === "x"
+      ? V(1, 0, 0)
+      : state.axis === "y"
+        ? V(0, 1, 0)
+        : V(0, 0, 1);
+  const curlDotN = curl.dot(nHat);
+
+  const maxSpin = 6.0;
+  const angVel = THREE.MathUtils.clamp(curlDotN * 0.85, -maxSpin, maxSpin);
+  rotorGroup.rotation.y += angVel * dt;
+
+  const lines = [
+    `r = (${x.toFixed(2)}, ${y.toFixed(2)}, ${z.toFixed(2)})`,
+    `${layer.key} = ${fmtVec(fVal)} ${p.units.field}`,
+    `∇×${layer.key} = ${fmtVec(curl)} ${p.units.curl}`,
+    `(∇×${layer.key})·${state.axis}̂ = ${fmtNum(curlDotN)} ${p.units.curl}`,
+    `∇·${layer.key} = ${fmtNum(div)} ${p.units.div}`,
+  ];
+
+  if (state.preset === "2B") {
+    const P = V(x, y, z);
+    const R1 = P.clone().sub(CH2B[0].p);
+    const R2 = P.clone().sub(CH2B[1].p);
+    const E1 = R1.clone().multiplyScalar(
+      (KE * CH2B[0].q) / Math.pow(Math.max(R1.length(), 1e-4), 3),
+    );
+    const E2 = R2.clone().multiplyScalar(
+      (KE * CH2B[1].q) / Math.pow(Math.max(R2.length(), 1e-4), 3),
+    );
+    lines.push(`R₁=${fmtVec(R1)} | E₁=${fmtVec(E1)}`);
+    lines.push(`R₂=${fmtVec(R2)} | E₂=${fmtVec(E2)}`);
+  } else if (state.preset === "2C") {
+    const r = Math.hypot(x, y, z);
+    if (r > 1e-5) {
+      const th = Math.acos(THREE.MathUtils.clamp(y / r, -1, 1));
+      const ph = Math.atan2(z, x);
+      const rHat = V(
+        Math.sin(th) * Math.cos(ph),
+        Math.cos(th),
+        Math.sin(th) * Math.sin(ph),
+      );
+      const thHat = V(
+        Math.cos(th) * Math.cos(ph),
+        -Math.sin(th),
+        Math.cos(th) * Math.sin(ph),
+      );
+      const phHat = V(-Math.sin(ph), 0, Math.cos(ph));
+      lines.push(
+        `E_sph = (${fmtNum(fVal.dot(rHat))} r̂, ${fmtNum(fVal.dot(thHat))} θ̂, ${fmtNum(fVal.dot(phHat))} φ̂)`,
+      );
+    }
+  }
+
+  document.getElementById("paddle-readout").textContent = lines.join("\n");
+  return { curl, div };
+}
+
+/* ============================================================
+   INTEGRATION GEOMETRIES & NUMERICAL INTEGRATORS
+   ============================================================ */
+function getExtraAngleRad() {
+  const slider = document.getElementById("extra-slider");
+  return deg(slider ? parseFloat(slider.value) : 60);
+}
+
+function getSurfaceTransform() {
+  const euler = new THREE.Euler(deg(state.tilt), deg(state.spin), 0, "YXZ");
+  const quat = new THREE.Quaternion().setFromEuler(euler);
+  const pos = V(state.spos.x, state.spos.y, state.spos.z);
+  return { pos, quat };
+}
+
+function rebuildSurface() {
+  disposeGroup(surfaceGroup);
+  const type = state.surface;
+  if (type === "none") return;
+
+  const { pos, quat } = getSurfaceTransform();
+  surfaceGroup.position.copy(pos);
+  surfaceGroup.quaternion.copy(quat);
+
+  const R = state.R;
+  const surfMat = new THREE.MeshStandardMaterial({
+    color: 0x38bdf8,
+    emissive: 0x0ea5e9,
+    emissiveIntensity: 0.15,
+    transparent: true,
+    opacity: 0.18,
+    side: THREE.DoubleSide,
+    depthWrite: false,
+  });
+  const wireMat = new THREE.LineBasicMaterial({
+    color: 0x7dd3fc,
+    transparent: true,
+    opacity: 0.75,
+  });
+  const loopMat = new THREE.LineBasicMaterial({
+    color: 0xfbbf24,
+    linewidth: 2,
+  });
+
+  const normals = [];
+
+  if (type === "sphere") {
+    const geo = new THREE.SphereGeometry(R, 32, 24);
+    surfaceGroup.add(new THREE.Mesh(geo, surfMat));
+    surfaceGroup.add(
+      new THREE.LineSegments(
+        new THREE.WireframeGeometry(geo),
+        new THREE.LineBasicMaterial({
+          color: 0x38bdf8,
+          transparent: true,
+          opacity: 0.16,
+        }),
+      ),
+    );
+    if (state.showNormals) {
+      for (let i = 1; i <= 4; i++) {
+        const th = (i / 5) * Math.PI;
+        for (let j = 0; j < 8; j++) {
+          const ph = (j / 8) * Math.PI * 2;
+          const n = V(
+            Math.sin(th) * Math.cos(ph),
+            Math.cos(th),
+            Math.sin(th) * Math.sin(ph),
+          );
+          normals.push({ p: n.clone().multiplyScalar(R), n });
+        }
+      }
+    }
+  } else if (type === "cylinder") {
+    const H = R * 1.6;
+    const geo = new THREE.CylinderGeometry(R, R, H, 32, 1, false);
+    surfaceGroup.add(new THREE.Mesh(geo, surfMat));
+    surfaceGroup.add(
+      new THREE.LineSegments(new THREE.EdgesGeometry(geo), wireMat),
+    );
+    if (state.showNormals) {
+      for (let j = 0; j < 10; j++) {
+        const ph = (j / 10) * Math.PI * 2;
+        const n = V(Math.cos(ph), 0, Math.sin(ph));
+        normals.push({ p: V(R * n.x, 0, R * n.z), n });
+      }
+      normals.push({ p: V(0, H / 2, 0), n: V(0, 1, 0) });
+      normals.push({ p: V(0, -H / 2, 0), n: V(0, -1, 0) });
+    }
+  } else if (type === "cube") {
+    const L = R * 1.6;
+    const geo = new THREE.BoxGeometry(L, L, L);
+    surfaceGroup.add(new THREE.Mesh(geo, surfMat));
+    surfaceGroup.add(
+      new THREE.LineSegments(new THREE.EdgesGeometry(geo), wireMat),
+    );
+    if (state.showNormals) {
+      const h = L / 2;
+      normals.push(
+        { p: V(h, 0, 0), n: V(1, 0, 0) },
+        { p: V(-h, 0, 0), n: V(-1, 0, 0) },
+        { p: V(0, h, 0), n: V(0, 1, 0) },
+        { p: V(0, -h, 0), n: V(0, -1, 0) },
+        { p: V(0, 0, h), n: V(0, 0, 1) },
+        { p: V(0, 0, -h), n: V(0, 0, -1) },
+      );
+    }
+  } else if (type === "sheet") {
+    if (state.preset === "2A") {
+      const dPhi = getExtraAngleRad();
+      const L = R * 1.6;
+      const segs = 28;
+      const geo = new THREE.CylinderGeometry(R, R, L, segs, 1, true, 0, dPhi);
+      geo.rotateX(Math.PI / 2);
+      surfaceGroup.add(new THREE.Mesh(geo, surfMat));
+      surfaceGroup.add(
+        new THREE.LineSegments(new THREE.EdgesGeometry(geo), wireMat),
+      );
+      if (state.showNormals) {
+        for (let i = 1; i < 6; i++) {
+          const a = (i / 6) * dPhi;
+          const n = V(Math.sin(a), Math.cos(a), 0);
+          normals.push({ p: n.clone().multiplyScalar(R), n });
+        }
+      }
+    } else {
+      const W = R * 1.8;
+      const geo = new THREE.PlaneGeometry(W, W);
+      surfaceGroup.add(new THREE.Mesh(geo, surfMat));
+      surfaceGroup.add(
+        new THREE.LineSegments(new THREE.EdgesGeometry(geo), wireMat),
+      );
+      if (state.showNormals) {
+        for (const u of [-W * 0.25, W * 0.25]) {
+          for (const v of [-W * 0.25, W * 0.25]) {
+            normals.push({ p: V(u, v, 0), n: V(0, 0, 1) });
+          }
+        }
+      }
+    }
+  } else if (type === "loop-circle") {
+    const pts = [];
+    for (let i = 0; i <= 72; i++) {
+      const a = (i / 72) * Math.PI * 2;
+      pts.push(V(R * Math.cos(a), 0, R * Math.sin(a)));
+    }
+    surfaceGroup.add(
+      new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), loopMat),
+    );
+    const disc = new THREE.Mesh(
+      new THREE.CircleGeometry(R, 48),
+      new THREE.MeshBasicMaterial({
+        color: 0xfbbf24,
+        transparent: true,
+        opacity: 0.08,
+        side: THREE.DoubleSide,
+        depthWrite: false,
+      }),
+    );
+    disc.rotation.x = -Math.PI / 2;
+    surfaceGroup.add(disc);
+    if (state.showNormals) {
+      normals.push({ p: V(0, 0, 0), n: V(0, 1, 0) });
+      for (let i = 0; i < 4; i++) {
+        const a = (i / 4) * Math.PI * 2;
+        const p = V(R * Math.cos(a), 0, R * Math.sin(a));
+        const t = V(-Math.sin(a), 0, Math.cos(a));
+        normals.push({ p, n: t, tangent: true });
+      }
+    }
+  } else if (type === "loop-rect") {
+    const h = R * 0.9;
+    const pts = [
+      V(-h, 0, -h),
+      V(h, 0, -h),
+      V(h, 0, h),
+      V(-h, 0, h),
+      V(-h, 0, -h),
+    ];
+    surfaceGroup.add(
+      new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), loopMat),
+    );
+    const plane = new THREE.Mesh(
+      new THREE.PlaneGeometry(2 * h, 2 * h),
+      new THREE.MeshBasicMaterial({
+        color: 0xfbbf24,
+        transparent: true,
+        opacity: 0.08,
+        side: THREE.DoubleSide,
+        depthWrite: false,
+      }),
+    );
+    plane.rotation.x = -Math.PI / 2;
+    surfaceGroup.add(plane);
+    if (state.showNormals) {
+      normals.push({ p: V(0, 0, 0), n: V(0, 1, 0) });
+    }
+  }
+
+  for (const item of normals) {
+    const arrow = new THREE.ArrowHelper(
+      item.n.clone().normalize(),
+      item.p,
+      0.38,
+      item.tangent ? 0xfbbf24 : 0x34d399,
+      0.11,
+      0.07,
+    );
+    surfaceGroup.add(arrow);
+  }
+}
+
+function evaluateIntegral() {
+  const type = state.surface;
+  if (type === "none") return null;
+
+  const p = PRESETS[state.preset];
+  const layer = getPrimaryLayer();
+  const fn = layer.fn;
+  const { pos, quat } = getSurfaceTransform();
+  const R = state.R;
+
+  const toWorld = (localPt) => localPt.clone().applyQuaternion(quat).add(pos);
+  const dirToWorld = (localDir) => localDir.clone().applyQuaternion(quat);
+
+  if (type === "sphere") {
+    let flux = 0;
+    const nTh = 24,
+      nPh = 48;
+    const dTh = Math.PI / nTh;
+    const dPh = (2 * Math.PI) / nPh;
+    for (let i = 0; i < nTh; i++) {
+      const th = (i + 0.5) * dTh;
+      const sinTh = Math.sin(th);
+      const dA = R * R * sinTh * dTh * dPh;
+      for (let j = 0; j < nPh; j++) {
+        const ph = (j + 0.5) * dPh;
+        const nLocal = V(
+          sinTh * Math.cos(ph),
+          Math.cos(th),
+          sinTh * Math.sin(ph),
+        );
+        const pw = toWorld(nLocal.clone().multiplyScalar(R));
+        const nw = dirToWorld(nLocal);
+        flux += fn(pw.x, pw.y, pw.z, state.t).dot(nw) * dA;
+      }
+    }
+    return { kind: "flux", value: flux, unit: p.integralUnit };
+  }
+
+  if (type === "cylinder") {
+    const H = R * 1.6;
+    let flux = 0;
+    const nPh = 48,
+      nY = 20;
+    const dPh = (2 * Math.PI) / nPh;
+    const dY = H / nY;
+    const dASide = R * dPh * dY;
+    for (let j = 0; j < nPh; j++) {
+      const ph = (j + 0.5) * dPh;
+      const nLocal = V(Math.cos(ph), 0, Math.sin(ph));
+      const nw = dirToWorld(nLocal);
+      for (let i = 0; i < nY; i++) {
+        const y = -H / 2 + (i + 0.5) * dY;
+        const pw = toWorld(V(R * nLocal.x, y, R * nLocal.z));
+        flux += fn(pw.x, pw.y, pw.z, state.t).dot(nw) * dASide;
+      }
+    }
+    const nR = 12;
+    const dR = R / nR;
+    const nTop = dirToWorld(V(0, 1, 0));
+    const nBot = dirToWorld(V(0, -1, 0));
+    for (let ir = 0; ir < nR; ir++) {
+      const rMid = (ir + 0.5) * dR;
+      const dACap = rMid * dR * dPh;
+      for (let j = 0; j < nPh; j++) {
+        const ph = (j + 0.5) * dPh;
+        const x = rMid * Math.cos(ph),
+          z = rMid * Math.sin(ph);
+        const pTop = toWorld(V(x, H / 2, z));
+        const pBot = toWorld(V(x, -H / 2, z));
+        flux += fn(pTop.x, pTop.y, pTop.z, state.t).dot(nTop) * dACap;
+        flux += fn(pBot.x, pBot.y, pBot.z, state.t).dot(nBot) * dACap;
+      }
+    }
+    return { kind: "flux", value: flux, unit: p.integralUnit };
+  }
+
+  if (type === "cube") {
+    const L = R * 1.6;
+    const h = L / 2;
+    const n = 16;
+    const du = L / n;
+    const dA = du * du;
+    let flux = 0;
+    const faces = [
+      { n: V(1, 0, 0), pt: (u, v) => V(h, u, v) },
+      { n: V(-1, 0, 0), pt: (u, v) => V(-h, u, v) },
+      { n: V(0, 1, 0), pt: (u, v) => V(u, h, v) },
+      { n: V(0, -1, 0), pt: (u, v) => V(u, -h, v) },
+      { n: V(0, 0, 1), pt: (u, v) => V(u, v, h) },
+      { n: V(0, 0, -1), pt: (u, v) => V(u, v, -h) },
+    ];
+    for (const f of faces) {
+      const nw = dirToWorld(f.n);
+      for (let i = 0; i < n; i++) {
+        const u = -h + (i + 0.5) * du;
+        for (let j = 0; j < n; j++) {
+          const v = -h + (j + 0.5) * du;
+          const pw = toWorld(f.pt(u, v));
+          flux += fn(pw.x, pw.y, pw.z, state.t).dot(nw) * dA;
+        }
+      }
+    }
+    return { kind: "flux", value: flux, unit: p.integralUnit };
+  }
+
+  if (type === "sheet") {
+    let flux = 0;
+    if (state.preset === "2A") {
+      const dPhi = getExtraAngleRad();
+      const L = R * 1.6;
+      const nP = 32,
+        nZ = 16;
+      const dp = dPhi / nP,
+        dz = L / nZ;
+      const dA = R * dp * dz;
+      for (let i = 0; i < nP; i++) {
+        const a = (i + 0.5) * dp;
+        const nLocal = V(Math.sin(a), Math.cos(a), 0);
+        const nw = dirToWorld(nLocal);
+        for (let j = 0; j < nZ; j++) {
+          const z = -L / 2 + (j + 0.5) * dz;
+          const pw = toWorld(V(R * nLocal.x, R * nLocal.y, z));
+          flux += fn(pw.x, pw.y, pw.z, state.t).dot(nw) * dA;
+        }
+      }
+    } else {
+      const W = R * 1.8;
+      const n = 20;
+      const du = W / n;
+      const dA = du * du;
+      const nw = dirToWorld(V(0, 0, 1));
+      for (let i = 0; i < n; i++) {
+        const u = -W / 2 + (i + 0.5) * du;
+        for (let j = 0; j < n; j++) {
+          const v = -W / 2 + (j + 0.5) * du;
+          const pw = toWorld(V(u, v, 0));
+          flux += fn(pw.x, pw.y, pw.z, state.t).dot(nw) * dA;
+        }
+      }
+    }
+    return { kind: "flux", value: flux, unit: p.integralUnit };
+  }
+
+  if (type === "loop-circle") {
+    let circ = 0;
+    const N = 128;
+    const dPhi = (2 * Math.PI) / N;
+    const ds = R * dPhi;
+    for (let i = 0; i < N; i++) {
+      const a = (i + 0.5) * dPhi;
+      const pLocal = V(R * Math.cos(a), 0, R * Math.sin(a));
+      const tLocal = V(-Math.sin(a), 0, Math.cos(a));
+      const pw = toWorld(pLocal);
+      const tw = dirToWorld(tLocal);
+      circ += fn(pw.x, pw.y, pw.z, state.t).dot(tw) * ds;
+    }
+    return { kind: "circulation", value: circ, unit: p.integralUnit };
+  }
+
+  if (type === "loop-rect") {
+    let circ = 0;
+    const h = R * 0.9;
+    const segs = 32;
+    const edges = [
+      [V(-h, 0, -h), V(h, 0, -h)],
+      [V(h, 0, -h), V(h, 0, h)],
+      [V(h, 0, h), V(-h, 0, h)],
+      [V(-h, 0, h), V(-h, 0, -h)],
+    ];
+    for (const [a, b] of edges) {
+      const dL = b.clone().sub(a).divideScalar(segs);
+      const dLw = dirToWorld(dL);
+      for (let i = 0; i < segs; i++) {
+        const pLocal = a.clone().addScaledVector(dL, i + 0.5);
+        const pw = toWorld(pLocal);
+        circ += fn(pw.x, pw.y, pw.z, state.t).dot(dLw);
+      }
+    }
+    return { kind: "circulation", value: circ, unit: p.integralUnit };
+  }
+
+  return null;
+}
+
+/* ============================================================
+   HUD & KATEX RENDERING
+   ============================================================ */
+function renderKaTeX(el, tex) {
+  if (!el) return;
+  if (window.katex) {
+    try {
+      window.katex.render(tex, el, { throwOnError: false, displayMode: false });
+      return;
+    } catch (_) {}
+  }
+  el.textContent = tex;
+}
+
+function updateHUDStatic() {
+  const p = PRESETS[state.preset];
+  const law = LAWS[p.law];
+  document.getElementById("hud-title").textContent = `${p.label} — ${law.name}`;
+  renderKaTeX(document.getElementById("hud-integral"), law.integral);
+  renderKaTeX(document.getElementById("hud-differential"), law.differential);
+
+  const legend = document.getElementById("hud-legend");
+  legend.innerHTML = p.layers
+    .map(
+      (l) =>
+        `<span><i class="dot" style="background:#${l.color.toString(16).padStart(6, "0")}"></i>${l.label}</span>`,
+    )
+    .join("");
+}
+
+function updateHUDDynamic(probeDiff) {
+  const p = PRESETS[state.preset];
+  const law = LAWS[p.law];
+
+  document.getElementById("hud-curl").textContent =
+    `${fmtVec(probeDiff.curl)} ${p.units.curl}`;
+  document.getElementById("hud-div").textContent =
+    `${fmtNum(probeDiff.div)} ${p.units.div}`;
+
+  const res = evaluateIntegral();
+  const qtyEl = document.getElementById("hud-qty");
+  const valEl = document.getElementById("hud-value");
+  const badgeEl = document.getElementById("hud-badge");
+  const noteEl = document.getElementById("hud-note");
+
+  if (!res) {
+    qtyEl.textContent = law.qtyText;
+    valEl.textContent = "Select geometry";
+    badgeEl.className = "badge zero";
+    badgeEl.textContent = "IDLE";
+    noteEl.textContent = p.hint;
+    return;
+  }
+
+  const labelSym =
+    res.kind === "flux" ? (p.law === "gaussE" ? "Ψ_E" : "Φ") : law.qtyText;
+  qtyEl.textContent = labelSym;
+  valEl.textContent = `${fmtNum(res.value)} ${res.unit}`;
+
+  const absV = Math.abs(res.value);
+  if (absV < 1e-7) {
+    badgeEl.className = "badge zero";
+    badgeEl.textContent = "ZERO";
+  } else if (res.value > 0) {
+    badgeEl.className = "badge pos";
+    badgeEl.textContent = "POSITIVE";
+  } else {
+    badgeEl.className = "badge neg";
+    badgeEl.textContent = "NEGATIVE";
+  }
+
+  if (state.preset === "2A" && state.surface === "sheet") {
+    const dPhiDeg = parseFloat(document.getElementById("extra-slider").value);
+    const L = state.R * 1.6;
+    const analyticPsi = ((LAMBDA * L) / EPS0) * (dPhiDeg / 360);
+    noteEl.textContent = `Strip Δφ = ${dPhiDeg}°, L = ${L.toFixed(2)} m → Analytic Ψ = λL(Δφ/360°)/ε₀ = ${fmtNum(analyticPsi)} V·m.`;
+  } else if (
+    p.law === "gaussE" &&
+    ["sphere", "cylinder", "cube"].includes(state.surface)
+  ) {
+    const qEnc = EPS0 * res.value;
+    noteEl.textContent = `Gauss's Law: Q_enc = ε₀ ∮ E·ds ≈ ${fmtNum(qEnc * 1e9)} nC.`;
+  } else {
+    noteEl.textContent = p.hint;
+  }
+}
+
+/* ============================================================
+   PRESET & LAYER LOADING
+   ============================================================ */
+function populatePresetSelect() {
+  const sel = document.getElementById("preset-select");
+  sel.innerHTML = "";
+  for (const [id, p] of Object.entries(PRESETS)) {
+    if (p.cat === state.cat) {
+      const opt = document.createElement("option");
+      opt.value = id;
+      opt.textContent = p.label;
+      sel.appendChild(opt);
+    }
+  }
+  if (!PRESETS[state.preset] || PRESETS[state.preset].cat !== state.cat) {
+    state.preset = sel.options[0].value;
+  }
+  sel.value = state.preset;
+}
+
+function loadPreset(id) {
+  state.preset = id;
+  const p = PRESETS[id];
+
+  document.getElementById("preset-hint").textContent = p.hint;
+
+  const layerSel = document.getElementById("layer-select");
+  layerSel.innerHTML = "";
+  for (const l of p.layers) {
+    const opt = document.createElement("option");
+    opt.value = l.key;
+    opt.textContent = l.label;
+    layerSel.appendChild(opt);
+  }
+  state.layer = p.layers[0].key;
+  layerSel.value = state.layer;
+
+  const extraSec = document.getElementById("extra-sec");
+  if (id === "2A") {
+    extraSec.style.display = "block";
+    document.getElementById("extra-label").textContent = "Strip Δφ";
+    const sl = document.getElementById("extra-slider");
+    document.getElementById("extra-val").textContent = `${sl.value}°`;
+  } else {
+    extraSec.style.display = "none";
+  }
+
+  disposeGroup(extrasGroup);
+  if (p.extras) {
+    extrasGroup.add(p.extras());
+  }
+
+  if (id === "2C") {
+    const pt = sphToCart(2, 45, 45);
+    setProbe(pt.x, pt.y, pt.z);
+  }
+
+  updateHUDStatic();
+  updateFieldArrows();
+  rebuildStreamlines();
+  rebuildSurface();
+}
+
+function setProbe(x, y, z) {
+  state.probe.x = THREE.MathUtils.clamp(x, -2.5, 2.5);
+  state.probe.y = THREE.MathUtils.clamp(y, -2.5, 2.5);
+  state.probe.z = THREE.MathUtils.clamp(z, -2.5, 2.5);
+  for (const ax of ["x", "y", "z"]) {
+    document.getElementById(`probe-${ax}`).value = state.probe[ax].toFixed(2);
+    document.getElementById(`probe-${ax}-val`).textContent =
+      state.probe[ax].toFixed(2);
+  }
+}
+
+/* ============================================================
+   UI CONTROLS & EVENT WIRING
+   ============================================================ */
+document.querySelectorAll("#topbar .tab").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    document
+      .querySelectorAll("#topbar .tab")
+      .forEach((b) => b.classList.remove("active"));
+    btn.classList.add("active");
+    state.cat = btn.dataset.cat;
+    populatePresetSelect();
+    loadPreset(state.preset);
+  });
+});
+
+document.getElementById("preset-select").addEventListener("change", (e) => {
+  loadPreset(e.target.value);
+});
+
+document.getElementById("layer-select").addEventListener("change", (e) => {
+  state.layer = e.target.value;
+  updateFieldArrows();
+  rebuildStreamlines();
+});
+
+document.getElementById("density").addEventListener("input", (e) => {
+  state.density = parseInt(e.target.value, 10);
+  document.getElementById("density-val").textContent = state.density;
+  rebuildFieldGrid();
+});
+
+for (const ax of ["x", "y", "z"]) {
+  document.getElementById(`probe-${ax}`).addEventListener("input", (e) => {
+    state.probe[ax] = parseFloat(e.target.value);
+    document.getElementById(`probe-${ax}-val`).textContent =
+      state.probe[ax].toFixed(2);
+  });
+}
+
+document.getElementById("axis-select").addEventListener("change", (e) => {
+  state.axis = e.target.value;
+});
+
+document.getElementById("surface-select").addEventListener("change", (e) => {
+  state.surface = e.target.value;
+  rebuildSurface();
+});
+
+document.getElementById("R").addEventListener("input", (e) => {
+  state.R = parseFloat(e.target.value);
+  document.getElementById("R-val").textContent = state.R.toFixed(2);
+  rebuildSurface();
+});
+
+for (const ax of ["x", "y", "z"]) {
+  document.getElementById(`s${ax}`).addEventListener("input", (e) => {
+    state.spos[ax] = parseFloat(e.target.value);
+    document.getElementById(`s${ax}-val`).textContent =
+      state.spos[ax].toFixed(2);
+    rebuildSurface();
+  });
+}
+
+document.getElementById("tilt").addEventListener("input", (e) => {
+  state.tilt = parseFloat(e.target.value);
+  document.getElementById("tilt-val").textContent = state.tilt;
+  rebuildSurface();
+});
+
+document.getElementById("spin").addEventListener("input", (e) => {
+  state.spin = parseFloat(e.target.value);
+  document.getElementById("spin-val").textContent = state.spin;
+  rebuildSurface();
+});
+
+document.getElementById("chk-normals").addEventListener("change", (e) => {
+  state.showNormals = e.target.checked;
+  rebuildSurface();
+});
+
+document.getElementById("chk-arrows").addEventListener("change", (e) => {
+  state.showArrows = e.target.checked;
+  updateFieldArrows();
+});
+
+document.getElementById("chk-stream").addEventListener("change", (e) => {
+  state.showStream = e.target.checked;
+  rebuildStreamlines();
+});
+
+document.getElementById("extra-slider").addEventListener("input", (e) => {
+  document.getElementById("extra-val").textContent = `${e.target.value}°`;
+  rebuildSurface();
+});
+
+const btnPlay = document.getElementById("btn-play");
+btnPlay.addEventListener("click", () => {
+  state.playing = !state.playing;
+  btnPlay.textContent = state.playing ? "Pause" : "Play";
+  btnPlay.classList.toggle("active", state.playing);
+});
+
+document.getElementById("omega").addEventListener("input", (e) => {
+  state.omega = parseFloat(e.target.value);
+  document.getElementById("omega-val").textContent = state.omega.toFixed(2);
+});
+
+document.getElementById("btn-reset-cam").addEventListener("click", () => {
+  camera.position.set(4.8, 3.8, 5.8);
+  controls.target.set(0, 0, 0);
+  controls.update();
+});
+
+document.getElementById("grid-select").addEventListener("change", (e) => {
+  setGrid(e.target.value);
+});
+
+/* ============================================================
+   RIGHT REFERENCE DRAWER (MAXWELL, DUALITY, CONVERTER & SANDBOX)
+   ============================================================ */
+const drawer = document.getElementById("drawer");
+const drawerToggle = document.getElementById("drawer-toggle");
+drawerToggle.addEventListener("click", () => {
+  drawer.classList.toggle("collapsed");
+  drawerToggle.innerHTML = drawer.classList.contains("collapsed")
+    ? "&lang;"
+    : "&rang;";
+});
+
+document.querySelectorAll(".dtab").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    document
+      .querySelectorAll(".dtab")
+      .forEach((b) => b.classList.remove("active"));
+    document
+      .querySelectorAll(".dpanel")
+      .forEach((p) => p.classList.remove("active"));
+    btn.classList.add("active");
+    document
+      .getElementById(`panel-${btn.dataset.panel}`)
+      .classList.add("active");
+  });
+});
+
+let maxwellForm = "integral";
+let maxwellTime = "td";
+
+const MAXWELL_DATA = [
+  {
+    title: "1. Gauss's Law (Electric)",
+    integral: {
+      td: "\\oint_{\\partial V}\\mathbf{D}\\cdot d\\mathbf{s} = \\int_V \\rho_v\\,dv = Q_{\\text{enc}}",
+      phasor:
+        "\\oint_{\\partial V}\\tilde{\\mathbf{D}}\\cdot d\\mathbf{s} = \\int_V \\tilde{\\rho}_v\\,dv",
+    },
+    differential: {
+      td: "\\nabla\\cdot\\mathbf{D} = \\rho_v",
+      phasor: "\\nabla\\cdot\\tilde{\\mathbf{D}} = \\tilde{\\rho}_v",
+    },
+    bridge:
+      "Divergence theorem: volume charge density acts as scalar source of D.",
+  },
+  {
+    title: "2. Gauss's Law (Magnetic)",
+    integral: {
+      td: "\\oint_{\\partial V}\\mathbf{B}\\cdot d\\mathbf{s} = 0",
+      phasor: "\\oint_{\\partial V}\\tilde{\\mathbf{B}}\\cdot d\\mathbf{s} = 0",
+    },
+    differential: {
+      td: "\\nabla\\cdot\\mathbf{B} = 0",
+      phasor: "\\nabla\\cdot\\tilde{\\mathbf{B}} = 0",
+    },
+    bridge:
+      "Solenoidal field: no isolated magnetic monopoles; B lines form closed loops.",
+  },
+  {
+    title: "3. Faraday's Law of Induction",
+    integral: {
+      td: "\\oint_{\\partial S}\\mathbf{E}\\cdot d\\mathbf{L} = -\\frac{d}{dt}\\int_S \\mathbf{B}\\cdot d\\mathbf{s}",
+      phasor:
+        "\\oint_{\\partial S}\\tilde{\\mathbf{E}}\\cdot d\\mathbf{L} = -j\\omega\\int_S \\tilde{\\mathbf{B}}\\cdot d\\mathbf{s}",
+    },
+    differential: {
+      td: "\\nabla\\times\\mathbf{E} = -\\frac{\\partial\\mathbf{B}}{\\partial t}",
+      phasor:
+        "\\nabla\\times\\tilde{\\mathbf{E}} = -j\\omega\\mu\\tilde{\\mathbf{H}}",
+    },
+    bridge:
+      "Stokes theorem: time-varying magnetic flux curls the electric field.",
+  },
+  {
+    title: "4. Ampère–Maxwell Law",
+    integral: {
+      td: "\\oint_{\\partial S}\\mathbf{H}\\cdot d\\mathbf{L} = \\int_S\\left(\\mathbf{J}+\\frac{\\partial\\mathbf{D}}{\\partial t}\\right)\\cdot d\\mathbf{s}",
+      phasor:
+        "\\oint_{\\partial S}\\tilde{\\mathbf{H}}\\cdot d\\mathbf{L} = \\int_S(\\sigma+j\\omega\\varepsilon)\\tilde{\\mathbf{E}}\\cdot d\\mathbf{s}",
+    },
+    differential: {
+      td: "\\nabla\\times\\mathbf{H} = \\mathbf{J} + \\frac{\\partial\\mathbf{D}}{\\partial t}",
+      phasor:
+        "\\nabla\\times\\tilde{\\mathbf{H}} = (\\sigma + j\\omega\\varepsilon)\\tilde{\\mathbf{E}}",
+    },
+    bridge: "Stokes theorem: conduction plus displacement current curls H.",
+  },
+];
+
+function renderMaxwellCards() {
+  const containerEl = document.getElementById("maxwell-cards");
+  containerEl.innerHTML = "";
+  for (const item of MAXWELL_DATA) {
+    const card = document.createElement("div");
+    card.className = "card";
+    const titleEl = document.createElement("div");
+    titleEl.className = "card-title";
+    titleEl.textContent = item.title;
+    const eqEl = document.createElement("div");
+    eqEl.className = "eq";
+    renderKaTeX(eqEl, item[maxwellForm][maxwellTime]);
+    const brEl = document.createElement("div");
+    brEl.className = "bridge";
+    brEl.textContent = item.bridge;
+    card.append(titleEl, eqEl, brEl);
+    containerEl.appendChild(card);
+  }
+
+  const constEl = document.getElementById("constitutive");
+  constEl.innerHTML = "";
+  for (const tex of [
+    "\\mathbf{D}=\\varepsilon\\mathbf{E}",
+    "\\mathbf{B}=\\mu\\mathbf{H}",
+    "\\mathbf{J}=\\sigma\\mathbf{E}",
+  ]) {
+    const span = document.createElement("div");
+    span.className = "eq";
+    renderKaTeX(span, tex);
+    constEl.appendChild(span);
+  }
+}
+
+document.querySelectorAll("#seg-form button").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    document
+      .querySelectorAll("#seg-form button")
+      .forEach((b) => b.classList.remove("active"));
+    btn.classList.add("active");
+    maxwellForm = btn.dataset.form;
+    renderMaxwellCards();
+  });
+});
+
+document.querySelectorAll("#seg-time button").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    document
+      .querySelectorAll("#seg-time button")
+      .forEach((b) => b.classList.remove("active"));
+    btn.classList.add("active");
+    maxwellTime = btn.dataset.time;
+    renderMaxwellCards();
+  });
+});
+
+function renderDualityTable() {
+  const rows = [
+    [
+      "Field Intensity",
+      "\\mathbf{E}\\;(\\text{V/m})",
+      "\\mathbf{H}\\;(\\text{A/m})",
+    ],
+    [
+      "Flux Density",
+      "\\mathbf{D}\\;(\\text{C/m}^2)",
+      "\\mathbf{B}\\;(\\text{T})",
+    ],
+    [
+      "Medium Const.",
+      "\\varepsilon = \\varepsilon_r\\varepsilon_0",
+      "\\mu = \\mu_r\\mu_0",
+    ],
+    [
+      "Scalar Potential",
+      "V\\;(\\mathbf{E}=-\\nabla V)",
+      "V_m\\;(\\mathbf{H}=-\\nabla V_m)",
+    ],
+    [
+      "Vector Potential",
+      "\\mathbf{F}\\;(\\mathbf{D}=-\\nabla\\times\\mathbf{F})",
+      "\\mathbf{A}\\;(\\mathbf{B}=\\nabla\\times\\mathbf{A})",
+    ],
+    ["Flux / Law", "\\Psi_E = Q_{\\text{enc}}", "\\Phi_B = 0"],
+  ];
+  const tbody = document.getElementById("duality-body");
+  tbody.innerHTML = "";
+  for (const [k, eTex, mTex] of rows) {
+    const tr = document.createElement("tr");
+    const tdK = document.createElement("td");
+    tdK.className = "k";
+    tdK.textContent = k;
+    const tdE = document.createElement("td");
+    tdE.className = "e";
+    renderKaTeX(tdE, eTex);
+    const tdM = document.createElement("td");
+    tdM.className = "m";
+    renderKaTeX(tdM, mTex);
+    tr.append(tdK, tdE, tdM);
+    tbody.appendChild(tr);
+  }
+}
+
+/* --- Coordinate Converter & 3-Charge Superposition Sandbox --- */
+function parsePointToCart(sys, a, b, c) {
+  if (sys === "rect") return V(a, b, c);
+  if (sys === "cyl") {
+    const ph = deg(b);
+    return V(a * Math.cos(ph), c, a * Math.sin(ph));
+  }
+  return sphToCart(a, b, c);
+}
+
+function updateConverterLabels() {
+  const sys = document.getElementById("conv-system").value;
+  const labels =
+    sys === "rect"
+      ? ["x (m)", "y (m)", "z (m)"]
+      : sys === "cyl"
+        ? ["r (m)", "φ (°)", "z (m)"]
+        : ["r (m)", "θ (°)", "φ (°)"];
+  document.getElementById("conv-l1").textContent = labels[0];
+  document.getElementById("conv-l2").textContent = labels[1];
+  document.getElementById("conv-l3").textContent = labels[2];
+}
+
+function updateConverterAndSandbox() {
+  const sys = document.getElementById("conv-system").value;
+  const a = parseFloat(document.getElementById("conv-a").value) || 0;
+  const b = parseFloat(document.getElementById("conv-b").value) || 0;
+  const c = parseFloat(document.getElementById("conv-c").value) || 0;
+
+  const P = parsePointToCart(sys, a, b, c);
+  const rcyl = Math.hypot(P.x, P.z);
+  const phCyl = THREE.MathUtils.radToDeg(Math.atan2(P.z, P.x));
+  const rsph = P.length();
+  const thSph =
+    rsph > 1e-9
+      ? THREE.MathUtils.radToDeg(
+          Math.acos(THREE.MathUtils.clamp(P.y / rsph, -1, 1)),
+        )
+      : 0;
+
+  document.getElementById("conv-out").textContent = [
+    `Rect: (${P.x.toFixed(3)}, ${P.y.toFixed(3)}, ${P.z.toFixed(3)}) m`,
+    `Cyl : (r=${rcyl.toFixed(3)} m, φ=${phCyl.toFixed(1)}°, z=${P.y.toFixed(3)} m)`,
+    `Sph : (r=${rsph.toFixed(3)} m, θ=${thSph.toFixed(1)}°, φ=${phCyl.toFixed(1)}°)`,
+  ].join("\n");
+
+  const Etot = V(0, 0, 0);
+  let Vpot = 0;
+  for (const idx of [1, 2, 3]) {
+    const qNc = parseFloat(document.getElementById(`q${idx}`).value) || 0;
+    if (qNc === 0) continue;
+    const ca = parseFloat(document.getElementById(`c${idx}a`).value) || 0;
+    const cb = parseFloat(document.getElementById(`c${idx}b`).value) || 0;
+    const cc = parseFloat(document.getElementById(`c${idx}c`).value) || 0;
+    const Qpos = parsePointToCart(sys, ca, cb, cc);
+    const R = P.clone().sub(Qpos);
+    const r = R.length();
+    if (r < 1e-5) continue;
+    const q = qNc * 1e-9;
+    Etot.add(R.multiplyScalar((KE * q) / (r * r * r)));
+    Vpot += (KE * q) / r;
+  }
+
+  document.getElementById("charge-out").textContent = [
+    `E(P) = ${fmtVec(Etot)} V/m`,
+    `|E|  = ${fmtNum(Etot.length())} V/m`,
+    `V(P) = ${fmtNum(Vpot)} V`,
+  ].join("\n");
+
+  return P;
+}
+
+document.getElementById("conv-system").addEventListener("change", () => {
+  updateConverterLabels();
+  updateConverterAndSandbox();
+});
+
+[
+  "conv-a",
+  "conv-b",
+  "conv-c",
+  "q1",
+  "c1a",
+  "c1b",
+  "c1c",
+  "q2",
+  "c2a",
+  "c2b",
+  "c2c",
+  "q3",
+  "c3a",
+  "c3b",
+  "c3c",
+].forEach((id) => {
+  document
+    .getElementById(id)
+    .addEventListener("input", updateConverterAndSandbox);
+});
+
+document.getElementById("conv-jump").addEventListener("click", () => {
+  const P = updateConverterAndSandbox();
+  setProbe(P.x, P.y, P.z);
+  controls.target.set(state.probe.x, state.probe.y, state.probe.z);
+  controls.update();
+});
+
+/* ============================================================
+   RESIZE & ANIMATION LOOP
+   ============================================================ */
+window.addEventListener("resize", () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+/* --- Initialize App --- */
+setGrid("cartesian");
+populatePresetSelect();
+rebuildFieldGrid();
+loadPreset("1A");
+renderMaxwellCards();
+renderDualityTable();
+updateConverterLabels();
+updateConverterAndSandbox();
+
+window.addEventListener("load", () => {
+  updateHUDStatic();
+  renderMaxwellCards();
+  renderDualityTable();
+});
+
+let lastTime = performance.now();
+function animate(now) {
+  requestAnimationFrame(animate);
+  const dt = Math.min((now - lastTime) / 1000, 0.05);
+  lastTime = now;
+
+  if (state.playing) {
+    state.t += dt;
+    if (PRESETS[state.preset].dynamic) {
+      updateFieldArrows();
+    }
+  }
+
+  const probeDiff = updateProbeReadout(dt);
+  updateHUDDynamic(probeDiff);
+
+  controls.update();
+  renderer.render(scene, camera);
+}
+
+requestAnimationFrame(animate);
+
+</script>
+  </body>
+</html>

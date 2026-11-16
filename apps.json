@@ -16,5 +16,11 @@
     "title": "Maxwell 3D",
     "category": "Simulation",
     "description": "Interactive 3D Maxwell's equations explorer with charge, capacitor, dipole and solenoid presets."
+  },
+  {
+    "file": "EMFCraft.html",
+    "title": "EMFCraft",
+    "category": "Simulation",
+    "description": "Interactive 3D laboratory for classical electromagnetics: curl/divergence visualizers, Gaussian surfaces, Amperian loops, and Maxwell's equations."
   }
 ]
