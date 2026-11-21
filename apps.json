@@ -22,5 +22,11 @@
     "title": "EMFCraft",
     "category": "Simulation",
     "description": "Interactive 3D laboratory for classical electromagnetics: curl/divergence visualizers, Gaussian surfaces, Amperian loops, and Maxwell's equations."
+  },
+  {
+    "file": "EM-Kraus-LAB.html",
+    "title": "EM-Kraus-LAB",
+    "category": "Lab-exam",
+    "description": "Interactive laboratory with multiple choice for classical electromagnetics."
   }
 ]

@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>ContextCut-PRO &amp; EM-KRAUS-LAB Engineering Report</title>
+<style>
+  :root {
+    --bg: #0b0f19;
+    --surface: #111827;
+    --surface-alt: #1e293b;
+    --border: rgba(56, 189, 248, 0.25);
+    --text: #e2e8f0;
+    --muted: #94a3b8;
+    --accent: #38bdf8;
+    --green: #34d399;
+    --amber: #fbbf24;
+    --pink: #f472b6;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 32px 20px;
+    background: var(--bg);
+    color: var(--text);
+    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    line-height: 1.6;
+  }
+  .container {
+    max-width: 1020px;
+    margin: 0 auto;
+  }
+  header {
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 20px;
+    margin-bottom: 28px;
+  }
+  .eyebrow {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    color: var(--accent);
+    font-weight: 700;
+  }
+  h1 {
+    margin: 6px 0 8px;
+    font-size: 28px;
+    color: #f8fafc;
+  }
+  .subtitle {
+    margin: 0;
+    color: var(--muted);
+    font-size: 14px;
+  }
+  h2 {
+    margin: 34px 0 14px;
+    font-size: 20px;
+    color: #f1f5f9;
+    border-left: 4px solid var(--accent);
+    padding-left: 12px;
+  }
+  h3 {
+    margin: 0 0 8px;
+    font-size: 16px;
+    color: #f8fafc;
+  }
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 18px 20px;
+    margin-bottom: 18px;
+  }
+  .grid-2 {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 16px;
+    margin-bottom: 18px;
+  }
+  .badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    margin-right: 6px;
+  }
+  .badge-blue { background: rgba(56, 189, 248, 0.16); color: var(--accent); border: 1px solid rgba(56, 189, 248, 0.35); }
+  .badge-green { background: rgba(52, 211, 153, 0.16); color: var(--green); border: 1px solid rgba(52, 211, 153, 0.35); }
+  .badge-amber { background: rgba(251, 191, 36, 0.16); color: var(--amber); border: 1px solid rgba(251, 191, 36, 0.35); }
+  pre {
+    background: #020617;
+    border: 1px solid rgba(148, 163, 184, 0.2);
+    border-radius: 8px;
+    padding: 14px 16px;
+    overflow-x: auto;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 12.5px;
+    line-height: 1.5;
+    color: #e2e8f0;
+    white-space: pre-wrap;
+    margin: 10px 0 14px;
+  }
+  code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 12.5px;
+    color: var(--accent);
+    background: rgba(56, 189, 248, 0.1);
+    padding: 1px 5px;
+    border-radius: 4px;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 12px 0 20px;
+    font-size: 13.5px;
+  }
+  th, td {
+    text-align: left;
+    padding: 10px 12px;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.18);
+    vertical-align: top;
+  }
+  th {
+    background: var(--surface-alt);
+    color: #f8fafc;
+    font-weight: 600;
+  }
+  ul {
+    margin: 8px 0 0;
+    padding-left: 20px;
+  }
+  li {
+    margin-bottom: 6px;
+  }
+  .split-notes {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+    margin-top: 10px;
+  }
+  .note-box {
+    background: rgba(15, 23, 42, 0.7);
+    border: 1px solid rgba(148, 163, 184, 0.18);
+    border-radius: 8px;
+    padding: 12px 14px;
+    font-size: 13px;
+  }
+  .note-box strong {
+    display: block;
+    margin-bottom: 4px;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  .note-code strong { color: var(--green); }
+  .note-prompt strong { color: var(--amber); }
+  @media (max-width: 720px) {
+    .split-notes { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <header>
+    <div class="eyebrow">Engineering Post-Mortem &amp; Runbook</div>
+    <h1>Hardening <code>ContextCut-PRO</code> for Incremental Local Agent Builds</h1>
+    <p class="subtitle">Architecture profile, harness code modifications, prompt evolution, and the complete sequence of successful prompts used to build <code>EM-KRAUS-LAB.html</code> (Modules 8&ndash;10 &amp; UI Controller).</p>
+  </header>
+
+  <h2>1. Runtime &amp; Hardware Architecture</h2>
+  <p>The workflow spans a bridged local dual-host setup designed for private, high-context local inference and agentic code execution:</p>
+
+  <div class="grid-2">
+    <div class="card">
+      <span class="badge badge-blue">Compute Node (Windows 11)</span>
+      <h3>GPU Inference &amp; Strata Runtime</h3>
+      <ul>
+        <li><strong>CPU / RAM:</strong> AMD Ryzen 9 7950X3D (16-core), 64 GB DDR5 RAM</li>
+        <li><strong>GPU:</strong> NVIDIA GeForce RTX 4090 (24 GB VRAM)</li>
+        <li><strong>Inference Engine:</strong> Ollama + Strata serving local reasoning and coding weights (including <code>deepseek-r1:32b</code>, <code>qwen3-coder:30b</code>, <code>qwen3.5:27b</code>, and <code>nomic-embed-text</code>) with <code>num_ctx: 49152</code> and <code>max_tokens: 49152</code></li>
+        <li><strong>Network Bridge:</strong> Direct local subnet (<code>192.168.137.1</code>) to the Ubuntu orchestration server</li>
+      </ul>
+    </div>
+    <div class="card">
+      <span class="badge badge-green">Orchestration Node (Ubuntu Linux &mdash; <code>openclaw</code>)</span>
+      <h3>ContextCut-PRO Proxy &amp; Agent Harness</h3>
+      <ul>
+        <li><strong>Host IP:</strong> <code>192.168.137.252</code></li>
+        <li><strong>Development &amp; Runtime Paths:</strong> Active repo at <code>~/dev/ContextCut-PRO/</code>; deployed service running from <code>~/contextcut/</code> (<code>./stop.sh</code> / <code>./start.sh</code>)</li>
+        <li><strong>Core Stack:</strong> <code>qdrant_proxy_final.py</code>, Qdrant vector database, <code>agent_handler.py</code> (<code>ContextTuningMiddleware</code>), OpenCode CLI, and target app directory <code>~/keanapps/EM-KRAUS-LAB.html</code></li>
+      </ul>
+    </div>
+  </div>
+
+  <h2>2. Root Causes &amp; Harness Code Changes (<code>agent_handler.py</code>)</h2>
+  <p>With <code>num_ctx</code> and <code>max_tokens</code> configured at <code>49,152</code> on reasoning models such as DeepSeek-R1 and Qwen, long-file generation initially failed due to multi-thousand-token <code>&lt;think&gt;</code> loops, repeated file-slicing inspections via <code>read_file</code> / <code>run_python</code> / <code>sed</code>, and JSON tool-call truncation when attempting to emit 400+ lines in a single turn. The following targeted fixes were implemented in <code>agent_handler.py</code>:</p>
+
+  <table>
+    <thead>
+      <tr>
+        <th style="width: 24%;">Subsystem</th>
+        <th style="width: 38%;">Code Changed in <code>ContextCut-PRO</code></th>
+        <th style="width: 38%;">Operational Effect</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>Incremental Disk Writes</strong><br><code>append_file</code> &amp; <code>write_file</code></td>
+        <td>Added <code>append_file(path, content)</code> returning only a compact JSON receipt (<code>bytes_appended</code>, <code>total_lines</code>, <code>last_5_lines</code>). Enforced a hard per-call ceiling of <strong>120 lines / 4,500 chars</strong> on both <code>write_file</code> and <code>append_file</code>.</td>
+        <td>Eliminated full-file rewrites and prevented single-turn JSON truncation. When the agent attempted a 153-line write in Prompt 3, the guard caught it immediately and the model self-corrected into ~60-line chunks.</td>
+      </tr>
+      <tr>
+        <td><strong>Auto Tail-Context Injection</strong><br><code>ContextTuningMiddleware</code> (<code>before_agent</code>)</td>
+        <td>Added append-intent/path detection (<code>:128-138</code>, <code>:492-543</code>, <code>:2929-3018</code>) that reads the final 30 lines of the target file on the harness side, injects <code>Tail of &lt;path&gt; (lines N-M)</code> into context, and marks the file inspected.</td>
+        <td>Gave DeepSeek/Qwen the exact <code>modules.push({...})</code> schema, helper names, and line numbers on Turn 1 without spending any tool calls or tokens inspecting the file.</td>
+      </tr>
+      <tr>
+        <td><strong>History Compaction &amp; Read Deduplication</strong></td>
+        <td>Redacted historical <code>AIMessage</code> write payloads (<code>content</code>, <code>code</code>, <code>new_str</code> &gt; 400 chars) older than the last 4 messages; clamped <code>read_file</code>, <code>shell_exec</code>, and <code>run_python</code> outputs to 2,500 chars; deduplicated identical read slices and token-normalized <code>run_python</code> AST/token hashes; removed <code>sed</code>/<code>cat</code>/<code>head</code>/<code>tail</code> from <code>shell_exec</code>.</td>
+        <td>Kept prompt context flat around ~5,900 tokens across multi-step builds instead of ballooning past 31,000+ tokens, and closed every backdoor the model used to slice through files repeatedly.</td>
+      </tr>
+      <tr>
+        <td><strong>Unconditional Thinking Ceilings</strong><br><code>_tune_model_request</code></td>
+        <td>Applied explicit thinking-budget caps across all turns (including Turn 1 <code>HumanMessage</code> turns) and normalized provider budget keys so reasoning models transition from <code>&lt;think&gt;</code> to tool calls within seconds instead of 1,400-second stalls.</td>
+        <td>Prevented 20+ minute reasoning hangs while preserving enough reasoning headroom for accurate Three.js math and physics formulas.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>3. Sequence of Successful Prompts (End-to-End)</h2>
+  <p>Each prompt below represents a verified milestone in the build, paired with the specific changes made to the codebase and prompt structure that made it succeed.</p>
+
+  <!-- PROMPT 1 -->
+  <div class="card">
+    <span class="badge badge-green">Prompt 1 &mdash; Module 8</span>
+    <span class="badge badge-blue">Result: Appended lines 918&ndash;1,027 (<code>id: 'maxwell'</code>)</span>
+    <h3>Maxwell&rsquo;s Equations &amp; Displacement Current (Kraus Ch. 7)</h3>
+    <pre>Use append_file on /home/steve/keanapps/EM-KRAUS-LAB.html to append only Module 8 (id: 'maxwell', title "Maxwell's Equations &amp; Displacement Current", chapter 'Kraus Ch. 7', ~90 lines) matching the { id, title, chapter, controls, blurb, quiz, build(), update() } schema of Modules 1–7. Stop immediately after appending Module 8.</pre>
+    <div class="split-notes">
+      <div class="note-box note-code">
+        <strong>What Changed in Code</strong>
+        <code>append_file</code> was introduced in <code>agent_handler.py</code> so new modules could be appended directly to disk without reading or rewriting the existing 917 lines (40 KB) of HTML/Three.js setup.
+      </div>
+      <div class="note-box note-prompt">
+        <strong>What Changed in Prompt</strong>
+        Scoped the deliverable from &ldquo;finish Modules 8&ndash;10 + UI controller&rdquo; down to a single ~90-line module with an explicit stop condition (<em>&ldquo;Stop immediately after appending Module 8&rdquo;</em>) and exact object keys.
+      </div>
+    </div>
+  </div>
+
+  <!-- PROMPT 2 -->
+  <div class="card">
+    <span class="badge badge-green">Prompt 2 &mdash; Module 9</span>
+    <span class="badge badge-blue">Result: Appended lines 1,028&ndash;1,107 (+4,187 bytes, <code>id: 'waves'</code>)</span>
+    <h3>Plane Waves &amp; Poynting Vector (Kraus Ch. 8)</h3>
+    <pre>Append Module 9 (id: 'waves', title 'Plane Waves &amp; Poynting Vector', chapter 'Kraus Ch. 8', ~90 lines) to /home/steve/keanapps/EM-KRAUS-LAB.html using append_file right now. Match the exact modules.push({ id, title, chapter, controls, blurb, quiz, build(), update(), tick(dt) }); schema shown in the injected file tail, animating E (blue along x), H (pink along y), and Poynting vector S (green along +z) with setHud(...) and fmt(...). Do not close &lt;/script&gt;, &lt;/body&gt;, or &lt;/html&gt;, and stop immediately after appending Module 9.</pre>
+    <div class="split-notes">
+      <div class="note-box note-code">
+        <strong>What Changed in Code</strong>
+        Added <strong>Auto Tail-Context Injection</strong> (<code>:2929-3018</code>) and marked the target file inspected on Turn 1; blocked <code>sed</code>/<code>grep</code>/<code>run_python</code> file-slicing loops; added <code>last_5_lines</code> to <code>append_file</code> receipts; enforced global thinking caps in <code>ContextTuningMiddleware</code>.
+      </div>
+      <div class="note-box note-prompt">
+        <strong>What Changed in Prompt</strong>
+        Removed negative &ldquo;Do NOT inspect...&rdquo; phrasing (which triggered extra reasoning tokens), referenced the auto-injected file tail directly, specified exact helper signatures (<code>setHud</code>, <code>fmt</code>), and explicitly forbade premature closing tags.
+      </div>
+    </div>
+  </div>
+
+  <!-- PROMPT 3 -->
+  <div class="card">
+    <span class="badge badge-green">Prompt 3 &mdash; Module 10</span>
+    <span class="badge badge-blue">Result: Appended lines 1,108&ndash;1,273 in 4 micro-chunks (<code>id: 'smith_antenna'</code>)</span>
+    <h3>Smith Chart &amp; Dipole Radiation (Kraus Ch. 9&ndash;11)</h3>
+    <pre>Append Module 10 (id: 'smith_antenna', title 'Smith Chart &amp; Dipole Radiation', chapter 'Kraus Ch. 9–11', ~100 lines) to /home/steve/keanapps/EM-KRAUS-LAB.html using append_file right now. Match the exact modules.push({ id, title, chapter, controls, blurb, quiz, build(), update() }); schema shown in the injected file tail, rendering a 2D Smith chart on chartEl (#chart-canvas) when viewMode === 0 and a 3D half-wave dipole radiation pattern on content when viewMode === 1. Do not close &lt;/script&gt;, &lt;/body&gt;, or &lt;/html&gt;, and stop immediately after appending Module 10.</pre>
+    <div class="split-notes">
+      <div class="note-box note-code">
+        <strong>What Changed in Code</strong>
+        The <strong>120-line / 4,500-char chunk guard</strong> in <code>append_file</code> intercepted an initial 153-line attempt and returned a corrective error. Using <code>last_5_lines</code> receipts, the agent cleanly split Module 10 into four sequential chunks (<code>1,845 B</code> &rarr; <code>2,064 B</code> &rarr; <code>2,717 B</code> &rarr; <code>218 B</code>) with balanced braces verified via Python.
+      </div>
+      <div class="note-box note-prompt">
+        <strong>What Changed in Prompt</strong>
+        Mapped the 2D/3D dual-renderer requirements explicitly to existing DOM variables (<code>chartEl</code> for <code>viewMode === 0</code>, <code>content</code> for <code>viewMode === 1</code>) so the model did not need to query DOM IDs.
+      </div>
+    </div>
+  </div>
+
+  <!-- PROMPT 4 -->
+  <div class="card">
+    <span class="badge badge-amber">Prompt 4 &mdash; UI Controller, Closing Tags &amp; Syntax Verification</span>
+    <span class="badge badge-blue">Target: Appends controller + <code>&lt;/script&gt;&lt;/body&gt;&lt;/html&gt;</code> &amp; runs <code>node --check</code></span>
+    <h3>Sidebar Router, Controls, KaTeX, Quiz Persistence &amp; Animation Loop</h3>
+    <pre>Append the UI controller and closing HTML tags to /home/steve/keanapps/EM-KRAUS-LAB.html using append_file (in &lt;= 100-line chunks so you stay within the 120-line / 4,500-char per-call limit):
+1. Wire up #module-list buttons, selectModule(idx), #controls inputs (range and check, initializing mod.state[c.id] = c.value), #lesson KaTeX rendering via renderAllMath(lessonEl), #quiz grading with localStorage persistence (#progress-bar / #progress-label), window resize listener, selectModule(0), and the requestAnimationFrame loop calling mod.tick(dt) and renderer.render(scene, camera).
+2. Append the closing &lt;/script&gt;
+&lt;/body&gt;
+&lt;/html&gt; tags.
+3. Run node --input-type=module --check on the extracted &lt;script type="module"&gt; block via run_python to confirm zero syntax errors.</pre>
+    <div class="split-notes">
+      <div class="note-box note-code">
+        <strong>What Changed in Code</strong>
+        Relies on the full hardened pipeline: tail injection shows the closing <code>});</code> of Module 10, the 120-line guard splits the controller into two ~75-line chunks, and <code>run_python</code> executes a one-shot <code>node --input-type=module --check</code> AST validation.
+      </div>
+      <div class="note-box note-prompt">
+        <strong>What Changed in Prompt</strong>
+        Explicitly reminded the model of the <code>&lt;= 100</code>-line per-call chunk ceiling up front (avoiding a rejected first call), enumerated exact DOM IDs/helper names (<code>renderAllMath</code>, <code>#progress-bar</code>), and authorized closing tags + final syntax check in one clean terminal step.
+      </div>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>

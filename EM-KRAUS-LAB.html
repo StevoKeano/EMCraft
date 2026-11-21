@@ -1,0 +1,1574 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>EM Lab — Electromagnetics à la Kraus</title>
+<meta name="description" content="Interactive electromagnetics learning lab inspired by John D. Kraus's Electromagnetics: field concepts, Gauss's law, potential, capacitance, magnetism, Faraday induction, Maxwell's equations, wave propagation, the Smith chart, and antenna radiation." />
+
+<style>
+  :root {
+    --bg: #0b0f19;
+    --panel: rgba(15, 23, 42, 0.86);
+    --border: rgba(56, 189, 248, 0.22);
+    --text: #e2e8f0;
+    --muted: #94a3b8;
+    --accent: #38bdf8;
+    --e: #38bdf8;
+    --b: #f472b6;
+    --s: #34d399;
+    --warn: #fbbf24;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; height: 100%; overflow: hidden;
+    background: var(--bg); color: var(--text);
+    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  #shell { display: grid; grid-template-rows: auto 1fr; height: 100%; }
+
+  #topbar {
+    display: flex; align-items: center; gap: 16px;
+    padding: 10px 16px;
+    border-bottom: 1px solid rgba(56,189,248,0.15);
+    background: rgba(2,6,23,0.6);
+  }
+  #topbar .brand { font-weight: 700; letter-spacing: 0.04em; font-size: 15px; }
+  #topbar .brand span { color: var(--accent); }
+  #topbar .sub { color: var(--muted); font-size: 12px; }
+  #topbar .spacer { flex: 1; }
+  #progress-wrap { display: flex; align-items: center; gap: 10px; }
+  #progress-track {
+    width: 160px; height: 6px; border-radius: 3px;
+    background: rgba(56,189,248,0.15); overflow: hidden;
+  }
+  #progress-bar { height: 100%; width: 0%; background: var(--accent); transition: width .25s; }
+  #progress-label { font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+  #body { display: grid; grid-template-columns: 232px minmax(0, 1fr); min-height: 0; overflow: hidden; }
+
+  #sidebar {
+    border-right: 1px solid rgba(56,189,248,0.12);
+    background: rgba(2,6,23,0.45);
+    overflow-y: auto;
+    padding: 10px 8px;
+  }
+  #sidebar .side-label {
+    font-size: 10px; text-transform: uppercase; letter-spacing: 0.14em;
+    color: var(--muted); padding: 6px 8px 10px;
+  }
+  .mod-btn {
+    display: flex; align-items: center; gap: 8px;
+    width: 100%; text-align: left;
+    padding: 8px 10px; margin-bottom: 4px;
+    border-radius: 8px; border: 1px solid transparent;
+    background: transparent; color: var(--text);
+    font-size: 12px; cursor: pointer;
+  }
+  .mod-btn:hover { background: rgba(56,189,248,0.08); }
+  .mod-btn.active {
+    background: rgba(56,189,248,0.16);
+    border-color: rgba(56,189,248,0.4);
+  }
+  .mod-btn .num {
+    font-size: 10px; color: var(--muted); font-variant-numeric: tabular-nums;
+    min-width: 16px;
+  }
+  .mod-btn .check { margin-left: auto; font-size: 11px; color: var(--s); opacity: 0; }
+  .mod-btn.done .check { opacity: 1; }
+  .mod-btn .chap { display: block; font-size: 10px; color: var(--muted); margin-top: 2px; }
+
+  #main { display: flex; flex-direction: column; min-height: 0; min-width: 0; overflow: hidden; }
+  #stage { flex: 1; position: relative; min-height: 0; min-width: 0; overflow: hidden; }
+  #stage canvas { display: block; width: 100%; height: 100%; }
+  #chart-canvas { position: absolute; inset: 0; display: none; }
+
+  #controls {
+    position: absolute; top: 12px; right: 12px; width: 300px;
+    max-height: calc(100% - 24px); overflow-y: auto;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    box-shadow: 0 12px 40px rgba(0,0,0,0.55);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    padding: 12px 14px;
+    font-size: 12px;
+    z-index: 10;
+  }
+  #controls .ctl-title {
+    font-weight: 600; font-size: 12px; color: #f1f5f9;
+    margin-bottom: 10px; letter-spacing: 0.02em;
+  }
+  .ctl { margin-bottom: 10px; }
+  .ctl .row-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
+  .ctl .name { color: var(--muted); font-size: 11px; }
+  .ctl .val { color: var(--accent); font-size: 11px; font-variant-numeric: tabular-nums; }
+  input[type="range"] {
+    width: 100%; height: 4px; border-radius: 2px;
+    background: rgba(56,189,248,0.2); outline: none; -webkit-appearance: none;
+  }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none; width: 14px; height: 14px; border-radius: 50%;
+    background: var(--accent); cursor: pointer; box-shadow: 0 0 8px rgba(56,189,248,0.6);
+  }
+  input[type="range"]::-moz-range-thumb {
+    width: 14px; height: 14px; border-radius: 50%; background: var(--accent);
+    cursor: pointer; border: none;
+  }
+  select {
+    width: 100%; padding: 7px 9px; border-radius: 7px;
+    background: rgba(2,6,23,0.7); color: var(--text);
+    border: 1px solid rgba(56,189,248,0.25); font-size: 12px; outline: none;
+  }
+  select:focus { border-color: var(--accent); }
+  .check-row { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 11px; margin-bottom: 6px; }
+  .check-row input[type="checkbox"] { accent-color: var(--accent); }
+
+  #hud {
+    position: absolute; left: 12px; bottom: 12px; width: 380px; max-width: calc(100% - 340px);
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    box-shadow: 0 12px 40px rgba(0,0,0,0.55);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    padding: 12px 14px;
+    font-size: 12px;
+    z-index: 10;
+  }
+  #hud .hud-title { font-weight: 600; color: #f1f5f9; font-size: 12px; margin-bottom: 6px; }
+  #hud .hud-eq { color: #cbd5e1; min-height: 20px; margin-bottom: 8px; }
+  #hud .hud-eq .katex { font-size: 1.0em; }
+  #hud .kv { display: flex; justify-content: space-between; gap: 10px; padding: 3px 0; }
+  #hud .kv .k { color: var(--muted); font-size: 11px; }
+  #hud .kv .v {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    color: var(--accent); font-variant-numeric: tabular-nums; font-size: 12px;
+  }
+
+  #bottom {
+    height: 32vh; min-height: 190px;
+    display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    border-top: 1px solid rgba(56,189,248,0.12);
+    background: rgba(2,6,23,0.5);
+  }
+  #lesson, #quiz { overflow-y: auto; overflow-x: hidden; min-width: 0; padding: 14px 16px; overflow-wrap: break-word; }
+  #lesson { border-right: 1px solid rgba(56,189,248,0.12); }
+  #lesson h3 { margin: 0 0 8px; font-size: 13px; color: #f1f5f9; }
+  #lesson p { margin: 0 0 8px; font-size: 12px; line-height: 1.55; color: #cbd5e1; }
+  #lesson .eqblock { margin: 8px 0; color: #e2e8f0; }
+  #lesson .eqblock .katex { font-size: 1.0em; }
+  #lesson .note { font-size: 11px; color: var(--muted); }
+  #quiz h3 { margin: 0 0 8px; font-size: 13px; color: #f1f5f9; }
+  .q { margin-bottom: 12px; }
+  .q .qtext { font-size: 12px; color: #e2e8f0; margin-bottom: 6px; }
+  .q label {
+    display: flex; gap: 8px; align-items: flex-start;
+    font-size: 11.5px; color: #cbd5e1; padding: 4px 6px; border-radius: 6px; cursor: pointer;
+  }
+  .q label:hover { background: rgba(56,189,248,0.07); }
+  .q input[type="radio"] { accent-color: var(--accent); margin-top: 2px; }
+  .q .explain { font-size: 11px; color: var(--muted); margin-top: 4px; display: none; }
+  .q.correct .explain { display: block; color: var(--s); }
+  .q.wrong .explain { display: block; color: #f87171; }
+  #quiz button {
+    padding: 7px 12px; border-radius: 7px; cursor: pointer;
+    background: rgba(56,189,248,0.14); color: var(--accent);
+    border: 1px solid rgba(56,189,248,0.35); font-size: 12px; font-weight: 600;
+  }
+  #quiz button:hover { background: rgba(56,189,248,0.24); }
+  #quiz .status { font-size: 11px; color: var(--muted); margin-top: 8px; }
+
+
+  /* Dynamically generated UI controller styles */
+  .module-btn {
+    display: flex; align-items: center; gap: 8px;
+    width: 100%; text-align: left;
+    padding: 8px 10px; margin-bottom: 4px;
+    border-radius: 8px; border: 1px solid transparent;
+    background: transparent; color: var(--text);
+    font-size: 12px; cursor: pointer; line-height: 1.35;
+  }
+  .module-btn:hover { background: rgba(56,189,248,0.08); }
+  .module-btn.active {
+    background: rgba(56,189,248,0.16);
+    border-color: rgba(56,189,248,0.4);
+  }
+  .control-row {
+    display: flex; flex-direction: column; gap: 5px;
+    margin-bottom: 10px;
+  }
+  .control-row .control-top {
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .control-label { color: var(--muted); font-size: 11px; }
+  .control-val { color: var(--accent); font-size: 11px; font-variant-numeric: tabular-nums; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+  .control-row.is-check {
+    flex-direction: row; justify-content: space-between; align-items: center;
+  }
+  .control-row input[type="checkbox"] { accent-color: var(--accent); width: 15px; height: 15px; cursor: pointer; }
+  .quiz-card {
+    background: rgba(15, 23, 42, 0.55);
+    border: 1px solid rgba(56, 189, 248, 0.14);
+    border-radius: 8px;
+    padding: 10px 12px;
+    margin-bottom: 10px;
+  }
+  .quiz-prompt { font-size: 12px; color: #e2e8f0; margin: 0 0 6px; font-weight: 500; }
+  .quiz-options { display: flex; flex-direction: column; gap: 3px; }
+  .quiz-option {
+    display: flex; gap: 8px; align-items: flex-start;
+    font-size: 11.5px; color: #cbd5e1; padding: 4px 6px; border-radius: 6px; cursor: pointer;
+  }
+  .quiz-option:hover { background: rgba(56,189,248,0.08); }
+  .quiz-option input[type="radio"] { accent-color: var(--accent); margin-top: 2px; }
+  .quiz-feedback { font-size: 11px; margin: 6px 0 0; min-height: 14px; }
+  .quiz-feedback.ok { color: var(--s); }
+  .quiz-feedback.bad { color: #f87171; }
+
+  @media (max-width: 900px) {
+    #body { grid-template-columns: 1fr; }
+    #sidebar { display: none; }
+    #controls { width: 240px; }
+    #hud { width: calc(100% - 24px); max-width: none; }
+    #bottom { grid-template-columns: 1fr; height: 40vh; }
+    #lesson { border-right: none; border-bottom: 1px solid rgba(56,189,248,0.12); }
+  }
+</style>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+</head>
+<body>
+
+<div id="shell">
+  <header id="topbar">
+    <div class="brand">EM <span>Lab</span></div>
+    <div class="sub">Electromagnetics à la Kraus</div>
+    <div class="spacer"></div>
+    <div id="progress-wrap">
+      <div id="progress-track"><div id="progress-bar"></div></div>
+      <div id="progress-label">0 / 10</div>
+    </div>
+  </header>
+
+  <div id="body">
+    <nav id="sidebar">
+      <div class="side-label">Modules</div>
+      <div id="module-list"></div>
+    </nav>
+
+    <main id="main">
+      <div id="stage">
+        <canvas id="chart-canvas"></canvas>
+        <div id="controls"></div>
+        <div id="hud">
+          <div class="hud-title" id="hud-title">—</div>
+          <div class="hud-eq" id="hud-eq"></div>
+          <div id="hud-values"></div>
+        </div>
+      </div>
+
+      <div id="bottom">
+        <section id="lesson"></section>
+        <section id="quiz"></section>
+      </div>
+    </main>
+  </div>
+</div>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+/* ============================================================
+   0. DOM REFERENCES
+   ============================================================ */
+const stageEl   = document.getElementById('stage');
+const chartEl   = document.getElementById('chart-canvas');
+const controlsEl= document.getElementById('controls');
+const hudTitle  = document.getElementById('hud-title');
+const hudEq     = document.getElementById('hud-eq');
+const hudValues = document.getElementById('hud-values');
+const lessonEl  = document.getElementById('lesson');
+const quizEl    = document.getElementById('quiz');
+const moduleList= document.getElementById('module-list');
+const progressBar = document.getElementById('progress-bar');
+const progressLabel = document.getElementById('progress-label');
+
+/* ============================================================
+   1. THREE.JS SETUP
+   ============================================================ */
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setSize(stageEl.clientWidth, stageEl.clientHeight);
+renderer.setClearColor(0x0b0f19, 1);
+stageEl.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.fog = new THREE.FogExp2(0x0b0f19, 0.03);
+
+const camera = new THREE.PerspectiveCamera(50, stageEl.clientWidth / stageEl.clientHeight, 0.1, 200);
+camera.position.set(4.6, 3.6, 5.6);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.08;
+controls.minDistance = 2;
+controls.maxDistance = 30;
+
+scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+const dirLight = new THREE.DirectionalLight(0xffffff, 0.9);
+dirLight.position.set(5, 8, 6);
+scene.add(dirLight);
+const rimLight = new THREE.DirectionalLight(0x38bdf8, 0.35);
+rimLight.position.set(-6, -3, -5);
+scene.add(rimLight);
+
+const content = new THREE.Group();
+scene.add(content);
+
+/* ============================================================
+   2. HELPERS
+   ============================================================ */
+function disposeObj(o) {
+  o.traverse(n => {
+    if (n.geometry) n.geometry.dispose();
+    if (n.material) {
+      if (Array.isArray(n.material)) n.material.forEach(m => m.dispose());
+      else n.material.dispose();
+    }
+  });
+}
+
+function clearContent() {
+  while (content.children.length) {
+    const c = content.children.pop();
+    disposeObj(c);
+  }
+}
+
+function addAxes(group, len = 3.2) {
+  const mk = (color, a, b) => {
+    const g = new THREE.BufferGeometry().setFromPoints([a, b]);
+    const m = new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.75 });
+    return new THREE.Line(g, m);
+  };
+  group.add(mk(0xef4444, new THREE.Vector3(-len, 0, 0), new THREE.Vector3(len, 0, 0)));
+  group.add(mk(0x22c55e, new THREE.Vector3(0, -len, 0), new THREE.Vector3(0, len, 0)));
+  group.add(mk(0x3b82f6, new THREE.Vector3(0, 0, -len), new THREE.Vector3(0, 0, len)));
+}
+
+function addGrid(group, size = 8, y = -2.2) {
+  const g = new THREE.GridHelper(size, 16, 0x1e293b, 0x1e293b);
+  g.position.y = y;
+  group.add(g);
+}
+
+function addArrowField(group, fn, opts = {}) {
+  const { range = 1.8, step = 0.6, color = 0x38bdf8, scale = 0.35, maxLen = 0.55 } = opts;
+  const arrows = [];
+  for (let x = -range; x <= range + 1e-9; x += step) {
+    for (let y = -range; y <= range + 1e-9; y += step) {
+      for (let z = -range; z <= range + 1e-9; z += step) {
+        const v = fn(x, y, z);
+        const len = Math.hypot(v[0], v[1], v[2]);
+        if (len < 1e-6) continue;
+        const dir = new THREE.Vector3(v[0], v[1], v[2]).normalize();
+        const L = Math.min(len * scale, maxLen);
+        const arrow = new THREE.ArrowHelper(dir, new THREE.Vector3(x, y, z), L, color, L * 0.35, L * 0.2);
+        group.add(arrow);
+        arrows.push(arrow);
+      }
+    }
+  }
+  return arrows;
+}
+
+function renderMath(el, tex, display = true) {
+  if (window.katex) {
+    try {
+      katex.render(tex, el, { throwOnError: false, displayMode: display });
+      return;
+    } catch (e) { /* fall through */ }
+  }
+  el.textContent = tex.replace(/\\[a-zA-Z]+/g, '').replace(/[{}]/g, '');
+}
+
+function renderAllMath(root) {
+  root.querySelectorAll('[data-tex]').forEach(el => {
+    renderMath(el, el.getAttribute('data-tex'), el.classList.contains('eqblock'));
+  });
+}
+
+function setHud(title, eqTex, rows) {
+  hudTitle.textContent = title;
+  renderMath(hudEq, eqTex, true);
+  hudValues.innerHTML = rows.map(r =>
+    '<div class="kv"><span class="k">' + r.k + '</span><span class="v">' + r.v + '</span></div>'
+  ).join('');
+}
+
+function fmt(v, d = 3) {
+  if (!isFinite(v)) return '—';
+  return (v >= 0 ? '+' : '') + v.toFixed(d);
+}
+
+/* ============================================================
+   3. MODULE DEFINITIONS
+   ============================================================ */
+const modules = [];
+/* ---------- 1. Electrostatics & Coulomb's Law ---------- */
+modules.push({
+  id: 'coulomb',
+  title: "Electrostatics & Coulomb's Law",
+  chapter: 'Kraus Ch. 2',
+  controls: [
+    { id: 'q1', label: 'Charge q1', type: 'range', min: -3, max: 3, step: 0.1, value: 1.5 },
+    { id: 'q2', label: 'Charge q2', type: 'range', min: -3, max: 3, step: 0.1, value: -1.0 },
+    { id: 'r', label: 'Separation r', type: 'range', min: 0.4, max: 3, step: 0.05, value: 1.4 },
+  ],
+  blurb: `
+    <h3>Coulomb's law</h3>
+    <p>Two point charges interact through the force</p>
+    <div class="eqblock" data-tex="\\mathbf{F} = \\frac{1}{4\\pi\\varepsilon_0}\\frac{q_1 q_2}{r^2}\\hat{r}"></div>
+    <p>Like charges repel, opposite charges attract. The field of a point charge is radial and falls off as 1/r^2:</p>
+    <div class="eqblock" data-tex="\\mathbf{E} = \\frac{1}{4\\pi\\varepsilon_0}\\frac{q}{r^2}\\hat{r}"></div>
+    <p class="note">Normalized units: 1/(4 pi eps0) = 1.</p>
+  `,
+  quiz: [
+    { q: 'Doubling the separation changes the force by a factor of...', options: ['1/4', '1/2', '2', '4'], answer: 0,
+      explain: 'F is proportional to 1/r^2, so doubling r gives F/4.' },
+    { q: 'Two like charges...', options: ['Repel', 'Attract', 'Feel no force', 'Orbit'], answer: 0,
+      explain: 'q1*q2 > 0 gives a repulsive force along r-hat.' },
+  ],
+  build() {
+    clearContent(); addGrid(content); addAxes(content);
+    camera.position.set(4.6, 3.6, 5.6); controls.target.set(0, 0, 0);
+    this._charges = [];
+    for (let i = 0; i < 2; i++) {
+      const m = new THREE.Mesh(new THREE.SphereGeometry(0.16, 24, 18),
+        new THREE.MeshStandardMaterial({ color: 0xfbbf24, emissive: 0xfbbf24, emissiveIntensity: 0.5 }));
+      content.add(m); this._charges.push(m);
+    }
+    this._force = new THREE.ArrowHelper(new THREE.Vector3(1, 0, 0), new THREE.Vector3(0, 0, 0), 1, 0x34d399, 0.2, 0.12);
+    content.add(this._force);
+    this._arrows = [];
+    this.update();
+  },
+  fieldFn() {
+    const q1 = this.state.q1, q2 = this.state.q2, r = this.state.r;
+    const p1 = [-r / 2, 0, 0], p2 = [r / 2, 0, 0];
+    return (x, y, z) => {
+      const out = [0, 0, 0];
+      for (const pair of [[q1, p1], [q2, p2]]) {
+        const q = pair[0], p = pair[1];
+        const dx = x - p[0], dy = y - p[1], dz = z - p[2];
+        const d = Math.hypot(dx, dy, dz);
+        if (d < 0.2) continue;
+        const f = q / (d * d * d);
+        out[0] += f * dx; out[1] += f * dy; out[2] += f * dz;
+      }
+      return out;
+    };
+  },
+  update() {
+    const q1 = this.state.q1, q2 = this.state.q2, r = this.state.r;
+    this._charges[0].position.set(-r / 2, 0, 0);
+    this._charges[1].position.set(r / 2, 0, 0);
+    for (const c of this._charges) {
+      const q = c === this._charges[0] ? q1 : q2;
+      const col = q >= 0 ? 0xfbbf24 : 0xf87171;
+      c.material.color.set(col); c.material.emissive.set(col);
+    }
+    for (const a of this._arrows) { content.remove(a); disposeObj(a); }
+    this._arrows = addArrowField(content, this.fieldFn(), { color: 0x38bdf8, range: 1.8, step: 0.6 });
+
+    const F = q1 * q2 / (r * r);
+    this._force.position.set(-r / 2, 0, 0);
+    this._force.setDirection(new THREE.Vector3(q1 * q2 >= 0 ? 1 : -1, 0, 0));
+    this._force.setLength(Math.min(Math.abs(F) * 0.5, 1.2), 0.2, 0.12);
+
+    setHud("Coulomb's Law",
+      '\\mathbf{F} = \\frac{1}{4\\pi\\varepsilon_0}\\frac{q_1 q_2}{r^2}\\hat{r}',
+      [
+        { k: 'F (signed)', v: fmt(F, 4) },
+        { k: 'U = q1 q2 / r', v: fmt(q1 * q2 / r, 4) },
+        { k: 'E at midpoint', v: fmt(4 * (q1 - q2) / (r * r), 4) },
+      ]);
+  },
+});
+
+/* ---------- 2. Gauss's Law ---------- */
+modules.push({
+  id: 'gauss',
+  title: "Gauss's Law",
+  chapter: 'Kraus Ch. 3',
+  controls: [
+    { id: 'Q', label: 'Enclosed charge Q', type: 'range', min: -3, max: 3, step: 0.1, value: 1.5 },
+    { id: 'rg', label: 'Gaussian radius r', type: 'range', min: 0.5, max: 2.5, step: 0.05, value: 1.2 },
+    { id: 'showFlux', label: 'Show flux arrows', type: 'check', value: true },
+  ],
+  blurb: `
+    <h3>Gauss's law</h3>
+    <p>The total electric flux through any closed surface equals the enclosed charge divided by eps0:</p>
+    <div class="eqblock" data-tex="\\oint_S \\mathbf{E}\\cdot d\\mathbf{A} = \\frac{Q_{\\text{enc}}}{\\varepsilon_0}"></div>
+    <p>For a sphere of radius r around a point charge, symmetry gives E = Q/(4 pi eps0 r^2) and the flux is Q/eps0 regardless of r.</p>
+    <p class="note">Normalized units: eps0 = 1.</p>
+  `,
+  quiz: [
+    { q: 'The flux through a Gaussian sphere depends on...', options: ['Enclosed charge only', 'The sphere radius', 'The surface area', 'The field strength'], answer: 0,
+      explain: 'Flux = Q_enc/eps0, independent of r.' },
+    { q: 'A charge outside the Gaussian surface contributes net flux of...', options: ['Zero', 'Q/eps0', 'Q/(4 pi eps0)', 'Infinite'], answer: 0,
+      explain: 'Field lines entering also leave, so the net flux is zero.' },
+  ],
+  build() {
+    clearContent(); addGrid(content); addAxes(content);
+    camera.position.set(4.6, 3.6, 5.6); controls.target.set(0, 0, 0);
+    this._charge = new THREE.Mesh(new THREE.SphereGeometry(0.14, 24, 18),
+      new THREE.MeshStandardMaterial({ color: 0xfbbf24, emissive: 0xfbbf24, emissiveIntensity: 0.6 }));
+    content.add(this._charge);
+    this._shell = new THREE.Mesh(new THREE.SphereGeometry(1, 32, 24),
+      new THREE.MeshBasicMaterial({ color: 0x38bdf8, wireframe: true, transparent: true, opacity: 0.18 }));
+    content.add(this._shell);
+    this._arrows = [];
+    this.update();
+  },
+  update() {
+    const Q = this.state.Q, rg = this.state.rg, showFlux = this.state.showFlux;
+    const col = Q >= 0 ? 0xfbbf24 : 0xf87171;
+    this._charge.material.color.set(col); this._charge.material.emissive.set(col);
+    this._shell.scale.setScalar(rg);
+
+    for (const a of this._arrows) { content.remove(a); disposeObj(a); }
+    this._arrows = [];
+    if (showFlux) {
+      const n = 40;
+      for (let i = 0; i < n; i++) {
+        const phi = Math.acos(1 - 2 * (i + 0.5) / n);
+        const theta = Math.PI * (1 + Math.sqrt(5)) * i;
+        const dir = new THREE.Vector3(Math.sin(phi) * Math.cos(theta), Math.cos(phi), Math.sin(phi) * Math.sin(theta));
+        const L = Math.min(Math.abs(Q) / (rg * rg) * 0.35, 0.5);
+        if (L < 0.02) continue;
+        const arrow = new THREE.ArrowHelper(dir.clone().multiplyScalar(Math.sign(Q)),
+          dir.clone().multiplyScalar(rg), L, 0x38bdf8, L * 0.35, L * 0.2);
+        content.add(arrow); this._arrows.push(arrow);
+      }
+    }
+    setHud("Gauss's Law",
+      '\\oint_S \\mathbf{E}\\cdot d\\mathbf{A} = \\frac{Q_{\\text{enc}}}{\\varepsilon_0}',
+      [
+        { k: 'E on sphere', v: fmt(Q / (4 * Math.PI * rg * rg), 4) },
+        { k: 'Flux Phi', v: fmt(Q, 4) },
+        { k: 'Area 4 pi r^2', v: fmt(4 * Math.PI * rg * rg, 4) },
+      ]);
+  },
+});
+
+/* ---------- 3. Electric Potential & Gradient ---------- */
+modules.push({
+  id: 'potential',
+  title: 'Electric Potential & Gradient',
+  chapter: 'Kraus Ch. 4',
+  controls: [
+    { id: 'q', label: 'Dipole charge q', type: 'range', min: 0.2, max: 3, step: 0.1, value: 1.5 },
+    { id: 'px', label: 'Probe X', type: 'range', min: -2, max: 2, step: 0.05, value: 0.5 },
+    { id: 'py', label: 'Probe Y', type: 'range', min: -2, max: 2, step: 0.05, value: 0.8 },
+    { id: 'contours', label: 'Equipotential rings', type: 'check', value: true },
+  ],
+  blurb: `
+    <h3>Potential and its gradient</h3>
+    <p>The scalar potential of a point charge is</p>
+    <div class="eqblock" data-tex="V = \\frac{1}{4\\pi\\varepsilon_0}\\frac{q}{r}"></div>
+    <p>The electric field is the negative gradient of the potential:</p>
+    <div class="eqblock" data-tex="\\mathbf{E} = -\\nabla V"></div>
+    <p>Equipotential surfaces are perpendicular to field lines; the field points downhill in potential. For a dipole, V = q(1/r+ - 1/r-).</p>
+    <p class="note">Normalized units: 1/(4 pi eps0) = 1.</p>
+  `,
+  quiz: [
+    { q: 'The electric field points...', options: ['Downhill in potential', 'Uphill in potential', 'Along equipotentials', 'Nowhere'], answer: 0,
+      explain: 'E = -grad V, so it points toward decreasing V.' },
+    { q: 'Equipotential surfaces are...', options: ['Perpendicular to field lines', 'Parallel to field lines', 'Always spheres', 'Always planes'], answer: 0,
+      explain: 'No work is done moving along an equipotential, so E must be normal to it.' },
+  ],
+  build() {
+    clearContent(); addGrid(content); addAxes(content);
+    camera.position.set(4.6, 3.6, 5.6); controls.target.set(0, 0, 0);
+    this._pos = new THREE.Mesh(new THREE.SphereGeometry(0.14, 24, 18),
+      new THREE.MeshStandardMaterial({ color: 0xfbbf24, emissive: 0xfbbf24, emissiveIntensity: 0.6 }));
+    this._neg = new THREE.Mesh(new THREE.SphereGeometry(0.14, 24, 18),
+      new THREE.MeshStandardMaterial({ color: 0xf87171, emissive: 0xf87171, emissiveIntensity: 0.6 }));
+    this._pos.position.set(-1, 0, 0); this._neg.position.set(1, 0, 0);
+    content.add(this._pos); content.add(this._neg);
+    this._probe = new THREE.Mesh(new THREE.SphereGeometry(0.08, 16, 12),
+      new THREE.MeshStandardMaterial({ color: 0x34d399, emissive: 0x34d399, emissiveIntensity: 0.7 }));
+    content.add(this._probe);
+    this._rings = new THREE.Group(); content.add(this._rings);
+    this._arrows = [];
+    this.update();
+  },
+  V(x, y, z) {
+    const q = this.state.q;
+    const d1 = Math.hypot(x + 1, y, z) || 1e-6;
+    const d2 = Math.hypot(x - 1, y, z) || 1e-6;
+    return q / d1 - q / d2;
+  },
+  E(x, y, z) {
+    const h = 1e-3;
+    return [
+      -(this.V(x + h, y, z) - this.V(x - h, y, z)) / (2 * h),
+      -(this.V(x, y + h, z) - this.V(x, y - h, z)) / (2 * h),
+      -(this.V(x, y, z + h) - this.V(x, y, z - h)) / (2 * h),
+    ];
+  },
+  update() {
+    const q = this.state.q, px = this.state.px, py = this.state.py, contours = this.state.contours;
+    this._probe.position.set(px, py, 0);
+
+    while (this._rings.children.length) { const c = this._rings.children.pop(); disposeObj(c); }
+    if (contours) {
+      for (const lvl of [0.4, 0.8, 1.4, 2.2, 3.2]) {
+        for (const sgn of [1, -1]) {
+          const pts = [];
+          const rr = q / lvl;
+          const cx = sgn === 1 ? -1 : 1;
+          for (let k = 0; k <= 96; k++) {
+            const a = (k / 96) * Math.PI * 2;
+            pts.push(new THREE.Vector3(cx + Math.cos(a) * rr, Math.sin(a) * rr, 0));
+          }
+          const geo = new THREE.BufferGeometry().setFromPoints(pts);
+          const mat = new THREE.LineBasicMaterial({ color: sgn === 1 ? 0xfbbf24 : 0xf87171, transparent: true, opacity: 0.22 });
+          this._rings.add(new THREE.Line(geo, mat));
+        }
+      }
+    }
+
+    for (const a of this._arrows) { content.remove(a); disposeObj(a); }
+    this._arrows = addArrowField(content, (x, y, z) => this.E(x, y, z), { color: 0x38bdf8, range: 1.8, step: 0.6 });
+
+    const Vp = this.V(px, py, 0);
+    const Ep = this.E(px, py, 0);
+    setHud('Potential & Gradient',
+      'V = \\frac{1}{4\\pi\\varepsilon_0}\\frac{q}{r}, \\qquad \\mathbf{E} = -\\nabla V',
+      [
+        { k: 'V at probe', v: fmt(Vp, 4) },
+        { k: 'E at probe', v: '(' + Ep.map(v => v.toFixed(2)).join(', ') + ')' },
+        { k: '|E|', v: fmt(Math.hypot(Ep[0], Ep[1], Ep[2]), 4) },
+      ]);
+  },
+});
+/* ---------- 4. Capacitance & Dielectrics ---------- */
+modules.push({
+  id: 'capacitance',
+  title: 'Capacitance & Dielectrics',
+  chapter: 'Kraus Ch. 4',
+  controls: [
+    { id: 'V0', label: 'Plate voltage V', type: 'range', min: 0.2, max: 4, step: 0.1, value: 2 },
+    { id: 'd', label: 'Plate separation d', type: 'range', min: 0.3, max: 2, step: 0.05, value: 0.8 },
+    { id: 'epsr', label: 'Dielectric eps_r', type: 'range', min: 1, max: 6, step: 0.1, value: 2.5 },
+  ],
+  blurb: `
+    <h3>Capacitance</h3>
+    <p>For parallel plates of area A separated by d,</p>
+    <div class="eqblock" data-tex="C = \\frac{\\varepsilon_0\\varepsilon_r A}{d}, \\qquad Q = CV, \\qquad U = \\tfrac12 CV^2"></div>
+    <p>A dielectric with relative permittivity eps_r increases capacitance by eps_r and reduces the field for a fixed charge. The field between the plates is uniform: E = V/d.</p>
+    <p class="note">Normalized units: eps0 = 1, A = 1.</p>
+  `,
+  quiz: [
+    { q: 'Inserting a dielectric of eps_r = 3 does what to C?', options: ['Triples it', 'Reduces it to 1/3', 'Leaves it unchanged', 'Doubles it'], answer: 0,
+      explain: 'C = eps0 eps_r A/d, linear in eps_r.' },
+    { q: 'For fixed charge, adding a dielectric...', options: ['Reduces E', 'Increases E', 'Leaves E unchanged', 'Reverses E'], answer: 0,
+      explain: 'E = Q/(eps0 eps_r A) for fixed Q, so E drops by eps_r.' },
+  ],
+  build() {
+    clearContent(); addGrid(content); addAxes(content);
+    camera.position.set(4.6, 3.6, 5.6); controls.target.set(0, 0, 0);
+    this._top = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.06, 2.2),
+      new THREE.MeshStandardMaterial({ color: 0xfbbf24, metalness: 0.6, roughness: 0.3, emissive: 0xfbbf24, emissiveIntensity: 0.25 }));
+    this._bot = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.06, 2.2),
+      new THREE.MeshStandardMaterial({ color: 0x38bdf8, metalness: 0.6, roughness: 0.3, emissive: 0x38bdf8, emissiveIntensity: 0.25 }));
+    content.add(this._top); content.add(this._bot);
+    this._dielectric = new THREE.Mesh(new THREE.BoxGeometry(2.1, 1, 2.1),
+      new THREE.MeshStandardMaterial({ color: 0x34d399, transparent: true, opacity: 0.16, roughness: 0.9 }));
+    content.add(this._dielectric);
+    this._arrows = [];
+    this.update();
+  },
+  update() {
+    const V0 = this.state.V0, d = this.state.d, epsr = this.state.epsr;
+    this._top.position.set(0, d / 2, 0);
+    this._bot.position.set(0, -d / 2, 0);
+    this._dielectric.position.set(0, 0, 0);
+    this._dielectric.scale.set(1, d * 0.95, 1);
+
+    for (const a of this._arrows) { content.remove(a); disposeObj(a); }
+    this._arrows = [];
+    const E = V0 / d;
+    const half = 1.0;
+    for (let x = -half + 0.2; x <= half - 0.2; x += 0.35) {
+      for (let z = -half + 0.2; z <= half - 0.2; z += 0.35) {
+        const L = Math.min(E * 0.25, d * 0.9);
+        const arrow = new THREE.ArrowHelper(new THREE.Vector3(0, -1, 0),
+          new THREE.Vector3(x, d / 2 - 0.05, z), L, 0x38bdf8, L * 0.35, L * 0.2);
+        content.add(arrow); this._arrows.push(arrow);
+      }
+    }
+    const C = epsr / d, Q = C * V0, U = 0.5 * C * V0 * V0;
+    setHud('Capacitance & Dielectrics',
+      'C = \\frac{\\varepsilon_0\\varepsilon_r A}{d}, \\quad Q = CV, \\quad U = \\tfrac12 CV^2',
+      [
+        { k: 'C', v: fmt(C, 4) },
+        { k: 'Q stored', v: fmt(Q, 4) },
+        { k: 'E between plates', v: fmt(E, 4) },
+        { k: 'U stored', v: fmt(U, 4) },
+      ]);
+  },
+});
+
+/* ---------- 5. Magnetostatics: Biot–Savart ---------- */
+modules.push({
+  id: 'magnetostatics',
+  title: 'Magnetostatics & Biot–Savart',
+  chapter: 'Kraus Ch. 5',
+  controls: [
+    { id: 'I', label: 'Current I', type: 'range', min: -3, max: 3, step: 0.1, value: 1.5 },
+    { id: 'r', label: 'Probe distance r', type: 'range', min: 0.2, max: 3, step: 0.05, value: 1.0 },
+    { id: 'loops', label: 'Field loops', type: 'range', min: 2, max: 8, step: 1, value: 5 },
+  ],
+  blurb: `
+    <h3>Biot–Savart law</h3>
+    <p>A current element produces a magnetic field</p>
+    <div class="eqblock" data-tex="d\\mathbf{B} = \\frac{\\mu_0 I}{4\\pi}\\frac{d\\mathbf{l}\\times\\hat{r}}{r^2}"></div>
+    <p>For a long straight wire the field circles the wire and falls off as 1/r:</p>
+    <div class="eqblock" data-tex="B = \\frac{\\mu_0 I}{2\\pi r}"></div>
+    <p class="note">Normalized units: mu0 = 1, so B = I/(2 pi r).</p>
+  `,
+  quiz: [
+    { q: 'The B field of a long straight wire falls off as...', options: ['1/r', '1/r^2', '1/r^3', 'constant'], answer: 0,
+      explain: 'B = mu0 I/(2 pi r), so B is proportional to 1/r.' },
+    { q: 'Reversing the current does what to the field direction?', options: ['Reverses it', 'Keeps it', 'Rotates 90 deg', 'Zeroes it'], answer: 0,
+      explain: 'B is linear in I, so the circulation reverses.' },
+  ],
+  build() {
+    clearContent(); addGrid(content); addAxes(content);
+    camera.position.set(4.6, 3.6, 5.6); controls.target.set(0, 0, 0);
+    this._wire = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 4.4, 16),
+      new THREE.MeshStandardMaterial({ color: 0xfbbf24, emissive: 0xfbbf24, emissiveIntensity: 0.4, metalness: 0.6, roughness: 0.3 }));
+    content.add(this._wire);
+    this._probe = new THREE.Mesh(new THREE.SphereGeometry(0.07, 16, 12),
+      new THREE.MeshStandardMaterial({ color: 0x34d399, emissive: 0x34d399, emissiveIntensity: 0.6 }));
+    content.add(this._probe);
+    this._loops = new THREE.Group(); content.add(this._loops);
+    this._arrows = [];
+    this.update();
+  },
+  update() {
+    const I = this.state.I, r = this.state.r, n = this.state.loops;
+    const col = I >= 0 ? 0xfbbf24 : 0xf87171;
+    this._wire.material.color.set(col); this._wire.material.emissive.set(col);
+
+    while (this._loops.children.length) { const c = this._loops.children.pop(); disposeObj(c); }
+    for (let i = 1; i <= n; i++) {
+      const rad = i * 0.42, pts = [];
+      for (let k = 0; k <= 64; k++) {
+        const a = (k / 64) * Math.PI * 2;
+        pts.push(new THREE.Vector3(Math.cos(a) * rad, 0, Math.sin(a) * rad));
+      }
+      this._loops.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts),
+        new THREE.LineBasicMaterial({ color: 0xf472b6, transparent: true, opacity: 0.35 })));
+    }
+
+    for (const a of this._arrows) { content.remove(a); disposeObj(a); }
+    this._arrows = [];
+    for (let i = 1; i <= n; i++) {
+      const rad = i * 0.42;
+      for (let k = 0; k < 8; k++) {
+        const a = (k / 8) * Math.PI * 2;
+        const x = Math.cos(a) * rad, z = Math.sin(a) * rad;
+        const mag = I / (2 * Math.PI * rad);
+        const dir = new THREE.Vector3(z, 0, -x).normalize().multiplyScalar(Math.sign(I));
+        const L = Math.min(Math.abs(mag) * 0.5, 0.35);
+        const arrow = new THREE.ArrowHelper(dir, new THREE.Vector3(x, 0, z), L, 0xf472b6, L * 0.35, L * 0.2);
+        content.add(arrow); this._arrows.push(arrow);
+      }
+    }
+    this._probe.position.set(r, 0, 0);
+    setHud('Magnetostatics — Biot–Savart',
+      'd\\mathbf{B} = \\frac{\\mu_0 I}{4\\pi}\\frac{d\\mathbf{l}\\times\\hat{r}}{r^2}, \\quad B = \\frac{\\mu_0 I}{2\\pi r}',
+      [
+        { k: 'B at r', v: fmt(I / (2 * Math.PI * r), 4) },
+        { k: 'I', v: fmt(I) },
+        { k: 'r', v: fmt(r) },
+      ]);
+  },
+});
+
+/* ---------- 6. Ampère's Law & Inductance ---------- */
+modules.push({
+  id: 'ampere',
+  title: "Ampère's Law & Inductance",
+  chapter: 'Kraus Ch. 5',
+  controls: [
+    { id: 'I', label: 'Enclosed current I', type: 'range', min: -3, max: 3, step: 0.1, value: 1.5 },
+    { id: 'rl', label: 'Ampère loop radius', type: 'range', min: 0.4, max: 2.5, step: 0.05, value: 1.2 },
+    { id: 'turns', label: 'Solenoid turns N', type: 'range', min: 1, max: 10, step: 1, value: 4 },
+  ],
+  blurb: `
+    <h3>Ampère's law and inductance</h3>
+    <p>Circulation of B around a closed loop equals mu0 times the enclosed current:</p>
+    <div class="eqblock" data-tex="\\oint \\mathbf{B}\\cdot d\\mathbf{l} = \\mu_0 I_{\\text{enc}}"></div>
+    <p>A solenoid of N turns, length l, area A has inductance</p>
+    <div class="eqblock" data-tex="L = \\frac{\\mu_0 N^2 A}{l}, \\qquad \\Phi = LI"></div>
+    <p class="note">Normalized units: mu0 = 1, A = 1, l = 1.</p>
+  `,
+  quiz: [
+    { q: 'Doubling the enclosed current does what to the circulation?', options: ['Doubles it', 'Halves it', 'Leaves it unchanged', 'Squares it'], answer: 0,
+      explain: 'Circulation = mu0 I_enc, linear in current.' },
+    { q: 'Inductance of a solenoid scales with N as...', options: ['N^2', 'N', '1/N', 'N^3'], answer: 0,
+      explain: 'L = mu0 N^2 A / l.' },
+  ],
+  build() {
+    clearContent(); addGrid(content); addAxes(content);
+    camera.position.set(4.6, 3.6, 5.6); controls.target.set(0, 0, 0);
+    this._wire = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 4.4, 14),
+      new THREE.MeshStandardMaterial({ color: 0xfbbf24, emissive: 0xfbbf24, emissiveIntensity: 0.4 }));
+    content.add(this._wire);
+    this._loop = new THREE.Group(); content.add(this._loop);
+    this._coils = new THREE.Group(); content.add(this._coils);
+    this._arrows = [];
+    this.update();
+  },
+  update() {
+    const I = this.state.I, rl = this.state.rl, N = this.state.turns;
+    const col = I >= 0 ? 0xfbbf24 : 0xf87171;
+    this._wire.material.color.set(col); this._wire.material.emissive.set(col);
+
+    while (this._loop.children.length) { const c = this._loop.children.pop(); disposeObj(c); }
+    const pts = [];
+    for (let k = 0; k <= 80; k++) {
+      const a = (k / 80) * Math.PI * 2;
+      pts.push(new THREE.Vector3(Math.cos(a) * rl, 0, Math.sin(a) * rl));
+    }
+    this._loop.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts),
+      new THREE.LineBasicMaterial({ color: 0x34d399, transparent: true, opacity: 0.8 })));
+
+    while (this._coils.children.length) { const c = this._coils.children.pop(); disposeObj(c); }
+    for (let i = 0; i < N; i++) {
+      const y = -1.6 + i * (3.2 / Math.max(N - 1, 1));
+      const ring = [];
+      for (let k = 0; k <= 48; k++) {
+        const a = (k / 48) * Math.PI * 2;
+        ring.push(new THREE.Vector3(Math.cos(a) * 0.5, y, Math.sin(a) * 0.5));
+      }
+      this._coils.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(ring),
+        new THREE.LineBasicMaterial({ color: 0xf472b6, transparent: true, opacity: 0.5 })));
+    }
+
+    for (const a of this._arrows) { content.remove(a); disposeObj(a); }
+    this._arrows = [];
+    for (let k = 0; k < 16; k++) {
+      const a = (k / 16) * Math.PI * 2;
+      const x = Math.cos(a) * rl, z = Math.sin(a) * rl;
+      const dir = new THREE.Vector3(z, 0, -x).normalize().multiplyScalar(Math.sign(I));
+      const L = Math.min(Math.abs(I) * 0.25, 0.3);
+      const arrow = new THREE.ArrowHelper(dir, new THREE.Vector3(x, 0, z), L, 0xf472b6, L * 0.35, L * 0.2);
+      content.add(arrow); this._arrows.push(arrow);
+    }
+    const L_ind = N * N;
+    setHud("Ampère's Law & Inductance",
+      '\\oint \\mathbf{B}\\cdot d\\mathbf{l} = \\mu_0 I_{\\text{enc}}, \\quad L = \\frac{\\mu_0 N^2 A}{l}',
+      [
+        { k: 'Circulation', v: fmt(I, 4) },
+        { k: 'Inductance L', v: fmt(L_ind, 4) },
+        { k: 'Flux LI', v: fmt(L_ind * I, 4) },
+      ]);
+  },
+});
+
+/* ---------- 7. Faraday Induction ---------- */
+modules.push({
+  id: 'faraday',
+  title: 'Faraday Induction',
+  chapter: 'Kraus Ch. 6',
+  controls: [
+    { id: 'dBdt', label: 'dB/dt', type: 'range', min: -3, max: 3, step: 0.1, value: 1.2 },
+    { id: 'R', label: 'Loop radius R', type: 'range', min: 0.3, max: 2, step: 0.05, value: 1.0 },
+    { id: 'omega', label: 'Animation rate omega', type: 'range', min: 0.2, max: 3, step: 0.05, value: 1.0 },
+  ],
+  blurb: `
+    <h3>Faraday's law of induction</h3>
+    <p>A changing magnetic flux through a loop drives an electromotive force:</p>
+    <div class="eqblock" data-tex="\\mathcal{E} = -\\frac{d\\Phi_B}{dt} = -\\frac{d}{dt}\\int_S \\mathbf{B}\\cdot d\\mathbf{s}"></div>
+    <p>For a loop of area A in a uniform field, Phi = BA, so the emf is -A dB/dt. The minus sign is Lenz's law: the induced current opposes the change that produced it.</p>
+    <div class="eqblock" data-tex="\\nabla\\times\\mathbf{E} = -\\frac{\\partial\\mathbf{B}}{\\partial t}"></div>
+    <p class="note">Normalized units: mu0 = 1.</p>
+  `,
+  quiz: [
+    { q: 'A loop of area A sits in a field changing at dB/dt. The emf is...', options: ['-A dB/dt', 'A dB/dt', '-B dA/dt', 'Zero'], answer: 0,
+      explain: 'Phi = BA, so dPhi/dt = A dB/dt and emf = -dPhi/dt.' },
+    { q: "Lenz's law says the induced current...", options: ['Opposes the flux change', 'Reinforces the flux change', 'Is always clockwise', 'Is zero'], answer: 0,
+      explain: 'The induced current creates a field opposing the flux change.' },
+  ],
+  build() {
+    clearContent(); addGrid(content); addAxes(content);
+    camera.position.set(4.6, 3.6, 5.6); controls.target.set(0, 0, 0);
+    this._loop = new THREE.Group(); content.add(this._loop);
+    this._arrows = [];
+    this._t = 0;
+    this.update();
+  },
+  update() {
+    const R = this.state.R, dBdt = this.state.dBdt;
+    while (this._loop.children.length) { const c = this._loop.children.pop(); disposeObj(c); }
+    const pts = [];
+    for (let k = 0; k <= 80; k++) {
+      const a = (k / 80) * Math.PI * 2;
+      pts.push(new THREE.Vector3(Math.cos(a) * R, 0, Math.sin(a) * R));
+    }
+    this._loop.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts),
+      new THREE.LineBasicMaterial({ color: 0xfbbf24, transparent: true, opacity: 0.9 })));
+
+    for (const a of this._arrows) { content.remove(a); disposeObj(a); }
+    this._arrows = [];
+    const B = Math.sin(this._t * this.state.omega) * 1.2;
+    for (let x = -R + 0.15; x <= R - 0.15; x += 0.3) {
+      for (let z = -R + 0.15; z <= R - 0.15; z += 0.3) {
+        if (Math.hypot(x, z) > R - 0.1) continue;
+        const L = Math.min(Math.abs(B) * 0.4, 0.5);
+        if (L < 0.02) continue;
+        const arrow = new THREE.ArrowHelper(new THREE.Vector3(0, Math.sign(B), 0),
+          new THREE.Vector3(x, -0.2, z), L, 0xf472b6, L * 0.35, L * 0.2);
+        content.add(arrow); this._arrows.push(arrow);
+      }
+    }
+    const A = Math.PI * R * R, emf = -A * dBdt;
+    setHud('Faraday Induction',
+      '\\mathcal{E} = -\\frac{d\\Phi_B}{dt} = -A\\frac{dB}{dt}',
+      [
+        { k: 'Loop area A', v: fmt(A, 4) },
+        { k: 'dB/dt', v: fmt(dBdt) },
+        { k: 'emf', v: fmt(emf, 4) },
+      ]);
+  },
+  tick(dt) { this._t += dt; this.update(); },
+});
+
+/* ---------- 8. Maxwell's Equations & Displacement Current ---------- */
+modules.push({
+  id: 'maxwell',
+  title: "Maxwell's Equations & Displacement Current",
+  chapter: 'Kraus Ch. 6',
+  controls: [
+    { id: 'dEdt', label: 'dE/dt amplitude', type: 'range', min: -3, max: 3, step: 0.1, value: 1.2 },
+    { id: 'A', label: 'Plate area A', type: 'range', min: 0.4, max: 2.2, step: 0.05, value: 1.0 },
+    { id: 'epsr', label: 'Dielectric eps_r', type: 'range', min: 1, max: 5, step: 0.1, value: 2.0 },
+    { id: 'showB', label: 'Induced B loops', type: 'check', value: true },
+  ],
+  blurb: `
+    <h3>Maxwell's equations</h3>
+    <p>In differential form the four equations are</p>
+    <div class="eqblock" data-tex="\\nabla\\cdot\\mathbf{E} = \\frac{\\rho}{\\varepsilon_0}, \\qquad \\nabla\\cdot\\mathbf{B} = 0"></div>
+    <div class="eqblock" data-tex="\\nabla\\times\\mathbf{E} = -\\frac{\\partial\\mathbf{B}}{\\partial t}, \\qquad \\nabla\\times\\mathbf{B} = \\mu_0\\mathbf{J} + \\mu_0\\varepsilon_0\\frac{\\partial\\mathbf{E}}{\\partial t}"></div>
+    <p>The last term is Maxwell's displacement current. Between capacitor plates no conduction current flows, yet a changing E produces exactly the B field a real current would:</p>
+    <div class="eqblock" data-tex="\\mathbf{J}_d = \\varepsilon_0\\varepsilon_r\\frac{\\partial\\mathbf{E}}{\\partial t}, \\qquad I_d = \\varepsilon_0\\varepsilon_r A\\frac{dE}{dt}"></div>
+    <p>For a circular gap of radius R the induced field inside is B(r) = mu0 I_d r / (2 pi R^2).</p>
+    <p class="note">Normalized units: eps0 = 1, mu0 = 1.</p>
+  `,
+  quiz: [
+    { q: 'The displacement current density is...', options: ['eps0 eps_r dE/dt', 'mu0 dB/dt', 'rho v', 'J x B'], answer: 0,
+      explain: 'J_d = eps0 eps_r dE/dt; it is the changing electric field acting as a current.' },
+    { q: 'Between capacitor plates the magnetic field is produced by...', options: ['The displacement current', 'Conduction current', 'Static charge', 'Nothing'], answer: 0,
+      explain: 'No conduction current crosses the gap; the changing E supplies the displacement current.' },
+    { q: 'Maxwell added the displacement term so that...', options: ['Charge is conserved and waves exist', 'B is always zero', 'E is static', 'mu0 vanishes'], answer: 0,
+      explain: 'It completes Ampere\'s law, making div J_total = 0 and permitting propagating EM waves.' },
+  ],
+  build() {
+    clearContent(); addGrid(content); addAxes(content);
+    camera.position.set(4.6, 3.6, 5.6); controls.target.set(0, 0, 0);
+    this._t = 0;
+    this._top = new THREE.Mesh(new THREE.BoxGeometry(1, 0.06, 1),
+      new THREE.MeshStandardMaterial({ color: 0xfbbf24, metalness: 0.6, roughness: 0.3, emissive: 0xfbbf24, emissiveIntensity: 0.25 }));
+    this._bot = new THREE.Mesh(new THREE.BoxGeometry(1, 0.06, 1),
+      new THREE.MeshStandardMaterial({ color: 0x38bdf8, metalness: 0.6, roughness: 0.3, emissive: 0x38bdf8, emissiveIntensity: 0.25 }));
+    content.add(this._top); content.add(this._bot);
+    this._gap = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 1.1, 32, 1, true),
+      new THREE.MeshBasicMaterial({ color: 0x34d399, transparent: true, opacity: 0.10, side: THREE.DoubleSide }));
+    content.add(this._gap);
+    this._eArrows = [];
+    this._bArrows = [];
+    this._loops = new THREE.Group(); content.add(this._loops);
+    this.update();
+  },
+  update() {
+    const dEdt = this.state.dEdt, A = this.state.A, epsr = this.state.epsr, showB = this.state.showB;
+    const omega = 1.0;
+    const R = Math.sqrt(A / Math.PI);
+    const E = (dEdt / omega) * Math.sin(this._t * omega);
+    const dE = dEdt * Math.cos(this._t * omega);
+    const Id = epsr * A * dE;
+
+    this._top.scale.set(2 * R, 1, 2 * R);
+    this._bot.scale.set(2 * R, 1, 2 * R);
+    this._top.position.set(0, 0.55, 0);
+    this._bot.position.set(0, -0.55, 0);
+    this._gap.scale.set(2 * R, 1, 2 * R);
+
+    for (const a of this._eArrows) { content.remove(a); disposeObj(a); }
+    this._eArrows = [];
+    const half = R * 0.8;
+    for (let x = -half; x <= half + 1e-9; x += Math.max(R * 0.35, 0.18)) {
+      for (let z = -half; z <= half + 1e-9; z += Math.max(R * 0.35, 0.18)) {
+        const L = Math.min(Math.abs(E) * 0.28, 1.0);
+        if (L < 0.02) continue;
+        const arrow = new THREE.ArrowHelper(new THREE.Vector3(0, Math.sign(E), 0),
+          new THREE.Vector3(x, -0.5, z), L, 0x38bdf8, L * 0.35, L * 0.2);
+        content.add(arrow); this._eArrows.push(arrow);
+      }
+    }
+
+    while (this._loops.children.length) { const c = this._loops.children.pop(); disposeObj(c); }
+    for (const a of this._bArrows) { content.remove(a); disposeObj(a); }
+    this._bArrows = [];
+    if (showB) {
+      const r = R * 0.55;
+      const pts = [];
+      for (let k = 0; k <= 80; k++) {
+        const a = (k / 80) * Math.PI * 2;
+        pts.push(new THREE.Vector3(Math.cos(a) * r, 0, Math.sin(a) * r));
+      }
+      this._loops.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts),
+        new THREE.LineBasicMaterial({ color: 0xf472b6, transparent: true, opacity: 0.85 })));
+      const B = Id * r / (2 * Math.PI * R * R);
+      for (let k = 0; k < 12; k++) {
+        const a = (k / 12) * Math.PI * 2;
+        const x = Math.cos(a) * r, z = Math.sin(a) * r;
+        const dir = new THREE.Vector3(-z, 0, x).normalize().multiplyScalar(Math.sign(B));
+        const L = Math.min(Math.abs(B) * 0.45, 0.35);
+        if (L < 0.02) continue;
+        const arrow = new THREE.ArrowHelper(dir, new THREE.Vector3(x, 0, z), L, 0xf472b6, L * 0.35, L * 0.2);
+        content.add(arrow); this._bArrows.push(arrow);
+      }
+    }
+
+    const Bedge = Id * (R * 0.55) / (2 * Math.PI * R * R);
+    setHud("Maxwell's Equations & Displacement Current",
+      '\\nabla\\times\\mathbf{B} = \\mu_0\\mathbf{J} + \\mu_0\\varepsilon_0\\frac{\\partial\\mathbf{E}}{\\partial t}',
+      [
+        { k: 'E(t)', v: fmt(E, 4) },
+        { k: 'dE/dt', v: fmt(dE, 4) },
+        { k: 'Displacement current I_d', v: fmt(Id, 4) },
+        { k: 'B at r = 0.55R', v: fmt(Bedge, 4) },
+      ]);
+  },
+  tick(dt) { this._t += dt; this.update(); },
+});
+modules.push({
+  id: 'waves',
+  title: 'Plane Waves & Poynting Vector',
+  chapter: 'Kraus Ch. 8',
+  controls: [
+    { id: 'amp', label: 'E0 amplitude', min: 0.2, max: 1.6, step: 0.1, value: 1.0 },
+    { id: 'lambda', label: 'Wavelength \u03bb', min: 1.2, max: 4.0, step: 0.2, value: 2.4 },
+    { id: 'speed', label: 'Phase speed', min: 0.2, max: 2.0, step: 0.1, value: 1.0 },
+  ],
+  blurb: 'A uniform plane wave travels along +z. E lies along x (blue), H lies along y (pink), and the two are in phase. The Poynting vector S = E \u00d7 H (green) points along +z and carries the time-averaged power density S_avg = E0\u00b2 / (2\u03b7\u2080).',
+  quiz: [
+    { q: 'For a plane wave in free space, E and H are:', a: ['parallel', 'perpendicular and in phase', 'perpendicular and 90\u00b0 out of phase'], c: 1, options: ['parallel', 'perpendicular and in phase', 'perpendicular and 90\u00b0 out of phase'], answer: 1 },
+    { q: 'The Poynting vector S = E \u00d7 H represents:', a: ['energy density', 'power flow density', 'phase velocity'], c: 1, options: ['energy density', 'power flow density', 'phase velocity'], answer: 1 },
+    { q: 'Time-averaged power density of a plane wave is:', a: ['E0\u00b2/\u03b7\u2080', 'E0\u00b2/(2\u03b7\u2080)', 'E0 H0 / 2'], c: 1, options: ['E0\u00b2/\u03b7\u2080', 'E0\u00b2/(2\u03b7\u2080)', 'E0 H0 / 2'], answer: 1 },
+  ],
+  _ctrl(id, d) {
+    if (this.state && this.state[id] !== undefined) return this.state[id];
+    const c = (this.controls || []).find(x => x.id === id);
+    if (!c) return d;
+    if (c.value !== undefined) return c.value;
+    if (c.val !== undefined) return c.val;
+    return d;
+  },
+  build() {
+    this._t = 0;
+    this._z0 = -3.2; this._z1 = 3.2; this._n = 22;
+    this._eArrows = []; this._hArrows = []; this._sArrows = [];
+    const g = new THREE.Group();
+    const axis = new THREE.Line(
+      new THREE.BufferGeometry().setFromPoints([
+        new THREE.Vector3(0, 0, this._z0), new THREE.Vector3(0, 0, this._z1)]),
+      new THREE.LineBasicMaterial({ color: 0x64748b, transparent: true, opacity: 0.6 }));
+    g.add(axis);
+    for (let k = 0; k < this._n; k++) {
+      const z = this._z0 + (k / (this._n - 1)) * (this._z1 - this._z0);
+      const e = new THREE.ArrowHelper(new THREE.Vector3(1, 0, 0), new THREE.Vector3(0, 0, z), 0.4, 0x3b82f6, 0.12, 0.07);
+      const h = new THREE.ArrowHelper(new THREE.Vector3(0, 1, 0), new THREE.Vector3(0, 0, z), 0.4, 0xf472b6, 0.12, 0.07);
+      const s = new THREE.ArrowHelper(new THREE.Vector3(0, 0, 1), new THREE.Vector3(0, 0, z), 0.4, 0x22c55e, 0.12, 0.07);
+      g.add(e); g.add(h); g.add(s);
+      this._eArrows.push(e); this._hArrows.push(h); this._sArrows.push(s);
+    }
+    content.add(g);
+  },
+  update() {
+    const E0 = this._ctrl('amp', 1.0);
+    const lam = this._ctrl('lambda', 2.4);
+    const sp = this._ctrl('speed', 1.0);
+    const k = 2 * Math.PI / lam;
+    const w = k * sp;
+    const hs = 0.75; // visual scaling: true H = E / eta0
+    let Emax = 0, Hmax = 0, Smax = 0;
+    for (let i = 0; i < this._n; i++) {
+      const z = this._z0 + (i / (this._n - 1)) * (this._z1 - this._z0);
+      const s = Math.sin(k * z - w * this._t);
+      const E = E0 * s;
+      const H = E0 * hs * s;
+      const S = Math.abs(E * H);
+      const ea = this._eArrows[i], ha = this._hArrows[i], sa = this._sArrows[i];
+      ea.setDirection(new THREE.Vector3(Math.sign(E) || 1, 0, 0));
+      ea.setLength(Math.max(Math.abs(E) * 0.9, 0.02));
+      ha.setDirection(new THREE.Vector3(0, Math.sign(H) || 1, 0));
+      ha.setLength(Math.max(Math.abs(H) * 0.9, 0.02));
+      sa.setDirection(new THREE.Vector3(0, 0, 1));
+      sa.setLength(Math.max(S * 0.9, 0.02));
+      Emax = Math.max(Emax, Math.abs(E));
+      Hmax = Math.max(Hmax, Math.abs(H));
+      Smax = Math.max(Smax, S);
+    }
+    const eta0 = 376.73;
+    const Savg = E0 * E0 / (2 * eta0);
+    setHud('Plane Waves & Poynting Vector',
+      '\\mathbf{S}=\\mathbf{E}\\times\\mathbf{H},\\quad S_{avg}=\\frac{E_0^2}{2\\eta_0}',
+      [
+        { k: 'E0 (peak)', v: fmt(E0, 3) },
+        { k: 'k = 2\u03c0/\u03bb', v: fmt(k, 3) },
+        { k: '\u03c9 = k\u00b7v', v: fmt(w, 3) },
+        { k: 'S_avg = E0\u00b2/2\u03b7\u2080', v: fmt(Savg, 4) },
+      ]);
+  },
+  tick(dt) { this._t += dt; this.update(); },
+});
+modules.push({
+  id: 'smith_antenna',
+  title: 'Smith Chart & Dipole Radiation',
+  chapter: 'Kraus Ch. 9\u201311',
+  controls: [
+    { id: 'dipoleView', label: '3D Dipole View (off = Smith Chart)', type: 'check', value: false },
+    { id: 'zr', label: 'Load R / Z\u2080', min: 0, max: 5, step: 0.05, value: 1.0 },
+    { id: 'zx', label: 'Load X / Z\u2080', min: -3, max: 3, step: 0.05, value: 0.5 },
+    { id: 'len', label: 'Dipole length (\u03bb)', min: 0.1, max: 2, step: 0.05, value: 0.5 },
+  ],
+  blurb: 'The Smith chart maps every load impedance Z = R + jX onto the reflection coefficient \u0393 = (Z\u2212Z\u2080)/(Z+Z\u2080) inside the unit circle, so matching, VSWR and stub design become geometry. The dipole view shows the far-field pattern of a centre-fed wire of length L: E \u221d [cos(kL/2\u00b7cos\u03b8) \u2212 cos(kL/2)] / sin\u03b8.',
+  quiz: [
+    { q: 'A load with Z = Z\u2080 sits at which point of the Smith chart?', options: ['Centre', 'Left edge', 'Right edge', 'Top edge'], answer: 0 },
+    { q: 'The VSWR circle on the Smith chart is centred on:', options: ['The load point', 'The chart centre', 'The left edge', 'The right edge'], answer: 1 },
+    { q: 'A half-wave dipole radiates maximally at:', options: ['\u03b8 = 0\u00b0', '\u03b8 = 90\u00b0', '\u03b8 = 45\u00b0', 'Uniformly'], answer: 1 },
+    { q: 'For a full-wave dipole the broadside field is:', options: ['Maximum', 'Zero', 'Half maximum', 'Undefined'], answer: 1 },
+  ],
+  _val(id, def) {
+    const el = document.getElementById('ctl-' + id) || document.getElementById('control-' + id);
+    if (el && el.value !== undefined) {
+      const v = parseFloat(el.value);
+      if (!isNaN(v)) return v;
+    }
+    if (Array.isArray(this.controls)) {
+      const c = this.controls.find((c) => c.id === id);
+      if (c && c.value !== undefined) return c.value;
+    }
+    return def;
+  },
+  build() {
+    this._t = 0;
+    this._dipole = null;
+    this.update();
+  },
+  _drawSmith(R, X) {
+    const cv = chartEl;
+    const ctx = cv.getContext('2d');
+    const W = cv.width, H = cv.height;
+    const cx = W / 2, cy = H / 2, rad = Math.min(W, H) * 0.42;
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = '#0b1020';
+    ctx.fillRect(0, 0, W, H);
+    ctx.strokeStyle = '#4a6fa5';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.arc(cx, cy, rad, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.lineWidth = 0.8;
+    ctx.strokeStyle = 'rgba(120,160,220,0.55)';
+    for (let r = 0; r <= 5; r += 0.5) {
+      const c = r / (1 + r), rr = 1 / (1 + r);
+      ctx.beginPath();
+      ctx.arc(cx + c * rad, cy, rr * rad, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    ctx.strokeStyle = 'rgba(220,140,120,0.55)';
+    for (let x = -5; x <= 5; x += 0.5) {
+      if (Math.abs(x) < 0.05) continue;
+      const cxx = 1, cyy = 1 / x, rr = 1 / Math.abs(x);
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(cx, cy, rad, 0, Math.PI * 2);
+      ctx.clip();
+      ctx.beginPath();
+      ctx.arc(cx + cxx * rad, cy - cyy * rad, rr * rad, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+    }
+    const den = (R + 1) * (R + 1) + X * X;
+    const gr = (R * R + X * X - 1) / den;
+    const gi = (2 * X) / den;
+    const gm = Math.hypot(gr, gi);
+    ctx.strokeStyle = '#ffcc44';
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.arc(cx, cy, gm * rad, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.lineTo(cx + gr * rad, cy - gi * rad);
+    ctx.stroke();
+    ctx.fillStyle = '#ffcc44';
+    ctx.beginPath();
+    ctx.arc(cx + gr * rad, cy - gi * rad, 5, 0, Math.PI * 2);
+    ctx.fill();
+    const vswr = gm < 1 ? (1 + gm) / (1 - gm) : Infinity;
+    setHud('Smith Chart & Dipole Radiation',
+      '\\Gamma=\\frac{Z-Z_0}{Z+Z_0},\\quad \\mathrm{VSWR}=\\frac{1+|\\Gamma|}{1-|\\Gamma|}',
+      [
+        { k: 'R / Z\u2080', v: fmt(R, 3) },
+        { k: 'X / Z\u2080', v: fmt(X, 3) },
+        { k: '|\u0393|', v: fmt(gm, 4) },
+        { k: 'VSWR', v: isFinite(vswr) ? fmt(vswr, 3) : '\u221e' },
+      ]);
+  },
+  _drawDipole(L) {
+    const kL2 = Math.PI * L;
+    const f = (th) => {
+      const s = Math.sin(th);
+      if (Math.abs(s) < 1e-6) return 0;
+      return (Math.cos(kL2 * Math.cos(th)) - Math.cos(kL2)) / s;
+    };
+    let fmax = 0;
+    for (let i = 0; i <= 180; i++) fmax = Math.max(fmax, Math.abs(f(i * Math.PI / 180)));
+    if (fmax < 1e-9) fmax = 1;
+    if (!this._dipole) {
+      const g = new THREE.Group();
+      const mat = new THREE.MeshStandardMaterial({ color: 0x66ccff, roughness: 0.35, metalness: 0.2, side: THREE.DoubleSide });
+      const wire = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 2 * L, 16), new THREE.MeshStandardMaterial({ color: 0xffcc44, metalness: 0.6, roughness: 0.3 }));
+      g.add(wire);
+      const surf = new THREE.Mesh(new THREE.SphereGeometry(1, 48, 32), mat);
+      surf.material.transparent = true;
+      surf.material.opacity = 0.55;
+      g.add(surf);
+      const pts = [];
+      for (let i = 0; i <= 180; i++) {
+        const th = i * Math.PI / 180;
+        const r = Math.abs(f(th)) / fmax;
+        pts.push(new THREE.Vector3(r * Math.sin(th), r * Math.cos(th), 0));
+      }
+      const curve = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineBasicMaterial({ color: 0xff6688 }));
+      g.add(curve);
+      this._dipole = { group: g, surf, curve, wire };
+      content.add(g);
+    }
+    const d = this._dipole;
+    const scale = 1.6;
+    const pos = d.surf.geometry.attributes.position;
+    for (let i = 0; i < pos.count; i++) {
+      const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
+      const r0 = Math.hypot(x, y, z) || 1e-6;
+      const th = Math.acos(Math.max(-1, Math.min(1, y / r0)));
+      const r = Math.abs(f(th)) / fmax;
+      pos.setXYZ(i, x / r0 * r * scale, y / r0 * r * scale, z / r0 * r * scale);
+    }
+    pos.needsUpdate = true;
+    d.surf.geometry.computeVertexNormals();
+    const pts = [];
+    for (let i = 0; i <= 180; i++) {
+      const th = i * Math.PI / 180;
+      const r = Math.abs(f(th)) / fmax * scale;
+      pts.push(new THREE.Vector3(r * Math.sin(th), r * Math.cos(th), 0));
+    }
+    d.curve.geometry.dispose();
+    d.curve.geometry = new THREE.BufferGeometry().setFromPoints(pts);
+    d.wire.scale.set(1, L / 0.5, 1);
+    d.group.rotation.y = this._t * 0.35;
+    const D = Math.max(0, Math.min(1, Math.abs(f(Math.PI / 2)) / fmax));
+    setHud('Smith Chart & Dipole Radiation',
+      'E(\\theta)\\propto\\frac{\\cos(\\frac{kL}{2}\\cos\\theta)-\\cos(\\frac{kL}{2})}{\\sin\\theta}',
+      [
+        { k: 'L (\u03bb)', v: fmt(L, 3) },
+        { k: 'kL/2', v: fmt(kL2, 3) },
+        { k: 'Broadside |E|/max', v: fmt(D, 3) },
+        { k: 'Nulls', v: L >= 1 ? 'broadside' : 'none' },
+      ]);
+  },
+  update() {
+    const R = (this.state && this.state.zr !== undefined) ? this.state.zr : this._val('zr', 1.0);
+    const X = (this.state && this.state.zx !== undefined) ? this.state.zx : this._val('zx', 0.5);
+    const L = (this.state && this.state.len !== undefined) ? this.state.len : this._val('len', 0.5);
+    const isDipole = !!(this.state && this.state.dipoleView);
+    if (!isDipole) {
+      chartEl.style.display = 'block';
+      renderer.domElement.style.display = 'none';
+      this._drawSmith(R, X);
+    } else {
+      chartEl.style.display = 'none';
+      renderer.domElement.style.display = 'block';
+      this._drawDipole(L);
+    }
+  },
+  tick(dt) { this._t += dt; this.update(); },
+});
+/* ============================================================
+   UI CONTROLLER
+   ============================================================ */
+const moduleListEl  = document.getElementById('module-list');
+
+const STORE_KEY = 'em-kraus-lab-progress';
+let activeIdx = 0;
+
+function loadProgress() {
+  try { return JSON.parse(localStorage.getItem(STORE_KEY) || '{}'); }
+  catch (e) { return {}; }
+}
+function saveProgress(p) {
+  try { localStorage.setItem(STORE_KEY, JSON.stringify(p)); } catch (e) {}
+}
+let progress = loadProgress();
+
+function buildModuleList() {
+  moduleListEl.innerHTML = '';
+  modules.forEach((m, i) => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'module-btn';
+    btn.dataset.idx = String(i);
+    btn.textContent = m.title || m.name || ('Module ' + (i + 1));
+    btn.addEventListener('click', () => selectModule(i));
+    moduleListEl.appendChild(btn);
+  });
+}
+
+function buildControls(mod) {
+  controlsEl.innerHTML = '<div class="ctl-title">Parameters</div>';
+  if (!mod.state) mod.state = {};
+  (mod.controls || []).forEach((c) => {
+    if (!(c.id in mod.state)) mod.state[c.id] = c.value;
+
+    const row = document.createElement('label');
+    row.className = 'control-row' + (c.type === 'check' ? ' is-check' : '');
+
+    const top = document.createElement('div');
+    top.className = 'control-top';
+
+    const name = document.createElement('span');
+    name.className = 'control-label';
+    name.textContent = c.label || c.id;
+    top.appendChild(name);
+
+    let valSpan = null;
+    if (c.type !== 'check') {
+      valSpan = document.createElement('span');
+      valSpan.className = 'control-val';
+      valSpan.textContent = Number(mod.state[c.id]).toFixed(2);
+      top.appendChild(valSpan);
+    }
+
+    const input = document.createElement('input');
+    input.id = 'ctl-' + c.id;
+    input.type = c.type === 'check' ? 'checkbox' : 'range';
+
+    if (c.type === 'check') {
+      input.checked = !!mod.state[c.id];
+    } else {
+      input.min  = c.min  ?? 0;
+      input.max  = c.max  ?? 1;
+      input.step = c.step ?? 0.01;
+      input.value = mod.state[c.id];
+    }
+
+    input.addEventListener('input', () => {
+      mod.state[c.id] = c.type === 'check' ? input.checked : parseFloat(input.value);
+      if (valSpan) valSpan.textContent = Number(mod.state[c.id]).toFixed(2);
+      mod.update();
+    });
+
+    row.appendChild(top);
+    row.appendChild(input);
+    controlsEl.appendChild(row);
+  });
+}
+
+
+function buildLesson(mod) {
+  const raw = mod.lesson || mod.blurb || '';
+  lessonEl.innerHTML = raw.trim().startsWith('<') ? raw : ('<h3>' + (mod.title || '') + '</h3><p>' + raw + '</p>');
+  renderAllMath(lessonEl);
+}
+
+function buildQuiz(mod) {
+  quizEl.innerHTML = '';
+  const key = mod.id || mod.name || String(activeIdx);
+  const saved = progress[key] || {};
+
+  (mod.quiz || []).forEach((q, qi) => {
+    const card = document.createElement('div');
+    card.className = 'quiz-card';
+
+    const prompt = document.createElement('p');
+    prompt.className = 'quiz-prompt';
+    prompt.textContent = (qi + 1) + '. ' + q.q;
+    card.appendChild(prompt);
+
+    const opts = document.createElement('div');
+    opts.className = 'quiz-options';
+
+    q.options.forEach((opt, oi) => {
+      const lab = document.createElement('label');
+      lab.className = 'quiz-option';
+
+      const radio = document.createElement('input');
+      radio.type = 'radio';
+      radio.name = key + '-q' + qi;
+      radio.value = String(oi);
+      if (saved[qi] === oi) radio.checked = true;
+
+      radio.addEventListener('change', () => {
+        progress[key] = progress[key] || {};
+        progress[key][qi] = oi;
+        saveProgress(progress);
+        updateProgress();
+        gradeQuiz(mod);
+      });
+
+      const span = document.createElement('span');
+      span.textContent = opt;
+
+      lab.appendChild(radio);
+      lab.appendChild(span);
+      opts.appendChild(lab);
+    });
+
+    card.appendChild(opts);
+
+    const fb = document.createElement('p');
+    fb.className = 'quiz-feedback';
+    fb.dataset.q = String(qi);
+    card.appendChild(fb);
+
+    quizEl.appendChild(card);
+  });
+
+  gradeQuiz(mod);
+}
+
+function gradeQuiz(mod) {
+  const key = mod.id || mod.name || String(activeIdx);
+  const saved = progress[key] || {};
+  let correct = 0;
+  const total = (mod.quiz || []).length;
+
+  (mod.quiz || []).forEach((q, qi) => {
+    const fb = quizEl.querySelector('.quiz-feedback[data-q="' + qi + '"]');
+    if (!fb) return;
+    const chosen = saved[qi];
+    if (chosen === undefined) {
+      fb.textContent = '';
+      fb.className = 'quiz-feedback';
+    } else if (chosen === q.answer) {
+      correct++;
+      fb.textContent = '\u2713 Correct';
+      fb.className = 'quiz-feedback ok';
+    } else {
+      fb.textContent = '\u2717 Incorrect \u2014 answer: ' + q.options[q.answer];
+      fb.className = 'quiz-feedback bad';
+    }
+  });
+
+  return { correct, total };
+}
+
+function updateProgress() {
+  let answered = 0, correct = 0, total = 0;
+  modules.forEach((m, i) => {
+    const key = m.id || m.name || String(i);
+    const saved = progress[key] || {};
+    (m.quiz || []).forEach((q, qi) => {
+      total++;
+      if (saved[qi] !== undefined) {
+        answered++;
+        if (saved[qi] === q.answer) correct++;
+      }
+    });
+  });
+  const pct = total ? Math.round((correct / total) * 100) : 0;
+  if (progressBar) progressBar.style.width = pct + '%';
+  if (progressLabel) progressLabel.textContent = correct + ' / ' + total + ' correct (' + pct + '%)';
+}
+
+function selectModule(idx) {
+  if (idx < 0 || idx >= modules.length) return;
+  activeIdx = idx;
+  const mod = modules[idx];
+
+  moduleListEl.querySelectorAll('.module-btn').forEach((b) => {
+    b.classList.toggle('active', Number(b.dataset.idx) === idx);
+  });
+
+  buildControls(mod);
+  buildLesson(mod);
+  buildQuiz(mod);
+  updateProgress();
+
+  clearContent();
+  chartEl.style.display = 'none';
+  renderer.domElement.style.display = 'block';
+  if (typeof mod.build === 'function') mod.build();
+  else if (typeof mod.init === 'function') mod.init();
+  if (typeof mod.update === 'function') mod.update();
+}
+
+function onResize() {
+  const w = Math.max(1, stageEl.clientWidth);
+  const h = Math.max(1, stageEl.clientHeight);
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+  renderer.setSize(w, h, false);
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  chartEl.width = Math.round(w * Math.min(window.devicePixelRatio || 1, 2));
+  chartEl.height = Math.round(h * Math.min(window.devicePixelRatio || 1, 2));
+  const mod = modules[activeIdx];
+  if (mod && typeof mod.update === 'function') mod.update();
+}
+
+/* ============================================================
+   BOOT
+   ============================================================ */
+buildModuleList();
+window.addEventListener('resize', onResize);
+if (window.ResizeObserver) new ResizeObserver(onResize).observe(stageEl);
+onResize();
+selectModule(0);
+
+let last = performance.now();
+function animate(now) {
+  const dt = Math.min(0.05, (now - last) / 1000);
+  last = now;
+  const mod = modules[activeIdx];
+  if (mod && typeof mod.tick === 'function') mod.tick(dt);
+  controls.update();
+  renderer.render(scene, camera);
+  requestAnimationFrame(animate);
+}
+requestAnimationFrame(animate);
+</script>
+</body>
+</html>
