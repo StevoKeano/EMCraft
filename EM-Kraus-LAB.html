@@ -45,7 +45,7 @@
   #progress-bar { height: 100%; width: 0%; background: var(--accent); transition: width .25s; }
   #progress-label { font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
 
-  #body { display: grid; grid-template-columns: 232px minmax(0, 1fr); min-height: 0; overflow: hidden; }
+  #body { display: grid; grid-template-columns: 232px minmax(0, 1fr); height: 100%; min-height: 0; overflow: hidden; }
 
   #sidebar {
     border-right: 1px solid rgba(56,189,248,0.12);
@@ -78,9 +78,9 @@
   .mod-btn.done .check { opacity: 1; }
   .mod-btn .chap { display: block; font-size: 10px; color: var(--muted); margin-top: 2px; }
 
-  #main { display: flex; flex-direction: column; min-height: 0; min-width: 0; overflow: hidden; }
+  #main { display: flex; flex-direction: column; height: 100%; min-height: 0; min-width: 0; overflow: hidden; }
   #stage { flex: 1; position: relative; min-height: 0; min-width: 0; overflow: hidden; }
-  #stage canvas { display: block; width: 100%; height: 100%; }
+  #stage canvas { position: absolute; inset: 0; display: block; width: 100%; height: 100%; }
   #chart-canvas { position: absolute; inset: 0; display: none; }
 
   #controls {
@@ -309,16 +309,32 @@ const progressLabel = document.getElementById('progress-label');
 /* ============================================================
    1. THREE.JS SETUP
    ============================================================ */
-const renderer = new THREE.WebGLRenderer({ antialias: true });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-renderer.setSize(stageEl.clientWidth, stageEl.clientHeight);
+let renderer;
+try {
+  renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+} catch (err) {
+  const msg = document.createElement('div');
+  msg.style.cssText = 'position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#f87171;padding:24px;text-align:center;font-size:14px;z-index:50;';
+  msg.textContent = 'WebGL failed to initialize: ' + (err && err.message ? err.message : err);
+  stageEl.appendChild(msg);
+  throw err;
+}
+const initW = Math.max(1, stageEl.clientWidth || window.innerWidth - 232);
+const initH = Math.max(1, stageEl.clientHeight || Math.round(window.innerHeight * 0.6));
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+renderer.setSize(initW, initH);
 renderer.setClearColor(0x0b0f19, 1);
+renderer.domElement.style.position = 'absolute';
+renderer.domElement.style.inset = '0';
+renderer.domElement.style.width = '100%';
+renderer.domElement.style.height = '100%';
+renderer.domElement.style.display = 'block';
 stageEl.appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
 scene.fog = new THREE.FogExp2(0x0b0f19, 0.03);
 
-const camera = new THREE.PerspectiveCamera(50, stageEl.clientWidth / stageEl.clientHeight, 0.1, 200);
+const camera = new THREE.PerspectiveCamera(50, initW / initH, 0.1, 200);
 camera.position.set(4.6, 3.6, 5.6);
 
 const controls = new OrbitControls(camera, renderer.domElement);
@@ -343,7 +359,8 @@ scene.add(content);
    ============================================================ */
 function disposeObj(o) {
   o.traverse(n => {
-    if (n.geometry) n.geometry.dispose();
+    const isSharedArrowGeo = n.isArrowHelper || (n.parent && n.parent.isArrowHelper);
+    if (!isSharedArrowGeo && n.geometry) n.geometry.dispose();
     if (n.material) {
       if (Array.isArray(n.material)) n.material.forEach(m => m.dispose());
       else n.material.dispose();
@@ -497,7 +514,7 @@ modules.push({
     const F = q1 * q2 / (r * r);
     this._force.position.set(-r / 2, 0, 0);
     this._force.setDirection(new THREE.Vector3(q1 * q2 >= 0 ? 1 : -1, 0, 0));
-    this._force.setLength(Math.min(Math.abs(F) * 0.5, 1.2), 0.2, 0.12);
+    const fLen = Math.max(0.001, Math.min(Math.abs(F) * 0.5, 1.2)); this._force.visible = Math.abs(F) > 1e-5; this._force.setLength(fLen, Math.min(0.2, fLen * 0.35), Math.min(0.12, fLen * 0.2));
 
     setHud("Coulomb's Law",
       '\\mathbf{F} = \\frac{1}{4\\pi\\varepsilon_0}\\frac{q_1 q_2}{r^2}\\hat{r}',
@@ -1096,6 +1113,11 @@ modules.push({
     return d;
   },
   build() {
+    clearContent();
+    addGrid(content);
+    addAxes(content);
+    camera.position.set(4.6, 3.6, 5.6);
+    controls.target.set(0, 0, 0);
     this._t = 0;
     this._z0 = -3.2; this._z1 = 3.2; this._n = 22;
     this._eArrows = []; this._hArrows = []; this._sArrows = [];
@@ -1183,6 +1205,11 @@ modules.push({
     return def;
   },
   build() {
+    clearContent();
+    addGrid(content);
+    addAxes(content);
+    camera.position.set(4.6, 3.6, 5.6);
+    controls.target.set(0, 0, 0);
     this._t = 0;
     this._dipole = null;
     this.update();
@@ -1533,37 +1560,44 @@ function selectModule(idx) {
   renderer.domElement.style.display = 'block';
   if (typeof mod.build === 'function') mod.build();
   else if (typeof mod.init === 'function') mod.init();
+  mod._built = true;
   if (typeof mod.update === 'function') mod.update();
+  renderer.render(scene, camera);
 }
 
 function onResize() {
-  const w = Math.max(1, stageEl.clientWidth);
-  const h = Math.max(1, stageEl.clientHeight);
+  const rect = stageEl.getBoundingClientRect();
+  const w = Math.max(1, Math.round(rect.width || stageEl.clientWidth));
+  const h = Math.max(1, Math.round(rect.height || stageEl.clientHeight));
   camera.aspect = w / h;
   camera.updateProjectionMatrix();
-  renderer.setSize(w, h, false);
+  renderer.setSize(w, h);
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
   chartEl.width = Math.round(w * Math.min(window.devicePixelRatio || 1, 2));
   chartEl.height = Math.round(h * Math.min(window.devicePixelRatio || 1, 2));
   const mod = modules[activeIdx];
-  if (mod && typeof mod.update === 'function') mod.update();
+  if (mod && mod._built && typeof mod.update === 'function') {
+    mod.update();
+    renderer.render(scene, camera);
+  }
 }
 
 /* ============================================================
    BOOT
    ============================================================ */
 buildModuleList();
+selectModule(0);
 window.addEventListener('resize', onResize);
 if (window.ResizeObserver) new ResizeObserver(onResize).observe(stageEl);
 onResize();
-selectModule(0);
+requestAnimationFrame(() => { onResize(); });
 
 let last = performance.now();
 function animate(now) {
   const dt = Math.min(0.05, (now - last) / 1000);
   last = now;
   const mod = modules[activeIdx];
-  if (mod && typeof mod.tick === 'function') mod.tick(dt);
+  if (mod && mod._built && typeof mod.tick === 'function') mod.tick(dt);
   controls.update();
   renderer.render(scene, camera);
   requestAnimationFrame(animate);
