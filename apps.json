@@ -35,4 +35,10 @@
     "category": "Simulation",
     "description": "Interactive 3D electromagnetics lab for transmission lines—covering distributed RLCG models, TEM fields, VSWR, Smith charts, stub matching, quarter-wave transformers, and TDR transients from Kraus & Fleisch Chapter 3.",
   },
+  {
+    "file": "EM-WAVE-PROPAGATION.html",
+    "title": "EM-WAVE-PROPAGATION",
+    "category": "Simulation",
+    "description": "propagation of waves through space and media, their polarization, reflection, refraction, and diffraction",
+  },
 ]
