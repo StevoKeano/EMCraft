@@ -1,0 +1,1543 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>EM-WAVE-PROPAGATION — Kraus &amp; Fleisch Ch. 4</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" crossorigin="anonymous" />
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js" crossorigin="anonymous"></script>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+<style>
+  :root {
+    --bg: #0b0f19;
+    --panel: rgba(15, 23, 42, 0.86);
+    --border: rgba(56, 189, 248, 0.22);
+    --text: #e2e8f0;
+    --muted: #94a3b8;
+    --accent: #38bdf8;
+    --ok: #68d391;
+    --bad: #fc8181;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; height: 100%; overflow: hidden;
+    background: var(--bg); color: var(--text);
+    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    font-size: 13px;
+  }
+  #shell { display: grid; grid-template-rows: auto 1fr; height: 100%; }
+  #topbar {
+    display: flex; align-items: center; gap: 16px;
+    padding: 10px 16px;
+    border-bottom: 1px solid rgba(56,189,248,0.15);
+    background: rgba(2,6,23,0.6);
+  }
+  #topbar h1 { margin: 0; font-weight: 700; letter-spacing: 0.04em; font-size: 15px; color: #f1f5f9; }
+  #topbar .sub { color: var(--muted); font-size: 12px; }
+  #topbar .badge {
+    margin-left: auto; font-size: 11px; color: var(--accent);
+    background: rgba(56,189,248,0.12); border: 1px solid rgba(56,189,248,0.3);
+    padding: 3px 9px; border-radius: 999px; font-variant-numeric: tabular-nums;
+  }
+  #body { display: grid; grid-template-columns: 268px 1fr; min-height: 0; }
+  #sidebar {
+    border-right: 1px solid rgba(56,189,248,0.12);
+    background: rgba(2,6,23,0.45);
+    overflow-y: auto;
+    padding: 10px 8px;
+  }
+  #sidebar h2 {
+    margin: 0; font-size: 10px; text-transform: uppercase; letter-spacing: 0.14em;
+    color: var(--muted); padding: 6px 8px 10px; font-weight: 600;
+  }
+  #module-list { display: flex; flex-direction: column; gap: 4px; }
+  .mod-btn {
+    display: flex; align-items: flex-start; gap: 8px;
+    width: 100%; text-align: left;
+    padding: 8px 10px;
+    border-radius: 8px; border: 1px solid transparent;
+    background: transparent; color: var(--text);
+    font-size: 12px; line-height: 1.35; cursor: pointer;
+  }
+  .mod-btn:hover { background: rgba(56,189,248,0.08); }
+  .mod-btn.active { background: rgba(56,189,248,0.16); border-color: rgba(56,189,248,0.4); }
+  .mod-btn .num { font-size: 10px; color: var(--muted); font-variant-numeric: tabular-nums; min-width: 18px; margin-top: 1px; }
+  #main { display: flex; flex-direction: column; min-height: 0; }
+  #stage { flex: 1; position: relative; min-height: 0; overflow: hidden; background: #0a0e13; }
+  #stage canvas.webgl, #chart-canvas {
+    position: absolute; inset: 0; width: 100% !important; height: 100% !important; display: block;
+  }
+  #chart-canvas { display: none; z-index: 2; pointer-events: none; }
+  #controls {
+    position: absolute; top: 12px; right: 12px; width: 295px;
+    max-height: calc(100% - 24px); overflow-y: auto;
+    background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
+    box-shadow: 0 12px 40px rgba(0,0,0,0.55); backdrop-filter: blur(14px);
+    padding: 12px 14px; font-size: 12px; z-index: 10;
+  }
+  .ctl { margin-bottom: 10px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px; }
+  .ctl:last-child { margin-bottom: 0; }
+  .ctl label { color: var(--muted); font-size: 11px; flex: 1 1 auto; }
+  .ctl .val { color: var(--accent); font-size: 11px; font-variant-numeric: tabular-nums; min-width: 44px; text-align: right; }
+  .ctl input[type="range"] {
+    width: 100%; height: 4px; border-radius: 2px; order: 3;
+    background: rgba(56,189,248,0.2); outline: none; -webkit-appearance: none;
+  }
+  .ctl input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none; width: 14px; height: 14px; border-radius: 50%;
+    background: var(--accent); cursor: pointer; box-shadow: 0 0 8px rgba(56,189,248,0.6);
+  }
+  .ctl input[type="checkbox"] { accent-color: var(--accent); }
+  .ctl select {
+    width: 100%; padding: 6px 8px; border-radius: 7px;
+    background: rgba(2,6,23,0.75); color: var(--text);
+    border: 1px solid rgba(56,189,248,0.25); font-size: 12px; outline: none;
+  }
+  #hud {
+    position: absolute; left: 12px; bottom: 12px; width: 390px; max-width: calc(100% - 330px);
+    background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
+    box-shadow: 0 12px 40px rgba(0,0,0,0.55); backdrop-filter: blur(14px);
+    padding: 12px 14px; font-size: 12px; z-index: 10;
+  }
+  #hud-title { font-weight: 600; color: #f1f5f9; font-size: 12px; margin-bottom: 6px; }
+  #hud-eq { color: #cbd5e1; min-height: 20px; margin-bottom: 8px; }
+  #hud-eq .katex { font-size: 0.95em; }
+  #hud-values { display: grid; grid-template-columns: 1fr auto; gap: 3px 12px; }
+  #hud-values .k { color: var(--muted); font-size: 11px; }
+  #hud-values .v {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    color: var(--accent); font-variant-numeric: tabular-nums; font-size: 12px; text-align: right;
+  }
+  #bottom {
+    height: 31vh; min-height: 185px;
+    display: grid; grid-template-columns: 1fr 1fr;
+    border-top: 1px solid rgba(56,189,248,0.12);
+    background: rgba(2,6,23,0.5);
+  }
+  #lesson, #quiz { overflow-y: auto; padding: 14px 16px; }
+  #lesson { border-right: 1px solid rgba(56,189,248,0.12); }
+  #lesson h3, #quiz h3 { margin: 0 0 8px; font-size: 13px; color: #f1f5f9; }
+  #lesson p { margin: 0 0 8px; font-size: 12px; line-height: 1.55; color: #cbd5e1; }
+  #lesson .eq, #lesson .eqblock { margin: 8px 0; color: #e2e8f0; }
+  .qcard { margin-bottom: 12px; }
+  .qcard .qtext { font-size: 12px; color: #e2e8f0; margin-bottom: 6px; }
+  .qcard .opts { display: flex; flex-direction: column; gap: 4px; }
+  .qcard .opts button {
+    text-align: left; padding: 5px 9px; border-radius: 6px; cursor: pointer;
+    background: rgba(15, 23, 42, 0.7); color: #cbd5e1;
+    border: 1px solid rgba(56,189,248,0.18); font-size: 11.5px;
+  }
+  .qcard .opts button:hover { background: rgba(56,189,248,0.12); }
+  .qcard .opts button.correct { border-color: var(--ok); background: rgba(104,211,145,0.18); color: #f0fff4; }
+  .qcard .opts button.wrong { border-color: var(--bad); background: rgba(252,129,129,0.18); color: #fff5f5; }
+  .qcard .fb { font-size: 11px; color: var(--muted); margin-top: 4px; }
+  @media (max-width: 900px) {
+    #body { grid-template-columns: 1fr; }
+    #sidebar { display: none; }
+    #controls { width: 240px; }
+    #hud { width: calc(100% - 24px); max-width: none; }
+    #bottom { grid-template-columns: 1fr; height: 40vh; }
+    #lesson { border-right: none; border-bottom: 1px solid rgba(56,189,248,0.12); }
+  }
+</style>
+</head>
+<body>
+<div id="shell">
+  <header id="topbar">
+    <h1>EM-WAVE-PROPAGATION</h1>
+    <span class="sub">Kraus &amp; Fleisch · Electromagnetics with Applications · Ch. 4 Wave Propagation, Attenuation, Polarization, Reflection, Refraction &amp; Diffraction</span>
+    <span class="badge" id="status-badge">0 / 0</span>
+  </header>
+  <div id="body">
+    <aside id="sidebar">
+      <h2>Chapter 4 Modules</h2>
+      <div id="module-list"></div>
+    </aside>
+    <section id="main">
+      <div id="stage">
+        <canvas id="chart-canvas"></canvas>
+        <div id="controls"></div>
+        <div id="hud">
+          <div id="hud-title">—</div>
+          <div id="hud-eq"></div>
+          <div id="hud-values"></div>
+        </div>
+      </div>
+      <div id="bottom">
+        <div id="lesson"></div>
+        <div id="quiz"></div>
+      </div>
+    </section>
+  </div>
+</div>
+<script type="module">
+import * as THREE from "three";
+import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+
+const stageEl    = document.getElementById("stage");
+const chartEl    = document.getElementById("chart-canvas");
+const controlsEl = document.getElementById("controls");
+const hudTitle   = document.getElementById("hud-title");
+const hudEq      = document.getElementById("hud-eq");
+const hudValues  = document.getElementById("hud-values");
+const lessonEl   = document.getElementById("lesson");
+const quizEl     = document.getElementById("quiz");
+const moduleList = document.getElementById("module-list");
+const badgeEl    = document.getElementById("status-badge");
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+const initW = Math.max(1, stageEl.clientWidth || window.innerWidth - 268);
+const initH = Math.max(1, stageEl.clientHeight || Math.round(window.innerHeight * 0.6));
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+renderer.setSize(initW, initH);
+renderer.setClearColor(0x0a0e13, 1);
+renderer.domElement.classList.add("webgl");
+renderer.domElement.style.outline = "none";
+stageEl.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.fog = new THREE.FogExp2(0x0a0e13, 0.025);
+const camera = new THREE.PerspectiveCamera(50, initW / initH, 0.1, 200);
+camera.position.set(4.8, 3.6, 5.8);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = false;
+controls.enableZoom = false;
+controls.minDistance = 1.5;
+controls.maxDistance = 40;
+
+renderer.domElement.addEventListener("wheel", (e) => {
+  e.preventDefault();
+  const dir = Math.sign(e.deltaY);
+  if (!dir) return;
+  const offset = camera.position.clone().sub(controls.target);
+  const dist = offset.length() || 1;
+  const factor = dir > 0 ? 1.04 : 1 / 1.04;
+  offset.setLength(Math.min(40, Math.max(1.5, dist * factor)));
+  camera.position.copy(controls.target).add(offset);
+}, { passive: false });
+
+scene.add(new THREE.AmbientLight(0xffffff, 0.65));
+const dirLight = new THREE.DirectionalLight(0xffffff, 0.9);
+dirLight.position.set(5, 8, 6);
+scene.add(dirLight);
+
+const content = new THREE.Group();
+scene.add(content);
+const sharedArrowGeoms = new Set();
+
+function disposeObj(o) {
+  o.traverse(n => {
+    const isShared = sharedArrowGeoms.has(n.geometry) || n.isArrowHelper || (n.parent && n.parent.isArrowHelper);
+    if (!isShared && n.geometry) n.geometry.dispose();
+    if (n.material) {
+      if (Array.isArray(n.material)) n.material.forEach(m => m.dispose());
+      else n.material.dispose();
+    }
+  });
+}
+
+function clearContent() {
+  while (content.children.length) disposeObj(content.children.pop());
+  sharedArrowGeoms.clear();
+}
+
+function addAxes(group, len = 3.2) {
+  const mk = (color, a, b) => new THREE.Line(
+    new THREE.BufferGeometry().setFromPoints([a, b]),
+    new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.75 })
+  );
+  group.add(mk(0xef4444, new THREE.Vector3(-len, 0, 0), new THREE.Vector3(len, 0, 0)));
+  group.add(mk(0x22c55e, new THREE.Vector3(0, -len, 0), new THREE.Vector3(0, len, 0)));
+  group.add(mk(0x3b82f6, new THREE.Vector3(0, 0, -len), new THREE.Vector3(0, 0, len)));
+}
+
+function addGrid(group, size = 8, y = -2.2) {
+  const g = new THREE.GridHelper(size, 16, 0x1e2a36, 0x1e2a36);
+  g.position.y = y;
+  group.add(g);
+}
+
+function addArrowField(vectors, color = 0x7fd1ff) {
+  const g = new THREE.Group();
+  for (const v of vectors) {
+    if (!v || !v.dir || !v.origin) continue;
+    const mag = v.dir.length();
+    if (mag < 1e-6) continue;
+    const dir = v.dir.clone().normalize();
+    const L = v.len !== undefined ? v.len : Math.min(mag, 1.5);
+    if (L < 1e-4) continue;
+    const arrow = new THREE.ArrowHelper(dir, v.origin, L, v.color ?? color, L * 0.25, L * 0.15);
+    if (arrow.line && arrow.line.geometry) sharedArrowGeoms.add(arrow.line.geometry);
+    if (arrow.cone && arrow.cone.geometry) sharedArrowGeoms.add(arrow.cone.geometry);
+    g.add(arrow);
+  }
+  content.add(g);
+  return g;
+}
+
+function renderMath(el, tex, display = true) {
+  if (window.katex) {
+    try { katex.render(tex, el, { throwOnError: false, displayMode: display }); return; } catch (e) {}
+  }
+  el.textContent = tex;
+}
+
+function renderAllMath(root) {
+  root.querySelectorAll("[data-tex]").forEach(el => {
+    renderMath(el, el.getAttribute("data-tex"), el.classList.contains("eq") || el.classList.contains("eqblock"));
+  });
+}
+
+function setHud(title, eqTex, rows) {
+  hudTitle.textContent = title;
+  renderMath(hudEq, eqTex, true);
+  hudValues.innerHTML = (rows || []).map(r => `<span class="k">${r.k}</span><span class="v">${r.v}</span>`).join("");
+}
+
+function fmt(v, d = 3) {
+  return isFinite(v) ? (v >= 0 ? "+" : "") + v.toFixed(d) : "—";
+}
+
+const modules = [];
+
+modules.push({
+  id: 'waves_in_space',
+  title: '4-2 Waves in Space',
+  controls: [
+    { id: 'f', label: 'Frequency f (MHz)', type: 'range', min: 10, max: 1000, step: 1, value: 300 },
+    { id: 'E0', label: 'Amplitude E0 (V/m)', type: 'range', min: 1, max: 10, step: 0.1, value: 5 },
+    { id: 'er', label: 'Relative permittivity εr', type: 'range', min: 1, max: 9, step: 0.1, value: 1 },
+    { id: 'ur', label: 'Relative permeability μr', type: 'range', min: 1, max: 4, step: 0.1, value: 1 },
+    { id: 'animate', label: 'Animate wave', type: 'check', value: true }
+  ],
+  state: { f: 300, E0: 5, er: 1, ur: 1, animate: true, t: 0 },
+
+  build() {
+    this.arrowsE = addArrowField([], 0xff5533);
+    this.arrowsH = addArrowField([], 0x33aaff);
+    this.axis = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.015, 0.015, 12, 8),
+      new THREE.MeshBasicMaterial({ color: 0x888888 })
+    );
+    this.axis.rotation.x = Math.PI / 2;
+    content.add(this.axis);
+    this.update();
+  },
+
+  update() {
+    const st = this.state;
+    const Z0 = 376.73;
+    const Z = Z0 * Math.sqrt(st.ur / st.er);
+    const c = 299792458;
+    const v = c / Math.sqrt(st.er * st.ur);
+    const fHz = st.f * 1e6;
+    const lambda = v / fHz;
+    const beta = 2 * Math.PI / lambda;
+    const omega = 2 * Math.PI * fHz;
+
+    const zs = [];
+    for (let i = 0; i < 24; i++) zs.push(-5 + i * (10 / 23));
+
+    const Evecs = [], Hvecs = [];
+    for (const z of zs) {
+      const ph = omega * st.t - beta * z;
+      const Ey = st.E0 * Math.cos(ph);
+      const Hx = -(st.E0 / Z) * Math.cos(ph);
+      Evecs.push(new THREE.Vector3(0, Ey * 0.35, z));
+      Hvecs.push(new THREE.Vector3(Hx * 0.35, 0, z));
+    }
+
+    this.arrowsE.setVectors(Evecs);
+    this.arrowsH.setVectors(Hvecs);
+
+    setHud('TEM wave propagating in +z', 'E_y=E_0\\cos(\\omega t-\\beta z),\\quad H_x=-\\frac{E_0}{Z}\\cos(\\omega t-\\beta z)', [
+      { k: 'Z (Ω)', v: Z.toFixed(1) },
+      { k: 'v (m/s)', v: v.toExponential(2) },
+      { k: 'λ (m)', v: lambda.toFixed(3) }
+    ]);
+  },
+
+  tick(dt) {
+    if (this.state.animate) {
+      this.state.t += dt;
+      this.update();
+    }
+  },
+
+  lesson: `<p>A uniform plane wave travelling in <b>+z</b> has transverse fields. For a TEM wave, <b>E</b> and <b>H</b> are perpendicular to each other and to the propagation direction.</p>
+  <p>With <b>E</b> along y and <b>H</b> along x: <code>Ey = E0 cos(ωt − βz)</code>, <code>Hx = −(E0/Z) cos(ωt − βz)</code>.</p>
+  <p>The wave impedance is <code>Z = 376.73 √(μr/εr)</code> Ω, the phase velocity is <code>v = c/√(εr μr)</code>, and the wavelength is <code>λ = v/f</code>.</p>`,
+
+  quiz: [
+    { q: 'For a TEM wave in a lossless medium, E and H are:', options: ['Parallel to each other', 'Perpendicular to each other and to the propagation direction', 'Both longitudinal', 'At 45° to the propagation direction'], answer: 1 },
+    { q: 'If εr increases while μr stays 1, the wave impedance Z:', options: ['Increases', 'Decreases', 'Stays the same', 'Becomes zero'], answer: 1 }
+  ]
+});
+
+modules.push({
+  id: 'traveling_standing_waves',
+  title: '4-3 Traveling and Standing Waves',
+  controls: [
+    { id: 'rho', label: 'Reflection coefficient ρ = E⁻/E⁺', type: 'range', min: 0, max: 1, step: 0.01, value: 0.5 },
+    { id: 'phi_deg', label: 'Reflected phase φ (deg)', type: 'range', min: -180, max: 180, step: 1, value: 180 },
+    { id: 'animate', label: 'Animate waves', type: 'check', value: true }
+  ],
+  build() {
+    this.state = { rho: 0.5, phi_deg: 180, animate: true };
+    this.t = 0;
+    this.group = new THREE.Group();
+    content.add(this.group);
+
+    const axisMat = new THREE.MeshStandardMaterial({ color: 0x334155, roughness: 0.8 });
+    const axis = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 12, 12), axisMat);
+    axis.rotation.z = Math.PI / 2;
+    axis.position.x = 0;
+    this.group.add(axis);
+
+    // forward wave: E+ = cos(kx - ωt)
+    this.forward = new THREE.Line(
+      new THREE.BufferGeometry(),
+      new THREE.LineBasicMaterial({ color: 0x38bdf8, linewidth: 2 })
+    );
+    // reflected wave: E- = ρ cos(kx + ωt + φ)
+    this.reflected = new THREE.Line(
+      new THREE.BufferGeometry(),
+      new THREE.LineBasicMaterial({ color: 0xf97316, linewidth: 2 })
+    );
+    // total wave
+    this.total = new THREE.Line(
+      new THREE.BufferGeometry(),
+      new THREE.LineBasicMaterial({ color: 0x22c55e, linewidth: 3 })
+    );
+    // envelope ±(1+ρ)
+    this.envTop = new THREE.Line(
+      new THREE.BufferGeometry(),
+      new THREE.LineBasicMaterial({ color: 0xa855f7, linewidth: 1.5 })
+    );
+    this.envBot = new THREE.Line(
+      new THREE.BufferGeometry(),
+      new THREE.LineBasicMaterial({ color: 0xa855f7, linewidth: 1.5 })
+    );
+    this.group.add(this.forward, this.reflected, this.total, this.envTop, this.envBot);
+
+    // small markers at maxima/minima
+    this.maxMark = new THREE.Mesh(new THREE.SphereGeometry(0.07, 12, 12), new THREE.MeshStandardMaterial({ color: 0xa855f7 }));
+    this.minMark = new THREE.Mesh(new THREE.SphereGeometry(0.07, 12, 12), new THREE.MeshStandardMaterial({ color: 0xa855f7 }));
+    this.group.add(this.maxMark, this.minMark);
+
+    this.N = 240;
+    this.xs = new Float32Array(this.N);
+    for (let i = 0; i < this.N; i++) this.xs[i] = -6 + 12 * i / (this.N - 1);
+
+    this.update();
+  },
+
+  update() {
+    const st = this.state;
+    const rho = st.rho;
+    const phi = st.phi_deg * Math.PI / 180;
+    const k = Math.PI / 2; // wavelength = 4 units
+    const omega = 2.0;
+    const t = this.t;
+
+    const posF = [], posR = [], posT = [], posET = [], posEB = [];
+    let emax = 0, emin = Infinity;
+    for (let i = 0; i < this.N; i++) {
+      const x = this.xs[i];
+      const ef = Math.cos(k * x - omega * t);
+      const er = rho * Math.cos(k * x + omega * t + phi);
+      const et = ef + er;
+      posF.push(x, ef, 0);
+      posR.push(x, er, 0);
+      posT.push(x, et, 0);
+      posET.push(x, 1 + rho, 0);
+      posEB.push(x, -(1 + rho), 0);
+      emax = Math.max(emax, Math.abs(et));
+      emin = Math.min(emin, Math.abs(et));
+    }
+
+    this.forward.geometry.setAttribute('position', new THREE.Float32BufferAttribute(posF, 3));
+    this.reflected.geometry.setAttribute('position', new THREE.Float32BufferAttribute(posR, 3));
+    this.total.geometry.setAttribute('position', new THREE.Float32BufferAttribute(posT, 3));
+    this.envTop.geometry.setAttribute('position', new THREE.Float32BufferAttribute(posET, 3));
+    this.envBot.geometry.setAttribute('position', new THREE.Float32BufferAttribute(posEB, 3));
+
+    // markers: maxima at x where cos(kx+φ/2)=±1, minima where cos=0
+    const phase = phi / 2;
+    const xMax = (Math.PI / 2 - phase) / k;
+    const xMin = (Math.PI - phase) / k;
+    this.maxMark.position.set(xMax, 1 + rho, 0);
+    this.minMark.position.set(xMin, 0, 0);
+
+    const vswr = rho >= 1 ? Infinity : (1 + rho) / (1 - rho);
+    const emaxVal = 1 + rho;
+    const eminVal = 1 - rho;
+
+    setHud(
+      'Traveling and Standing Waves',
+      'E(x,t)=E^+\\cos(kx-\\omega t)+\\rho E^+\\cos(kx+\\omega t+\\phi)',
+      [
+        { k: 'ρ', v: rho.toFixed(2) },
+        { k: 'VSWR', v: isFinite(vswr) ? vswr.toFixed(2) : '∞' },
+        { k: 'E_max / E_min', v: `${emaxVal.toFixed(2)} / ${eminVal.toFixed(2)}` }
+      ]
+    );
+  },
+
+  tick(dt) {
+    if (this.state.animate) {
+      this.t += dt * 1.6;
+      this.update();
+    }
+  },
+
+  lesson: `<p><b>Traveling and standing waves.</b> A forward wave <i>E⁺ cos(kx−ωt)</i> and a reflected wave <i>ρE⁺ cos(kx+ωt+φ)</i> superpose. When ρ=0 only the forward traveling wave remains. When ρ=1 and φ=180°, the waves cancel at nodes and form a pure standing wave.</p>
+  <p>The voltage standing wave ratio is <b>VSWR = (1+ρ)/(1−ρ)</b>. The envelope spans from <b>E_max = 1+ρ</b> to <b>E_min = 1−ρ</b> (normalized to E⁺).</p>
+  <p>Try ρ=0.5, φ=180°: partial standing wave. Try ρ=1, φ=180°: full standing wave with VSWR → ∞.</p>`,
+
+  quiz: [
+    {
+      q: 'For ρ = 0.5, what is the VSWR?',
+      options: ['1.5', '3.0', '0.5', '2.0'],
+      answer: 1
+    },
+    {
+      q: 'A pure standing wave occurs when:',
+      options: ['ρ = 0', 'ρ = 1 and φ = 180°', 'ρ = 0.5 and φ = 0°', 'φ = 90° for any ρ'],
+      answer: 1
+    }
+  ]
+});
+
+modules.push({
+  id: 'conductors_dielectrics',
+  title: '4-4 Conductors and Dielectrics',
+  controls: [
+    { id: 'freq_log10', label: 'log10 f (Hz)', type: 'range', min: 3, max: 11, step: 0.1, value: 8 },
+    { id: 'sigma', label: 'σ (S/m)', type: 'range', min: 0, max: 100, step: 0.01, value: 0.01 },
+    { id: 'eps_r', label: 'ε_r', type: 'range', min: 1, max: 81, step: 0.1, value: 4 },
+    { id: 'eps_pp', label: 'ε″ (loss)', type: 'range', min: 0, max: 5, step: 0.05, value: 0.05 }
+  ],
+  build() {
+    const g = new THREE.Group();
+    const axis = new THREE.Group();
+    axis.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(-3,0,0), new THREE.Vector3(3,0,0)]), new THREE.LineBasicMaterial({color:0x555555})));
+    axis.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0,-2,0), new THREE.Vector3(0,2,0)]), new THREE.LineBasicMaterial({color:0x555555})));
+    g.add(axis);
+    const jc = new THREE.Mesh(new THREE.CylinderGeometry(0.06,0.06,1,12), new THREE.MeshStandardMaterial({color:0xff5533, emissive:0x441100}));
+    const jd = new THREE.Mesh(new THREE.CylinderGeometry(0.06,0.06,1,12), new THREE.MeshStandardMaterial({color:0x33aaff, emissive:0x002244}));
+    g.add(jc, jd);
+    const labelC = new THREE.Mesh(new THREE.SphereGeometry(0.09,12,12), new THREE.MeshStandardMaterial({color:0xff5533}));
+    const labelD = new THREE.Mesh(new THREE.SphereGeometry(0.09,12,12), new THREE.MeshStandardMaterial({color:0x33aaff}));
+    g.add(labelC, labelD);
+    content.add(g);
+    this._g = g; this._jc = jc; this._jd = jd; this._lc = labelC; this._ld = labelD;
+    this.update();
+  },
+  update() {
+    const st = this.state;
+    const f = Math.pow(10, st.freq_log10);
+    const w = 2 * Math.PI * f;
+    const eps0 = 8.854e-12;
+    const ep = st.eps_r * eps0;
+    const epp = st.eps_pp * eps0;
+    const sigma = st.sigma;
+    const jd = w * ep;
+    const jc = sigma;
+    const tanD = (sigma + w * epp) / (w * ep);
+    let regime;
+    if (tanD < 0.01) regime = 'Good dielectric';
+    else if (tanD < 1) regime = 'Quasi-conductor';
+    else regime = 'Good conductor';
+    const scale = 1 / Math.max(jc, jd, 1e-12);
+    const Lc = Math.max(0.15, Math.min(2.8, jc * scale * 2.8));
+    const Ld = Math.max(0.15, Math.min(2.8, jd * scale * 2.8));
+    this._jc.scale.set(1, Lc, 1);
+    this._jd.scale.set(1, Ld, 1);
+    this._jc.position.set(-1.2, Lc/2, 0);
+    this._jd.position.set(1.2, Ld/2, 0);
+    this._lc.position.set(-1.2, Lc, 0);
+    this._ld.position.set(1.2, Ld, 0);
+    setHud('4-4 Conductors and Dielectrics',
+      '\\tan\\delta = \\frac{\\sigma + \\omega\\varepsilon^{\\prime\\prime}}{\\omega\\varepsilon^{\\prime}}',
+      [{k:'tan δ', v: tanD.toFixed(3)}, {k:'regime', v: regime}, {k:'Jc/Jd', v:(jc/jd).toFixed(3)}]);
+  },
+  tick(dt) {
+    const t = performance.now() * 0.001;
+    if (this._jc) this._jc.rotation.y = Math.sin(t) * 0.15;
+    if (this._jd) this._jd.rotation.y = Math.sin(t + 1) * 0.15;
+  },
+  lesson: `<p>For a material with conductivity σ and complex permittivity ε = ε′ − jε″, the loss tangent is <b>tan δ = (σ + ωε″)/(ωε′)</b>. Small tan δ means a good dielectric; tan δ ≈ 1 is quasi-conductive; large tan δ means a good conductor. The red phasor is conduction current density Jc = σE; the blue phasor is displacement current density Jd = ωε′E.</p>`,
+  quiz: [
+    { q: 'If tan δ = 0.005, the material is best classified as:', options: ['Good conductor','Quasi-conductor','Good dielectric','Perfect vacuum'], answer: 2 },
+    { q: 'Increasing σ at fixed frequency mainly increases:', options: ['Jd','Jc','ε′','tan δ denominator'], answer: 1 }
+  ]
+});
+
+modules.push({
+  id: 'conducting_media_lossy',
+  title: '4-5 Conducting Media and Lossy Lines',
+  controls: [
+    { id: 'sigma', label: 'Conductivity σ (S/m)', type: 'range', min: 0.001, max: 50, step: 0.001, value: 4 },
+    { id: 'freq_MHz', label: 'Frequency (MHz)', type: 'range', min: 0.1, max: 500, step: 0.1, value: 10 },
+    { id: 'animate', label: 'Animate waves', type: 'check', value: true }
+  ],
+  build() {
+    this.t = 0;
+    this.group = new THREE.Group();
+    content.add(this.group);
+
+    const N = 160;
+    const mkLine = (color) => {
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(N * 3), 3));
+      const line = new THREE.Line(geo, new THREE.LineBasicMaterial({ color }));
+      this.group.add(line);
+      return line;
+    };
+    this.eLine = mkLine(0x4fc3f7);
+    this.hLine = mkLine(0xffb74d);
+
+    this.skinPlane = new THREE.Mesh(
+      new THREE.PlaneGeometry(1, 1),
+      new THREE.MeshBasicMaterial({ color: 0x66bb6a, transparent: true, opacity: 0.22, side: THREE.DoubleSide })
+    );
+    this.skinPlane.rotation.y = Math.PI / 2;
+    this.group.add(this.skinPlane);
+
+    this.axis = new THREE.Line(
+      new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 0, 0), new THREE.Vector3(1, 0, 0)]),
+      new THREE.LineBasicMaterial({ color: 0x888888 })
+    );
+    this.group.add(this.axis);
+
+    this.arrowE = addArrowField([new THREE.Vector3(0, 1, 0)], 0x4fc3f7);
+    this.arrowH = addArrowField([new THREE.Vector3(0, 0, 1)], 0xffb74d);
+    this.group.add(this.arrowE, this.arrowH);
+
+    this.update();
+  },
+  update() {
+    const st = this.state;
+    const sigma = st.sigma;
+    const f = st.freq_MHz * 1e6;
+    const w = 2 * Math.PI * f;
+    const mu = 4e-7 * Math.PI;
+    const eps = 8.854e-12;
+
+    // complex helpers: represent as [re, im]
+    const cmul = (a, b) => [a[0]*b[0] - a[1]*b[1], a[0]*b[1] + a[1]*b[0]];
+    const csqrt = (a) => {
+      const r = Math.hypot(a[0], a[1]);
+      const re = Math.sqrt((r + a[0]) / 2);
+      const im = Math.sign(a[1] || 1) * Math.sqrt((r - a[0]) / 2);
+      return [re, im];
+    };
+
+    const jwmu = [0, w * mu];
+    const a = [sigma, w * eps];
+    const g = csqrt(cmul(jwmu, a));
+    const alpha = g[0];
+    const beta = g[1];
+    const delta = 1 / alpha;
+    const Zc = csqrt(cmul(jwmu, [sigma / (sigma*sigma + (w*eps)*(w*eps)), -w*eps / (sigma*sigma + (w*eps)*(w*eps))]));
+    const dBm = 8.686 * alpha;
+
+    const N = 160;
+    const ePos = this.eLine.geometry.attributes.position.array;
+    const hPos = this.hLine.geometry.attributes.position.array;
+    for (let i = 0; i < N; i++) {
+      const x = i / (N - 1);
+      const decay = Math.exp(-alpha * x);
+      const phase = beta * x;
+      ePos[i * 3] = x;
+      ePos[i * 3 + 1] = 0.35 * decay * Math.cos(phase);
+      ePos[i * 3 + 2] = 0;
+      hPos[i * 3] = x;
+      hPos[i * 3 + 1] = 0;
+      hPos[i * 3 + 2] = 0.35 * decay * Math.cos(phase);
+    }
+    this.eLine.geometry.attributes.position.needsUpdate = true;
+    this.hLine.geometry.attributes.position.needsUpdate = true;
+
+    const dVis = Math.min(1, Math.max(0.02, delta));
+    this.skinPlane.scale.set(1, 0.7, 1);
+    this.skinPlane.position.set(dVis, 0, 0);
+
+    this.arrowE.position.set(0.05, 0.35, 0);
+    this.arrowH.position.set(0.05, 0, 0.35);
+
+    setHud('Conducting Media & Lossy Lines', '\\gamma=\\alpha+j\\beta=\\sqrt{j\\omega\\mu(\\sigma+j\\omega\\epsilon)}', [
+      { k: 'α', v: alpha.toFixed(2) + ' Np/m' },
+      { k: 'dB/m', v: dBm.toFixed(2) },
+      { k: 'δ_s', v: delta.toFixed(3) + ' m' },
+      { k: '|Z_c|', v: Math.hypot(Zc[0], Zc[1]).toFixed(2) + ' Ω' }
+    ]);
+  },
+  tick(dt) {
+    const st = this.state;
+    if (!st.animate) return;
+    this.t += dt;
+    const f = st.freq_MHz * 1e6;
+    const w = 2 * Math.PI * f;
+    const sigma = st.sigma;
+    const mu = 4e-7 * Math.PI;
+    const eps = 8.854e-12;
+
+    const cmul = (a, b) => [a[0]*b[0] - a[1]*b[1], a[0]*b[1] + a[1]*b[0]];
+    const csqrt = (a) => {
+      const r = Math.hypot(a[0], a[1]);
+      const re = Math.sqrt((r + a[0]) / 2);
+      const im = Math.sign(a[1] || 1) * Math.sqrt((r - a[0]) / 2);
+      return [re, im];
+    };
+    const g = csqrt(cmul([0, w * mu], [sigma, w * eps]));
+    const beta = g[1];
+    const alpha = g[0];
+
+    const N = 160;
+    const ePos = this.eLine.geometry.attributes.position.array;
+    const hPos = this.hLine.geometry.attributes.position.array;
+    for (let i = 0; i < N; i++) {
+      const x = i / (N - 1);
+      const decay = Math.exp(-alpha * x);
+      const phase = beta * x - w * this.t;
+      ePos[i * 3 + 1] = 0.35 * decay * Math.cos(phase);
+      hPos[i * 3 + 2] = 0.35 * decay * Math.cos(phase);
+    }
+    this.eLine.geometry.attributes.position.needsUpdate = true;
+    this.hLine.geometry.attributes.position.needsUpdate = true;
+  },
+  lesson: '<p>In a conducting medium, the propagation constant is <b>γ = α + jβ = √(jωμ(σ + jωε))</b>. The real part α gives attenuation; the imaginary part β gives phase. The skin depth is <b>δ_s = 1/α</b>, the distance over which the field falls by 1/e. The characteristic impedance is <b>Z_c = √(jωμ/(σ + jωε))</b>. Higher σ or higher f increases α and shrinks δ_s. The 3D view shows decaying E (blue) and H (orange) waves and the green skin-depth plane.</p>',
+  quiz: [
+    { q: 'For a good conductor, how does skin depth δ_s depend on frequency?', options: ['δ_s ∝ 1/√f', 'δ_s ∝ f', 'δ_s is independent of f', 'δ_s ∝ 1/f²'], answer: 0 },
+    { q: 'Which quantity directly determines attenuation in Np/m?', options: ['β', 'α', '|Z_c|', 'ε'], answer: 1 }
+  ]
+});
+
+modules.push({
+  id: 'dielectric_hysteresis_loss',
+  title: '4-6 Dielectric Hysteresis and Loss',
+  controls: [
+    { id: 'eps_r', label: 'Relative permittivity eps_r', type: 'range', min: 1, max: 80, step: 0.1, value: 4.5 },
+    { id: 'loss_tan', label: 'Loss tangent tan delta', type: 'range', min: 0, max: 0.8, step: 0.01, value: 0.15 },
+    { id: 'freq_GHz', label: 'Frequency (GHz)', type: 'range', min: 0.1, max: 20, step: 0.05, value: 2.45 },
+    { id: 'animate', label: 'Animate dipoles', type: 'check', value: true }
+  ],
+  build() {
+    const st = this.state;
+    this.dipoles = [];
+    const mat = new THREE.MeshStandardMaterial({ color: 0x4fc3f7, roughness: 0.35, metalness: 0.1 });
+    for (let i = 0; i < 18; i++) {
+      const g = new THREE.Group();
+      const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.055, 0.22, 4, 8), mat);
+      body.rotation.z = Math.PI / 2;
+      g.add(body);
+      const plus = new THREE.Mesh(new THREE.SphereGeometry(0.045, 8, 8), new THREE.MeshStandardMaterial({ color: 0xff7043 }));
+      plus.position.x = 0.16;
+      const minus = new THREE.Mesh(new THREE.SphereGeometry(0.045, 8, 8), new THREE.MeshStandardMaterial({ color: 0x64b5f6 }));
+      minus.position.x = -0.16;
+      g.add(plus, minus);
+      g.position.set((i % 6 - 2.5) * 0.55, Math.floor(i / 6) * 0.55 - 0.55, 0);
+      content.add(g);
+      this.dipoles.push(g);
+    }
+    this.loop = new THREE.Group();
+    content.add(this.loop);
+    this.loopLine = new THREE.Line(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: 0xffb74d }));
+    this.loop.add(this.loopLine);
+    this.axis = new THREE.Line(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: 0x9e9e9e }));
+    this.loop.add(this.axis);
+    this.fieldArrows = addArrowField([new THREE.Vector3(1, 0, 0)], 0x66bb6a);
+    this.update();
+  },
+  update() {
+    const st = this.state;
+    const eps_r = st.eps_r, tanD = st.loss_tan, f = st.freq_GHz;
+    const eps_p = eps_r * tanD;
+    const E0 = 1.0;
+    const Wh = Math.PI * eps_p * E0 * E0;
+    const Pd = 0.5 * 2 * Math.PI * f * 1e9 * eps_p * E0 * E0;
+    const phase = Math.atan(tanD);
+    const amp = 0.55 + 0.35 * Math.min(eps_r / 80, 1);
+    const pts = [];
+    for (let i = 0; i <= 80; i++) {
+      const t = i / 80 * Math.PI * 2;
+      const E = Math.sin(t);
+      const D = amp * (Math.sin(t - phase) + 0.12 * Math.sin(2 * t));
+      pts.push(new THREE.Vector3(E * 1.25, D * 1.25, 0));
+    }
+    this.loopLine.geometry.dispose();
+    this.loopLine.geometry = new THREE.BufferGeometry().setFromPoints(pts);
+    this.axis.geometry.dispose();
+    this.axis.geometry = new THREE.BufferGeometry().setFromPoints([
+      new THREE.Vector3(-1.35, 0, 0), new THREE.Vector3(1.35, 0, 0),
+      new THREE.Vector3(0, -1.35, 0), new THREE.Vector3(0, 1.35, 0)
+    ]);
+    this.loop.position.set(2.2, 0.1, 0);
+    this.loop.rotation.z = 0;
+    this.dipoles.forEach((g, i) => {
+      const t = this.t || 0;
+      const lag = phase + 0.18 * Math.sin(t * 2 + i * 0.7);
+      g.rotation.z = lag;
+      g.position.y = Math.floor(i / 6) * 0.55 - 0.55 + 0.05 * Math.sin(t * 3 + i);
+    });
+    setHud('Dielectric Hysteresis and Loss', 'D=(\\epsilon - j\\epsilon^{\\prime\\prime})E', [
+      { k: 'eps_pp', v: eps_p.toFixed(3) },
+      { k: 'Wh', v: Wh.toFixed(3) + ' J/m^3' },
+      { k: 'Pd', v: Pd.toFixed(2) + ' W/m^3' }
+    ]);
+  },
+  tick(dt) {
+    if (!this.state.animate) return;
+    this.t = (this.t || 0) + dt;
+    this.update();
+  },
+  lesson: '<p>A real dielectric responds to an alternating field with a phase lag. Write <b>D = (eps - j eps&#8243;)E</b>, where <b>eps&#8243; = eps_r tan delta</b>. The area of the D-E loop gives hysteresis loss per cycle, <b>W_h = pi eps&#8243; E_0^2</b>, and the power density is <b>P_d = 0.5 omega eps&#8243; E_0^2</b>. Higher loss tangent or frequency increases heating.</p>',
+  quiz: [
+    { q: 'If loss tangent doubles at fixed eps_r and E0, what happens to W_h?', options: ['It doubles', 'It halves', 'It stays the same', 'It quadruples'], answer: 0 },
+    { q: 'Which quantity grows linearly with frequency for fixed eps&#8243; and E0?', options: ['W_h', 'P_d', 'eps_r', 'Phase lag'], answer: 1 }
+  ]
+});
+
+modules.push({
+  id: 'interfaces_salisbury_ferrite',
+  title: '4-7 Interfaces, Salisbury & Ferrite Absorbers',
+  controls: [
+    { id: 'mode', label: 'Mode', type: 'select', options: ['Interface', 'Salisbury', 'Ferrite'], value: 'Interface' },
+    { id: 'Z2_or_Rs', label: 'Z2 / Rs (Ω/sq)', type: 'range', min: 20, max: 1000, step: 1, value: 377 },
+    { id: 'd_lambda', label: 'd / λ', type: 'range', min: 0.05, max: 0.5, step: 0.01, value: 0.25 }
+  ],
+  build() {
+    const st = this.state;
+    content.clear();
+    const g = new THREE.Group();
+    const d = st.d_lambda;
+    const plane = new THREE.Mesh(new THREE.PlaneGeometry(6, 4), new THREE.MeshStandardMaterial({ color: 0x223344, roughness: 0.8, metalness: 0.1 }));
+    plane.rotation.x = -Math.PI / 2;
+    plane.position.y = -1.2;
+    g.add(plane);
+    const wall = new THREE.Mesh(new THREE.BoxGeometry(6, 3, 0.15), new THREE.MeshStandardMaterial({ color: 0x556677, roughness: 0.7 }));
+    wall.position.set(0, 0.3, -2.2);
+    g.add(wall);
+    if (st.mode === 'Interface') {
+      const slab = new THREE.Mesh(new THREE.BoxGeometry(6, 2.6, 0.35), new THREE.MeshStandardMaterial({ color: 0x88aacc, roughness: 0.5, metalness: 0.2 }));
+      slab.position.set(0, 0.3, -1.0);
+      g.add(slab);
+    } else if (st.mode === 'Salisbury') {
+      const screen = new THREE.Mesh(new THREE.BoxGeometry(6, 2.6, 0.08), new THREE.MeshStandardMaterial({ color: 0xcc8844, roughness: 0.4, metalness: 0.6 }));
+      screen.position.set(0, 0.3, -1.0 + d * 2.0);
+      g.add(screen);
+      const spacer = new THREE.Mesh(new THREE.BoxGeometry(6, 2.6, d * 2.0), new THREE.MeshStandardMaterial({ color: 0x334455, transparent: true, opacity: 0.35 }));
+      spacer.position.set(0, 0.3, -1.0 + d);
+      g.add(spacer);
+    } else {
+      const ferrite = new THREE.Mesh(new THREE.BoxGeometry(6, 2.6, 0.5), new THREE.MeshStandardMaterial({ color: 0x664488, roughness: 0.6, metalness: 0.3 }));
+      ferrite.position.set(0, 0.3, -1.0);
+      g.add(ferrite);
+    }
+    const arrow = new THREE.ArrowHelper(new THREE.Vector3(0, 0, 1), new THREE.Vector3(0, 0.3, -2.0), 2.2, 0xffaa33, 0.35, 0.2);
+    g.add(arrow);
+    content.add(g);
+    this.update();
+  },
+  update() {
+    const st = this.state;
+    const z0 = 377;
+    const z2 = st.Z2_or_Rs;
+    const d = st.d_lambda;
+    let rhoRe = 0, rhoIm = 0, label = '';
+    if (st.mode === 'Interface') {
+      rhoRe = (z2 - z0) / (z2 + z0);
+      label = 'Single interface';
+    } else {
+      const beta = 2 * Math.PI * d;
+      const t = Math.tan(beta);
+      const zinRe = z2;
+      const zinIm = z0 * t;
+      const numRe = zinRe - z0;
+      const numIm = zinIm;
+      const denRe = zinRe + z0;
+      const denIm = zinIm;
+      const den2 = denRe * denRe + denIm * denIm;
+      rhoRe = (numRe * denRe + numIm * denIm) / den2;
+      rhoIm = (numIm * denRe - numRe * denIm) / den2;
+      label = st.mode === 'Salisbury' ? 'Salisbury screen' : 'Ferrite-titanate';
+    }
+    const mag = Math.sqrt(rhoRe * rhoRe + rhoIm * rhoIm);
+    const rl = -20 * Math.log10(Math.max(mag, 1e-6));
+    setHud('4-7 Interfaces, Salisbury & Ferrite Absorbers', '\\rho = \\frac{Z_{in}-Z_0}{Z_{in}+Z_0}', [
+      { k: 'Mode', v: label },
+      { k: '|rho|', v: mag.toFixed(3) },
+      { k: 'RL (dB)', v: rl.toFixed(1) }
+    ]);
+  },
+  tick(dt) {},
+  lesson: '<p>Reflection at a single interface is <b>ρ=(Zin−Z0)/(Zin+Z0)</b>. A Salisbury screen places a resistive sheet a quarter wavelength in front of a metal backing, giving cancellation at the design frequency. Ferrite-titanate absorbers use magnetic loss and impedance matching to reduce reflection over a band.</p>',
+  quiz: [
+    { q: 'For a single interface with Z2=Z0, what is |ρ|?', options: ['0', '1', '0.5', '2'], answer: 0 },
+    { q: 'A Salisbury screen is typically spaced at what fraction of a wavelength?', options: ['λ/4', 'λ/2', 'λ', '3λ/4'], answer: 0 }
+  ]
+});
+
+modules.push({
+  id: 'phase_velocity_refractive_index',
+  title: '4-8 Phase Velocity & Refractive Index',
+  controls: [
+    { id: 'eps_r', label: 'Relative permittivity ε_r', type: 'range', min: 1, max: 16, step: 0.25, value: 2.25 },
+    { id: 'mu_r', label: 'Relative permeability μ_r', type: 'range', min: 1, max: 4, step: 0.1, value: 1 },
+    { id: 'f_GHz', label: 'Frequency f (GHz)', type: 'range', min: 0.1, max: 10, step: 0.1, value: 1 },
+    { id: 'animate', label: 'Animate wave', type: 'check', value: true }
+  ],
+  state: { eps_r: 2.25, mu_r: 1, f_GHz: 1, animate: true },
+  time: 0,
+
+  build() {
+    this.group = new THREE.Group();
+    content.add(this.group);
+
+    const grid = new THREE.GridHelper(12, 12, 0x334455, 0x223344);
+    grid.position.y = -1.6;
+    this.group.add(grid);
+
+    // Free-space wave (top)
+    this.freeWave = new THREE.Group();
+    this.freeWave.position.set(0, 1.2, 0);
+    this.group.add(this.freeWave);
+
+    // Medium wave (bottom)
+    this.mediumWave = new THREE.Group();
+    this.mediumWave.position.set(0, -0.8, 0);
+    this.group.add(this.mediumWave);
+
+    // Build sinusoidal curves as line geometry
+    this.freeLine = new THREE.Line(
+      new THREE.BufferGeometry(),
+      new THREE.LineBasicMaterial({ color: 0x66ccff, linewidth: 2 })
+    );
+    this.mediumLine = new THREE.Line(
+      new THREE.BufferGeometry(),
+      new THREE.LineBasicMaterial({ color: 0xffaa44, linewidth: 2 })
+    );
+    this.freeWave.add(this.freeLine);
+    this.mediumWave.add(this.mediumLine);
+
+    // Axis lines
+    const axisMat = new THREE.LineBasicMaterial({ color: 0x556677 });
+    const axisGeo = new THREE.BufferGeometry().setFromPoints([
+      new THREE.Vector3(-6, 0, 0), new THREE.Vector3(6, 0, 0)
+    ]);
+    this.freeWave.add(new THREE.Line(axisGeo, axisMat));
+    this.mediumWave.add(new THREE.Line(axisGeo.clone(), axisMat));
+
+    // Labels via sprites? Keep simple: small markers
+    const markerMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+    const markerGeo = new THREE.SphereGeometry(0.06, 8, 8);
+    this.freeMarker = new THREE.Mesh(markerGeo, markerMat);
+    this.mediumMarker = new THREE.Mesh(markerGeo, markerMat.clone());
+    this.freeWave.add(this.freeMarker);
+    this.mediumWave.add(this.mediumMarker);
+
+    // Arrow field for propagation direction
+    addArrowField([
+      new THREE.Vector3(0, 1.2, 0),
+      new THREE.Vector3(0, -0.8, 0)
+    ], 0x88aaff);
+
+    this.update();
+  },
+
+  update() {
+    const st = this.state;
+    const n = Math.sqrt(st.eps_r * st.mu_r);
+    const vpOverC = 1 / n;
+    const lambdaRatio = 1 / n;
+
+    // Wavelength in scene units: free-space lambda0 = 2.0 units
+    const lambda0 = 2.0;
+    const lambda = lambda0 / n;
+
+    // Build curves: x from -6 to 6, y = sin(2π x / lambda)
+    const N = 240;
+    const freePts = [];
+    const medPts = [];
+    for (let i = 0; i <= N; i++) {
+      const x = -6 + 12 * i / N;
+      freePts.push(new THREE.Vector3(x, 0.55 * Math.sin(2 * Math.PI * x / lambda0), 0));
+      medPts.push(new THREE.Vector3(x, 0.55 * Math.sin(2 * Math.PI * x / lambda), 0));
+    }
+    this.freeLine.geometry.dispose();
+    this.freeLine.geometry = new THREE.BufferGeometry().setFromPoints(freePts);
+    this.mediumLine.geometry.dispose();
+    this.mediumLine.geometry = new THREE.BufferGeometry().setFromPoints(medPts);
+
+    // Markers at crests
+    this.freeMarker.position.set(lambda0 / 4, 0.55, 0);
+    this.mediumMarker.position.set(lambda / 4, 0.55, 0);
+
+    setHud(
+      'Phase Velocity & Refractive Index',
+      'n=\\sqrt{\\mu_r\\varepsilon_r},\\quad v_p=\\frac{c}{n},\\quad \\lambda=\\frac{\\lambda_0}{n}',
+      [
+        { k: 'n', v: n.toFixed(3) },
+        { k: 'v_p / c', v: vpOverC.toFixed(3) },
+        { k: 'λ / λ₀', v: lambdaRatio.toFixed(3) }
+      ]
+    );
+  },
+
+  tick(dt) {
+    if (!this.state.animate) return;
+    this.time += dt;
+    const st = this.state;
+    const n = Math.sqrt(st.eps_r * st.mu_r);
+    const lambda0 = 2.0;
+    const lambda = lambda0 / n;
+    const omega = 2 * Math.PI * st.f_GHz * 0.5; // scaled for visual speed
+
+    // Animate phase by shifting sine argument
+    const N = 240;
+    const freePts = [];
+    const medPts = [];
+    for (let i = 0; i <= N; i++) {
+      const x = -6 + 12 * i / N;
+      freePts.push(new THREE.Vector3(x, 0.55 * Math.sin(2 * Math.PI * x / lambda0 - omega * this.time), 0));
+      medPts.push(new THREE.Vector3(x, 0.55 * Math.sin(2 * Math.PI * x / lambda - omega * this.time), 0));
+    }
+    this.freeLine.geometry.dispose();
+    this.freeLine.geometry = new THREE.BufferGeometry().setFromPoints(freePts);
+    this.mediumLine.geometry.dispose();
+    this.mediumLine.geometry = new THREE.BufferGeometry().setFromPoints(medPts);
+  },
+
+  lesson: `
+    <h3>Phase Velocity & Refractive Index</h3>
+    <p>In a dielectric medium, the refractive index is
+    <b>n = √(μ_r ε_r)</b>. The phase velocity is <b>v_p = c / n</b>,
+    and the wavelength shrinks to <b>λ = λ₀ / n</b>.</p>
+    <p>The top wave is in free space (λ₀); the bottom wave is in the medium
+    (λ = λ₀/n). Higher ε_r or μ_r increases n, slows the wave, and compresses
+    the wavelength.</p>
+    <p>Frequency is unchanged across the boundary; only speed and wavelength change.</p>
+  `,
+
+  quiz: [
+    {
+      q: 'If ε_r = 4 and μ_r = 1, what is the refractive index n?',
+      options: ['1', '2', '4', '16'],
+      answer: 1
+    },
+    {
+      q: 'For n = 2, the wavelength in the medium compared with free space is:',
+      options: ['λ₀/2', '2λ₀', 'λ₀', 'λ₀/4'],
+      answer: 0
+    }
+  ]
+});
+
+modules.push({
+  id: 'group_velocity',
+  title: '4-9 Group Velocity',
+  controls: [
+    { id: 'omega_ratio', label: 'ω₀/ω₁ ratio', type: 'range', min: 1.05, max: 4, step: 0.05, value: 1.5 },
+    { id: 'dw', label: 'Δω', type: 'range', min: 0.05, max: 0.3, step: 0.01, value: 0.12 },
+    { id: 'animate', label: 'Animate packet', type: 'check', value: true }
+  ],
+  build() {
+    const g = new THREE.Group();
+    const axis = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.015, 0.015, 8, 8),
+      new THREE.MeshStandardMaterial({ color: 0x334155 })
+    );
+    axis.rotation.z = Math.PI / 2;
+    g.add(axis);
+
+    const envelope = new THREE.Mesh(
+      new THREE.TorusGeometry(1.2, 0.035, 8, 48, Math.PI * 1.4),
+      new THREE.MeshStandardMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.55 })
+    );
+    envelope.rotation.y = Math.PI / 2;
+    g.add(envelope);
+
+    const carrier = new THREE.Mesh(
+      new THREE.TorusGeometry(1.55, 0.025, 8, 64, Math.PI * 2),
+      new THREE.MeshStandardMaterial({ color: 0xf59e0b, transparent: true, opacity: 0.8 })
+    );
+    carrier.rotation.y = Math.PI / 2;
+    g.add(carrier);
+
+    const vpArrow = new THREE.ArrowHelper(new THREE.Vector3(1, 0, 0), new THREE.Vector3(-2.2, 0.9, 0), 1.8, 0xef4444, 0.18, 0.12);
+    const vgArrow = new THREE.ArrowHelper(new THREE.Vector3(1, 0, 0), new THREE.Vector3(-2.2, -0.9, 0), 1.8, 0x22c55e, 0.18, 0.12);
+    g.add(vpArrow, vgArrow);
+
+    const vpLabel = new THREE.Mesh(
+      new THREE.SphereGeometry(0.11, 12, 12),
+      new THREE.MeshStandardMaterial({ color: 0xef4444 })
+    );
+    vpLabel.position.set(0.4, 0.9, 0);
+    const vgLabel = new THREE.Mesh(
+      new THREE.SphereGeometry(0.11, 12, 12),
+      new THREE.MeshStandardMaterial({ color: 0x22c55e })
+    );
+    vgLabel.position.set(0.4, -0.9, 0);
+    g.add(vpLabel, vgLabel);
+
+    this._packet = g;
+    this._envelope = envelope;
+    this._carrier = carrier;
+    this._vpArrow = vpArrow;
+    this._vgArrow = vgArrow;
+    this._vpLabel = vpLabel;
+    this._vgLabel = vgLabel;
+    content.add(g);
+  },
+  update() {
+    const st = this.state;
+    const c = 1;
+    const w0 = st.omega_ratio;
+    const dw = st.dw;
+    const b0 = w0;
+    const db = dw;
+    const vp = w0 / b0;
+    const vg = dw / db;
+    const ratio = vp * vg / (c * c);
+
+    this._vpArrow.setLength(1.8 * vp, 0.18, 0.12);
+    this._vgArrow.setLength(1.8 * vg, 0.18, 0.12);
+    this._vpLabel.position.x = 1.8 * vp;
+    this._vgLabel.position.x = 1.8 * vg;
+
+    this._envelope.scale.set(1, 1, 1 + 0.25 * dw);
+    this._carrier.scale.set(1, 1, 1 + 0.15 * w0);
+
+    setHud(
+      'Group Velocity',
+      'v_p=\\omega_0/\\beta_0,\\quad v_g=\\Delta\\omega/\\Delta\\beta',
+      [
+        { k: 'v_p/c', v: vp.toFixed(3) },
+        { k: 'v_g/c', v: vg.toFixed(3) },
+        { k: 'v_p v_g/c^2', v: ratio.toFixed(3) }
+      ]
+    );
+  },
+  tick(dt) {
+    const st = this.state;
+    if (!st.animate) return;
+    const t = performance.now() * 0.001;
+    const w0 = st.omega_ratio;
+    const dw = st.dw;
+    const b0 = w0;
+    const db = dw;
+    const vp = w0 / b0;
+    const vg = dw / db;
+    const z = 0.8 * Math.sin(t * 0.8);
+    const phase = w0 * t - b0 * z;
+    const env = Math.cos(dw * t - db * z);
+    this._packet.position.x = z;
+    this._envelope.rotation.x = phase * 0.15;
+    this._carrier.rotation.x = phase;
+    this._vpArrow.position.x = -2.2 + vp * t * 0.35;
+    this._vgArrow.position.x = -2.2 + vg * t * 0.35;
+    this._vpLabel.position.x = this._vpArrow.position.x + 1.8 * vp;
+    this._vgLabel.position.x = this._vgArrow.position.x + 1.8 * vg;
+    this._envelope.scale.set(1, 1, 1 + 0.25 * env);
+  },
+  lesson: '<p>A two-tone packet is <b>E = 2E₀ cos(Δω t − Δβ z) cos(ω₀ t − β₀ z)</b>. The fast carrier travels at the phase velocity <b>v_p = ω₀/β₀</b>, while the envelope travels at the group velocity <b>v_g = Δω/Δβ</b>. In a non-dispersive medium v_p = v_g; in a dispersive medium they differ. The product v_p v_g/c² is a useful dispersion indicator.</p>',
+  quiz: [
+    { q: 'Which velocity describes the envelope of a wave packet?', options: ['Phase velocity', 'Group velocity', 'Particle velocity', 'Signal velocity'], answer: 1 },
+    { q: 'If v_p = c and v_g = c, what is v_p v_g/c²?', options: ['0', '0.5', '1', '2'], answer: 2 }
+  ]
+});
+
+modules.push({
+  id: 'power_energy_relations',
+  title: '4-10 Power and Energy Relations',
+  controls: [
+    { id: 'E0', label: 'E0 (V/m)', type: 'range', min: 1, max: 50, step: 1, value: 10 },
+    { id: 'eps_r', label: 'eps_r', type: 'range', min: 1, max: 9, step: 0.1, value: 1 },
+    { id: 'animate', label: 'Animate S (2w)', type: 'check', value: true }
+  ],
+  state: { E0: 10, eps_r: 1, animate: true, t: 0 },
+
+  build() {
+    const st = this.state;
+    const eps0 = 8.854e-12, mu0 = 1.2566e-6;
+    const Z0 = Math.sqrt(mu0 / eps0);
+    const eps = eps0 * st.eps_r;
+    const Z = Math.sqrt(mu0 / eps);
+    const H0 = st.E0 / Z;
+
+    // E arrows along +x
+    const Evecs = [];
+    for (let i = -2; i <= 2; i++) {
+      for (let j = -1; j <= 1; j++) {
+        Evecs.push(new THREE.Vector3(st.E0 * 0.6, 0, 0).add(new THREE.Vector3(0, 0, 0)));
+      }
+    }
+    // simpler: grid of E arrows
+    const Earr = [];
+    for (let y = -1; y <= 1; y++) for (let z = -1; z <= 1; z++) {
+      Earr.push(new THREE.Vector3(st.E0 * 0.5, 0, 0));
+    }
+    addArrowField(Earr, 0x4fc3f7);
+
+    // H arrows along +y
+    const Harr = [];
+    for (let x = -1; x <= 1; x++) for (let z = -1; z <= 1; z++) {
+      Harr.push(new THREE.Vector3(0, H0 * 0.5, 0));
+    }
+    addArrowField(Harr, 0xffb74d);
+
+    // S arrows along +z, pulsing
+    this.Sgroup = new THREE.Group();
+    for (let x = -1; x <= 1; x++) for (let y = -1; y <= 1; y++) {
+      const g = new THREE.Group();
+      const dir = new THREE.Vector3(0, 0, 1);
+      const arrow = new THREE.ArrowHelper(dir, new THREE.Vector3(0, 0, 0), 1.2, 0x81c784, 0.25, 0.15);
+      g.add(arrow);
+      g.position.set(x * 1.2, y * 1.2, 0);
+      this.Sgroup.add(g);
+    }
+    content.add(this.Sgroup);
+
+    // axes labels
+    const mkLabel = (txt, pos, color) => {
+      const c = document.createElement('canvas'); c.width = 256; c.height = 64;
+      const ctx = c.getContext('2d'); ctx.fillStyle = color; ctx.font = 'bold 40px sans-serif';
+      ctx.fillText(txt, 10, 45);
+      const tex = new THREE.CanvasTexture(c);
+      const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true }));
+      sp.position.copy(pos); sp.scale.set(1.6, 0.4, 1);
+      content.add(sp);
+    };
+    mkLabel('E (+x)', new THREE.Vector3(2.6, 0, 0), '#4fc3f7');
+    mkLabel('H (+y)', new THREE.Vector3(0, 2.6, 0), '#ffb74d');
+    mkLabel('S = E x H (+z)', new THREE.Vector3(0, 0, 2.6), '#81c784');
+
+    this.update();
+  },
+
+  update() {
+    const st = this.state;
+    const eps0 = 8.854e-12, mu0 = 1.2566e-6;
+    const eps = eps0 * st.eps_r;
+    const Z = Math.sqrt(mu0 / eps);
+    const H0 = st.E0 / Z;
+    const Sav = st.E0 * st.E0 / (2 * Z);
+    const we = 0.5 * eps * st.E0 * st.E0;
+    const wm = 0.5 * mu0 * H0 * H0;
+    const wTotal = we + wm;
+    const ve = we / wTotal;
+
+    setHud('Power & Energy Relations',
+      'S = E \\times H,\\quad S_{av} = \\frac{E_0^2}{2Z},\\quad w_e = \\frac{1}{2}\\epsilon E^2,\\quad w_m = \\frac{1}{2}\\mu H^2',
+      [
+        { k: 'Z (ohm)', v: Z.toFixed(2) },
+        { k: 'S_av (W/m^2)', v: Sav.toExponential(3) },
+        { k: 'w_e (J/m^3)', v: we.toExponential(3) },
+        { k: 'w_m (J/m^3)', v: wm.toExponential(3) },
+        { k: 'w_total (J/m^3)', v: wTotal.toExponential(3) },
+        { k: 'v_e = w_e/w_total', v: ve.toFixed(3) }
+      ]
+    );
+  },
+
+  tick(dt) {
+    const st = this.state;
+    st.t += dt;
+    if (this.Sgroup) {
+      const pulse = st.animate ? 0.5 + 0.5 * Math.sin(2 * st.t) : 1;
+      this.Sgroup.children.forEach(g => {
+        g.scale.set(1, 1, 0.4 + 1.2 * pulse);
+      });
+    }
+  },
+
+  lesson: `<h3>Power and Energy Relations</h3>
+  <p>For a uniform plane wave, the Poynting vector is <b>S = E × H</b>. Its time-average magnitude is
+  <b>S<sub>av</sub> = E<sub>0</sub><sup>2</sup>/(2Z)</b>, where <b>Z = sqrt(mu/eps)</b> is the intrinsic impedance.</p>
+  <p>The stored electric and magnetic energy densities are <b>w<sub>e</sub> = ½ eps E<sup>2</sup></b> and
+  <b>w<sub>m</sub> = ½ mu H<sup>2</sup></b>. For a plane wave these are equal, so <b>v<sub>e</sub> = w<sub>e</sub>/w<sub>total</sub> = 0.5</b>.</p>
+  <p>Note that <b>S</b> oscillates at <b>2ω</b> (the product of two cosines), while the energy densities oscillate at <b>2ω</b> as well but average to the values above.</p>`,
+
+  quiz: [
+    { q: 'For a plane wave in free space, what is the time-average Poynting magnitude?', options: ['E0^2/(2Z0)', 'E0^2/Z0', 'E0*H0', 'E0^2/(4Z0)'], answer: 0 },
+    { q: 'For a uniform plane wave, the ratio w_e/w_total is:', options: ['0.5', '1', '0', 'depends on eps_r'], answer: 0 }
+  ]
+});
+
+modules.push({
+  id: 'polarization_states',
+  title: '4-11 Linear, Elliptical & Circular Polarization',
+  controls: [
+    { id: 'E1', label: 'E1 (x amplitude)', type: 'range', min: 0, max: 5, step: 0.1, value: 3 },
+    { id: 'E2', label: 'E2 (y amplitude)', type: 'range', min: 0, max: 5, step: 0.1, value: 3 },
+    { id: 'delta_deg', label: 'delta (deg)', type: 'range', min: -180, max: 180, step: 1, value: -90 },
+    { id: 'animate', label: 'Animate', type: 'check', value: true }
+  ],
+  build() {
+    this.t = 0;
+    this.group = new THREE.Group();
+    content.add(this.group);
+    this.helix = new THREE.Line(
+      new THREE.BufferGeometry(),
+      new THREE.LineBasicMaterial({ color: 0x66ccff, transparent: true, opacity: 0.9 })
+    );
+    this.trace = new THREE.Line(
+      new THREE.BufferGeometry(),
+      new THREE.LineBasicMaterial({ color: 0xffaa33 })
+    );
+    this.group.add(this.helix, this.trace);
+    this.axis = new THREE.Line(
+      new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 0, -6), new THREE.Vector3(0, 0, 6)]),
+      new THREE.LineBasicMaterial({ color: 0x555555 })
+    );
+    this.group.add(this.axis);
+    this.arrow = new THREE.ArrowHelper(new THREE.Vector3(1, 0, 0), new THREE.Vector3(0, 0, 0), 1, 0xffffff);
+    this.group.add(this.arrow);
+    this.update();
+  },
+  update() {
+    const st = this.state;
+    const E1 = st.E1, E2 = st.E2;
+    const delta = st.delta_deg * Math.PI / 180;
+    const N = 160, zMin = -6, zMax = 6;
+    const hp = [];
+    for (let i = 0; i <= N; i++) {
+      const z = zMin + (zMax - zMin) * i / N;
+      const ph = -z;
+      const x = E1 * Math.cos(ph);
+      const y = E2 * Math.cos(ph + delta);
+      hp.push(new THREE.Vector3(x, y, z));
+    }
+    this.helix.geometry.dispose();
+    this.helix.geometry = new THREE.BufferGeometry().setFromPoints(hp);
+    this.trace.geometry.dispose();
+    this.trace.geometry = new THREE.BufferGeometry().setFromPoints(hp);
+
+    const ph0 = this.t;
+    const x0 = E1 * Math.cos(ph0);
+    const y0 = E2 * Math.cos(ph0 + delta);
+    this.arrow.position.set(0, 0, 0);
+    this.arrow.setDirection(new THREE.Vector3(x0, y0, 0).normalize());
+    this.arrow.setLength(Math.hypot(x0, y0) || 0.001, 0.25, 0.15);
+
+    const ar = (E1 > 1e-6 && E2 > 1e-6) ? Math.min(E1, E2) / Math.max(E1, E2) : 0;
+    let state = 'Elliptical';
+    if (E1 < 0.05 || E2 < 0.05) state = 'Linear';
+    else if (Math.abs(E1 - E2) < 0.05 && Math.abs(Math.sin(delta)) > 0.95) {
+      state = Math.sin(delta) < 0 ? 'RHCP' : 'LHCP';
+    } else if (Math.abs(Math.sin(delta)) < 0.05) {
+      state = 'Linear';
+    }
+    const tilt = 0.5 * Math.atan2(2 * E1 * E2 * Math.cos(delta), E1 * E1 - E2 * E2) * 180 / Math.PI;
+    setHud('Polarization State', '\\mathbf{E}=E_1\\cos(\\omega t-bz)\\hat{x}+E_2\\cos(\\omega t-bz+\\delta)\\hat{y}', [
+      { k: 'State', v: state },
+      { k: 'AR', v: ar.toFixed(2) },
+      { k: 'Tilt', v: tilt.toFixed(1) + '°' }
+    ]);
+  },
+  tick(dt) {
+    if (this.state.animate) {
+      this.t += dt * 2.0;
+      this.update();
+    }
+  },
+  lesson: `<p><b>Polarization</b> is the orientation of the electric field as a wave propagates. For <i>E</i> = E<sub>1</sub>cos(ωt−bz)x̂ + E<sub>2</sub>cos(ωt−bz+δ)ŷ:</p>
+  <ul>
+    <li><b>Linear:</b> δ = 0 or 180°, or one amplitude is zero.</li>
+    <li><b>Circular:</b> E<sub>1</sub> = E<sub>2</sub> and δ = ±90°. RHCP for δ = −90°, LHCP for δ = +90°.</li>
+    <li><b>Elliptical:</b> all other cases; the E-vector traces an ellipse.</li>
+  </ul>
+  <p>The axial ratio AR = min(E<sub>1</sub>,E<sub>2</sub>)/max(E<sub>1</sub>,E<sub>2</sub>); AR = 1 is circular, AR = 0 is linear. The tilt angle is the ellipse major-axis orientation.</p>`,
+  quiz: [
+    { q: 'Which condition gives circular polarization?', options: ['E1 = E2 and δ = ±90°', 'E1 = 0', 'δ = 0°', 'E1 ≠ E2'], answer: 0 },
+    { q: 'For δ = −90° and E1 = E2, the wave is:', options: ['RHCP', 'LHCP', 'Linear', 'Unpolarized'], answer: 0 }
+  ]
+});
+
+/* === UI CONTROLLER === */
+
+let activeIdx = 0;
+const progress = {};
+
+function buildModuleList() {
+  moduleList.innerHTML = "";
+  modules.forEach((m, i) => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "mod-btn";
+    b.dataset.idx = String(i);
+    b.innerHTML = `<span class="num">${i + 1}.</span>${m.title}`;
+    b.addEventListener("click", () => selectModule(i));
+    moduleList.appendChild(b);
+  });
+}
+
+function buildControls(mod) {
+  controlsEl.innerHTML = "";
+  if (!mod.state) mod.state = {};
+  (mod.controls || []).forEach(c => {
+    if (!(c.id in mod.state)) mod.state[c.id] = c.value;
+    const row = document.createElement("div");
+    row.className = "ctl";
+    const lab = document.createElement("label");
+    lab.textContent = c.label || c.id;
+    row.appendChild(lab);
+    if (c.type === "select") {
+      const sel = document.createElement("select");
+      (c.options || []).forEach(opt => {
+        const o = document.createElement("option");
+        o.value = opt; o.textContent = opt;
+        if (opt === mod.state[c.id]) o.selected = true;
+        sel.appendChild(o);
+      });
+      sel.addEventListener("change", () => { mod.state[c.id] = sel.value; mod.update(); });
+      row.appendChild(sel);
+    } else if (c.type === "check") {
+      const inp = document.createElement("input");
+      inp.type = "checkbox";
+      inp.checked = !!mod.state[c.id];
+      inp.addEventListener("change", () => { mod.state[c.id] = inp.checked; mod.update(); });
+      row.appendChild(inp);
+    } else {
+      const inp = document.createElement("input");
+      inp.type = "range";
+      inp.min = c.min ?? 0; inp.max = c.max ?? 1; inp.step = c.step ?? 0.01;
+      inp.value = mod.state[c.id];
+      const val = document.createElement("span");
+      val.className = "val";
+      val.textContent = Number(mod.state[c.id]).toFixed(2);
+      inp.addEventListener("input", () => {
+        mod.state[c.id] = parseFloat(inp.value);
+        val.textContent = Number(mod.state[c.id]).toFixed(2);
+        mod.update();
+      });
+      row.appendChild(inp);
+      row.appendChild(val);
+    }
+    controlsEl.appendChild(row);
+  });
+}
+
+function buildLesson(mod) {
+  const raw = mod.lesson || mod.blurb || "";
+  lessonEl.innerHTML = raw.trim().startsWith("<") ? raw : `<h3>${mod.title}</h3><p>${raw}</p>`;
+  renderAllMath(lessonEl);
+}
+
+function buildQuiz(mod) {
+  quizEl.innerHTML = "<h3>Concept Check</h3>";
+  const key = mod.id || String(activeIdx);
+  progress[key] = progress[key] || {};
+  (mod.quiz || []).forEach((q, qi) => {
+    const card = document.createElement("div");
+    card.className = "qcard";
+    const qt = document.createElement("div");
+    qt.className = "qtext";
+    qt.textContent = `${qi + 1}. ${q.q}`;
+    card.appendChild(qt);
+    const opts = document.createElement("div");
+    opts.className = "opts";
+    const fb = document.createElement("div");
+    fb.className = "fb";
+    q.options.forEach((opt, oi) => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.textContent = opt;
+      btn.addEventListener("click", () => {
+        progress[key][qi] = oi;
+        opts.querySelectorAll("button").forEach((b, idx) => {
+          b.classList.toggle("correct", idx === q.answer);
+          b.classList.toggle("wrong", idx === oi && oi !== q.answer);
+        });
+        fb.textContent = oi === q.answer ? ("✓ " + (q.explain || "Correct")) : ("✗ " + (q.explain || "Try again"));
+        updateBadge();
+      });
+      opts.appendChild(btn);
+    });
+    card.appendChild(opts);
+    card.appendChild(fb);
+    quizEl.appendChild(card);
+  });
+  updateBadge();
+}
+
+function updateBadge() {
+  let correct = 0, total = 0;
+  modules.forEach((m, i) => {
+    const saved = progress[m.id || String(i)] || {};
+    (m.quiz || []).forEach((q, qi) => { total++; if (saved[qi] === q.answer) correct++; });
+  });
+  badgeEl.textContent = `${correct} / ${total} CORRECT`;
+}
+
+function selectModule(idx) {
+  if (!modules.length || idx < 0 || idx >= modules.length) return;
+  activeIdx = idx;
+  const mod = modules[idx];
+  moduleList.querySelectorAll(".mod-btn").forEach(b => b.classList.toggle("active", Number(b.dataset.idx) === idx));
+  buildControls(mod);
+  buildLesson(mod);
+  buildQuiz(mod);
+  clearContent();
+  camera.position.set(4.8, 3.6, 5.8);
+  controls.target.set(0, 0, 0);
+  controls.update();
+  chartEl.style.display = "none";
+  renderer.domElement.style.display = "block";
+  if (typeof mod.build === "function") mod.build();
+  mod._built = true;
+  if (typeof mod.update === "function") mod.update();
+  renderer.render(scene, camera);
+}
+
+function onResize() {
+  const rect = stageEl.getBoundingClientRect();
+  const w = Math.max(1, Math.round(rect.width || stageEl.clientWidth));
+  const h = Math.max(1, Math.round(rect.height || stageEl.clientHeight));
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+  renderer.setSize(w, h);
+  chartEl.width = Math.round(w * Math.min(window.devicePixelRatio || 1, 2));
+  chartEl.height = Math.round(h * Math.min(window.devicePixelRatio || 1, 2));
+  const mod = modules[activeIdx];
+  if (mod && mod._built && typeof mod.update === "function") {
+    mod.update();
+    renderer.render(scene, camera);
+  }
+}
+
+buildModuleList();
+selectModule(0);
+window.addEventListener("resize", onResize);
+if (window.ResizeObserver) new ResizeObserver(onResize).observe(stageEl);
+onResize();
+
+let last = performance.now();
+function animate(now) {
+  const dt = Math.min(0.05, (now - last) / 1000);
+  last = now;
+  const mod = modules[activeIdx];
+  if (mod && mod._built && typeof mod.tick === "function") mod.tick(dt);
+  controls.update();
+  if (!Number.isFinite(camera.position.x) || !Number.isFinite(camera.position.y) || !Number.isFinite(camera.position.z)) {
+    camera.position.set(4.8, 3.6, 5.8);
+    controls.target.set(0, 0, 0);
+    controls.update();
+  }
+  renderer.render(scene, camera);
+  requestAnimationFrame(animate);
+}
+requestAnimationFrame(animate);
+</script>
+</body>
+</html>
