@@ -21,27 +21,169 @@
 </script>
 
 <style>
-  :root{
-    --bg:#0a0e13;
-    --panel:#111820;
-    --panel-2:#0d141b;
-    --line:#1e2a36;
-    --ink:#d8e4ef;
-    --dim:#8ea2b6;
-    --accent:#4fd1c5;
-    --accent-2:#f6ad55;
-    --ok:#68d391;
-    --bad:#fc8181;
-    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  :root {
+    --bg: #0b0f19;
+    --panel: rgba(15, 23, 42, 0.86);
+    --border: rgba(56, 189, 248, 0.22);
+    --text: #e2e8f0;
+    --muted: #94a3b8;
+    --accent: #38bdf8;
+    --e: #38bdf8;
+    --b: #f472b6;
+    --s: #34d399;
+    --warn: #fbbf24;
+    --ok: #68d391;
+    --bad: #fc8181;
   }
-  *{ box-sizing:border-box; }
-  html, body{ height:100%; margin:0; }
-  body{
-    background:var(--bg);
-    color:var(--ink);
-    font-family: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-    font-size:13px;
-    overflow:hidden;
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; height: 100%; overflow: hidden;
+    background: var(--bg); color: var(--text);
+    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    font-size: 13px;
+  }
+  #shell { display: grid; grid-template-rows: auto 1fr; height: 100%; }
+
+  #topbar {
+    display: flex; align-items: center; gap: 16px;
+    padding: 10px 16px;
+    border-bottom: 1px solid rgba(56,189,248,0.15);
+    background: rgba(2,6,23,0.6);
+  }
+  #topbar h1 {
+    margin: 0; font-weight: 700; letter-spacing: 0.04em; font-size: 15px; color: #f1f5f9;
+  }
+  #topbar .sub { color: var(--muted); font-size: 12px; }
+  #topbar .badge {
+    margin-left: auto; font-size: 11px; color: var(--accent);
+    background: rgba(56,189,248,0.12); border: 1px solid rgba(56,189,248,0.3);
+    padding: 3px 9px; border-radius: 999px; font-variant-numeric: tabular-nums;
+  }
+
+  #body { display: grid; grid-template-columns: 244px 1fr; min-height: 0; }
+
+  #sidebar {
+    border-right: 1px solid rgba(56,189,248,0.12);
+    background: rgba(2,6,23,0.45);
+    overflow-y: auto;
+    padding: 10px 8px;
+  }
+  #sidebar h2 {
+    margin: 0; font-size: 10px; text-transform: uppercase; letter-spacing: 0.14em;
+    color: var(--muted); padding: 6px 8px 10px; font-weight: 600;
+  }
+  #module-list { display: flex; flex-direction: column; gap: 4px; }
+  .mod-btn {
+    display: flex; align-items: flex-start; gap: 8px;
+    width: 100%; text-align: left;
+    padding: 8px 10px;
+    border-radius: 8px; border: 1px solid transparent;
+    background: transparent; color: var(--text);
+    font-size: 12px; line-height: 1.35; cursor: pointer;
+  }
+  .mod-btn:hover { background: rgba(56,189,248,0.08); }
+  .mod-btn.active {
+    background: rgba(56,189,248,0.16);
+    border-color: rgba(56,189,248,0.4);
+  }
+  .mod-btn .num {
+    font-size: 10px; color: var(--muted); font-variant-numeric: tabular-nums;
+    min-width: 16px; margin-top: 1px;
+  }
+
+  #main { display: flex; flex-direction: column; min-height: 0; }
+  #stage { flex: 1; position: relative; min-height: 0; overflow: hidden; background: #0a0e13; }
+  #stage canvas.webgl, #chart-canvas {
+    position: absolute; inset: 0; width: 100% !important; height: 100% !important; display: block;
+  }
+  #chart-canvas { display: none; z-index: 2; }
+
+  #controls {
+    position: absolute; top: 12px; right: 12px; width: 295px;
+    max-height: calc(100% - 24px); overflow-y: auto;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    box-shadow: 0 12px 40px rgba(0,0,0,0.55);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    padding: 12px 14px;
+    font-size: 12px;
+    z-index: 10;
+  }
+  .ctl { margin-bottom: 10px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px; }
+  .ctl:last-child { margin-bottom: 0; }
+  .ctl label { color: var(--muted); font-size: 11px; flex: 1 1 auto; }
+  .ctl .val { color: var(--accent); font-size: 11px; font-variant-numeric: tabular-nums; min-width: 44px; text-align: right; }
+  .ctl input[type="range"] {
+    width: 100%; height: 4px; border-radius: 2px; order: 3;
+    background: rgba(56,189,248,0.2); outline: none; -webkit-appearance: none;
+  }
+  .ctl input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none; width: 14px; height: 14px; border-radius: 50%;
+    background: var(--accent); cursor: pointer; box-shadow: 0 0 8px rgba(56,189,248,0.6);
+  }
+  .ctl input[type="checkbox"] { accent-color: var(--accent); }
+  .ctl select {
+    width: 100%; padding: 6px 8px; border-radius: 7px;
+    background: rgba(2,6,23,0.75); color: var(--text);
+    border: 1px solid rgba(56,189,248,0.25); font-size: 12px; outline: none;
+  }
+
+  #hud {
+    position: absolute; left: 12px; bottom: 12px; width: 380px; max-width: calc(100% - 330px);
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    box-shadow: 0 12px 40px rgba(0,0,0,0.55);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    padding: 12px 14px;
+    font-size: 12px;
+    z-index: 10;
+  }
+  #hud-title { font-weight: 600; color: #f1f5f9; font-size: 12px; margin-bottom: 6px; }
+  #hud-eq { color: #cbd5e1; min-height: 20px; margin-bottom: 8px; }
+  #hud-eq .katex { font-size: 0.95em; }
+  #hud-values { display: grid; grid-template-columns: 1fr auto; gap: 3px 12px; }
+  #hud-values .k { color: var(--muted); font-size: 11px; }
+  #hud-values .v {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    color: var(--accent); font-variant-numeric: tabular-nums; font-size: 12px; text-align: right;
+  }
+
+  #bottom {
+    height: 31vh; min-height: 185px;
+    display: grid; grid-template-columns: 1fr 1fr;
+    border-top: 1px solid rgba(56,189,248,0.12);
+    background: rgba(2,6,23,0.5);
+  }
+  #lesson, #quiz { overflow-y: auto; padding: 14px 16px; }
+  #lesson { border-right: 1px solid rgba(56,189,248,0.12); }
+  #lesson h3, #quiz h3 { margin: 0 0 8px; font-size: 13px; color: #f1f5f9; }
+  #lesson p { margin: 0 0 8px; font-size: 12px; line-height: 1.55; color: #cbd5e1; }
+  #lesson .eq { margin: 8px 0; color: #e2e8f0; }
+
+  .qcard { margin-bottom: 12px; }
+  .qcard .qtext { font-size: 12px; color: #e2e8f0; margin-bottom: 6px; }
+  .qcard .opts { display: flex; flex-direction: column; gap: 4px; }
+  .qcard .opts button {
+    text-align: left; padding: 5px 9px; border-radius: 6px; cursor: pointer;
+    background: rgba(15, 23, 42, 0.7); color: #cbd5e1;
+    border: 1px solid rgba(56,189,248,0.18); font-size: 11.5px;
+  }
+  .qcard .opts button:hover { background: rgba(56,189,248,0.12); }
+  .qcard .opts button.correct { border-color: var(--ok); background: rgba(104,211,145,0.18); color: #f0fff4; }
+  .qcard .opts button.wrong { border-color: var(--bad); background: rgba(252,129,129,0.18); color: #fff5f5; }
+  .qcard .fb { font-size: 11px; color: var(--muted); margin-top: 4px; }
+
+  @media (max-width: 900px) {
+    #body { grid-template-columns: 1fr; }
+    #sidebar { display: none; }
+    #controls { width: 240px; }
+    #hud { width: calc(100% - 24px); max-width: none; }
+    #bottom { grid-template-columns: 1fr; height: 40vh; }
+    #lesson { border-right: none; border-bottom: 1px solid rgba(56,189,248,0.12); }
   }
 </style>
 </head>
@@ -108,8 +250,23 @@ const camera = new THREE.PerspectiveCamera(50, initW / initH, 0.1, 200);
 camera.position.set(4.6, 3.6, 5.6);
 
 const controls = new OrbitControls(camera, renderer.domElement);
-controls.enableDamping = true;
-controls.dampingFactor = 0.08;
+controls.enableDamping = false;
+controls.enableZoom = false;
+controls.minDistance = 1.5;
+controls.maxDistance = 40;
+renderer.domElement.style.outline = "none";
+
+renderer.domElement.addEventListener("wheel", (e) => {
+  e.preventDefault();
+  const dir = Math.sign(e.deltaY);
+  if (!dir) return;
+  const offset = camera.position.clone().sub(controls.target);
+  const dist = offset.length() || 1;
+  const factor = dir > 0 ? 1.04 : 1 / 1.04;
+  const nextDist = Math.min(40, Math.max(1.5, dist * factor));
+  offset.setLength(nextDist);
+  camera.position.copy(controls.target).add(offset);
+}, { passive: false });
 
 scene.add(new THREE.AmbientLight(0xffffff, 0.65));
 const dirLight = new THREE.DirectionalLight(0xffffff, 0.9);
@@ -151,6 +308,18 @@ function addGrid(group, size = 8, y = -2.2) {
 }
 
 function addArrowField(group, fn, opts = {}) {
+  if (Array.isArray(group)) {
+    const color = typeof fn === "number" ? fn : 0x7fd1ff;
+    const g = new THREE.Group();
+    for (const v of group) {
+      const dir = v.dir.clone().normalize();
+      const L = v.len ?? 1;
+      const arrow = new THREE.ArrowHelper(dir, v.origin, L, color, L * 0.25, L * 0.15);
+      g.add(arrow);
+    }
+    content.add(g);
+    return g;
+  }
   const { range = 1.8, step = 0.6, color = 0x4fd1c5, scale = 0.35, maxLen = 0.55 } = opts;
   const arrows = [];
   for (let x = -range; x <= range + 1e-9; x += step) {
@@ -314,40 +483,47 @@ modules.push({
     return group;
   },
 
-  update(t, state, p) {
+  update() {
     const refs = this._refs;
     if (!refs) return;
+    const p = this.compute(this.state);
+    const t = this._t || 0;
     const { spheres, arrows, zA } = refs;
-    const w = p.w, beta = p.beta, alpha = p.alpha;
+    const phaseScale = 2.2;
+    const beta = phaseScale, alpha = Math.min(0.35, p.alpha * 12);
     const z0mag = Math.hypot(p.z0Re, p.z0Im) || 1;
 
     for (const s of spheres) {
       const z = s.userData.z;
-      const V = Math.exp(-alpha * (z - zA)) * Math.cos(w * t - beta * (z - zA));
+      const V = Math.exp(-alpha * (z - zA)) * Math.cos(t - beta * (z - zA));
       s.scale.setScalar(0.35 + 0.75 * Math.abs(V));
       s.material.color.setHex(V >= 0 ? 0x68d391 : 0xfc8181);
       s.material.emissive.setHex(V >= 0 ? 0x1f5c33 : 0x5c1f1f);
     }
     for (const a of arrows) {
       const z = a.userData.z;
-      const V = Math.exp(-alpha * (z - zA)) * Math.cos(w * t - beta * (z - zA));
-      const I = V / z0mag;
-      a.setLength(0.25 + 0.95 * Math.abs(I), 0.18, 0.1);
+      const V = Math.exp(-alpha * (z - zA)) * Math.cos(t - beta * (z - zA));
+      const I = (V / z0mag) * 50;
+      a.setLength(0.25 + 0.95 * Math.min(1.5, Math.abs(I)), 0.18, 0.1);
       a.setColor(I >= 0 ? 0x7fd1ff : 0xf6ad55);
     }
+
+    const f = (x, d = 3) => (Number.isFinite(x) ? x.toFixed(d) : '∞');
+    setHud(
+      "Telegrapher's Equations",
+      "\\gamma = \\sqrt{(R+j\\omega L)(G+j\\omega C)}, \\quad Z_0 = \\sqrt{\\frac{R+j\\omega L}{G+j\\omega C}}",
+      [
+        { k: "Z₀ (Ω)", v: `${f(p.z0Re, 2)} ${p.z0Im >= 0 ? '+' : '−'} j${f(Math.abs(p.z0Im), 2)}` },
+        { k: "α (Np/m)", v: f(p.alpha, 4) },
+        { k: "β (rad/m)", v: f(p.beta, 3) },
+        { k: "v_p (m/s)", v: Number.isFinite(p.vp) ? p.vp.toExponential(3) : '∞' }
+      ]
+    );
   },
 
-  hud(p) {
-    const f = (x, d = 3) => (Number.isFinite(x) ? x.toFixed(d) : '∞');
-    return `
-      <div class="hud">
-        <div class="hud-title">Telegrapher's Equations</div>
-        <div class="hud-row">∂V/∂z = −(R + jωL) I &nbsp;·&nbsp; ∂I/∂z = −(G + jωC) V</div>
-        <div class="hud-row">γ = α + jβ = √((R + jωL)(G + jωC))</div>
-        <div class="hud-row">Z₀ = √((R + jωL)/(G + jωC)) = ${f(p.z0Re, 2)} ${p.z0Im >= 0 ? '+' : '−'} j${f(Math.abs(p.z0Im), 2)} Ω</div>
-        <div class="hud-row">α = ${f(p.alpha)} Np/m &nbsp;·&nbsp; β = ${f(p.beta)} rad/m</div>
-        <div class="hud-row">v_p = ω/β = ${f(p.vp, 0)} m/s</div>
-      </div>`;
+  tick(dt) {
+    this._t = (this._t || 0) + dt * 3.0;
+    this.update();
   },
 
   lesson: `
@@ -2063,6 +2239,9 @@ function selectModule(idx) {
   buildLesson(mod);
   buildQuiz(mod);
   clearContent();
+  camera.position.set(4.6, 3.6, 5.6);
+  controls.target.set(0, 0, 0);
+  controls.update();
   chartEl.style.display = "none";
   renderer.domElement.style.display = "block";
   if (typeof mod.build === "function") mod.build();
@@ -2107,83 +2286,3 @@ requestAnimationFrame(animate);
 </script>
 </body>
 </html>
-<script type="module">
-import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
-import { OrbitControls } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/controls/OrbitControls.js';
-
-const stage = document.getElementById('stage');
-const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-renderer.setSize(stage.clientWidth, stage.clientHeight);
-renderer.domElement.classList.add('webgl');
-stage.appendChild(renderer.domElement);
-
-const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x0b1020);
-
-const camera = new THREE.PerspectiveCamera(45, stage.clientWidth / stage.clientHeight, 0.1, 500);
-camera.position.set(6, 4.5, 8);
-
-const controls = new OrbitControls(camera, renderer.domElement);
-controls.enableDamping = true;
-controls.dampingFactor = 0.08;
-controls.target.set(0, 0, 0);
-
-const content = new THREE.Group();
-scene.add(content);
-
-const sharedArrowGeoms = new Set();
-
-function disposeObj(obj) {
-  obj.traverse((o) => {
-    if (o.geometry && !sharedArrowGeoms.has(o.geometry)) o.geometry.dispose();
-    if (o.material) {
-      if (Array.isArray(o.material)) o.material.forEach((m) => m.dispose());
-      else o.material.dispose();
-    }
-  });
-}
-
-function clearContent() {
-  while (content.children.length) {
-    const c = content.children.pop();
-    disposeObj(c);
-  }
-}
-
-function addAxes(len = 4) {
-  const g = new THREE.Group();
-  const axes = [
-    [new THREE.Vector3(1, 0, 0), 0xff5a5a],
-    [new THREE.Vector3(0, 1, 0), 0x5aff8a],
-    [new THREE.Vector3(0, 0, 1), 0x5aa8ff],
-  ];
-  for (const [dir, color] of axes) {
-    const arrow = new THREE.ArrowHelper(dir, new THREE.Vector3(0, 0, 0), len, color, 0.35, 0.2);
-    sharedArrowGeoms.add(arrow.line.geometry);
-    sharedArrowGeoms.add(arrow.cone.geometry);
-    g.add(arrow);
-  }
-  content.add(g);
-  return g;
-}
-
-function addGrid(size = 10, div = 10) {
-  const grid = new THREE.GridHelper(size, div, 0x2a3550, 0x1a2236);
-  grid.position.y = -0.001;
-  content.add(grid);
-  return grid;
-}
-
-function addArrowField(vectors, color = 0x7fd1ff) {
-  const g = new THREE.Group();
-  for (const v of vectors) {
-    const dir = v.dir.clone().normalize();
-    const arrow = new THREE.ArrowHelper(dir, v.origin, v.len ?? 1, color, 0.18, 0.1);
-    sharedArrowGeoms.add(arrow.line.geometry);
-    sharedArrowGeoms.add(arrow.cone.geometry);
-    g.add(arrow);
-  }
-  content.add(g);
-  return g;
-}
