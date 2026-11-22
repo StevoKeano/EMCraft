@@ -1364,6 +1364,366 @@ modules.push({
   ]
 });
 
+modules.push({
+  id: 'poynting_elliptical_circular',
+  title: '4-12 Poynting Vector for CP & EP Waves',
+  controls: [
+    { id: 'E1', label: 'E1 amplitude', type: 'range', min: 0.5, max: 5, step: 0.1, value: 3 },
+    { id: 'E2', label: 'E2 amplitude', type: 'range', min: 0.5, max: 5, step: 0.1, value: 3 },
+    { id: 'delta', label: 'Phase delta (deg)', type: 'range', min: -180, max: 180, step: 1, value: 90 },
+    { id: 'animate', label: 'Animate', type: 'check', value: true }
+  ],
+  state: { E1: 3, E2: 3, delta: 90, animate: true, t: 0 },
+
+  build() {
+    const st = this.state;
+    this.group = new THREE.Group();
+    content.add(this.group);
+
+    // axes / propagation direction
+    const axis = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.02, 0.02, 8, 8),
+      new THREE.MeshBasicMaterial({ color: 0x444444 })
+    );
+    axis.rotation.z = Math.PI / 2;
+    this.group.add(axis);
+
+    // E field arrow (rotating in y-z plane, propagating along x)
+    this.eArrow = new THREE.ArrowHelper(new THREE.Vector3(0,1,0), new THREE.Vector3(0,0,0), 1, 0xff4444, 0.25, 0.15);
+    this.group.add(this.eArrow);
+
+    // H field arrow (perpendicular to E)
+    this.hArrow = new THREE.ArrowHelper(new THREE.Vector3(0,0,1), new THREE.Vector3(0,0,0), 1, 0x4488ff, 0.25, 0.15);
+    this.group.add(this.hArrow);
+
+    // S arrow along +x
+    this.sArrow = new THREE.ArrowHelper(new THREE.Vector3(1,0,0), new THREE.Vector3(0,0,0), 1, 0xffaa00, 0.3, 0.18);
+    this.group.add(this.sArrow);
+
+    // small ellipse guide
+    this.ellipse = new THREE.LineLoop(
+      new THREE.BufferGeometry(),
+      new THREE.LineBasicMaterial({ color: 0x888888 })
+    );
+    this.group.add(this.ellipse);
+
+    this.update();
+  },
+
+  update() {
+    const st = this.state;
+    const E1 = st.E1, E2 = st.E2;
+    const delta = st.delta * Math.PI / 180;
+    const Z = 1; // normalized impedance
+
+    // instantaneous S(t) = (E1^2 cos^2(wt) + E2^2 cos^2(wt+delta)) / Z
+    const wt = st.t;
+    const Sinst = (E1*E1*Math.cos(wt)*Math.cos(wt) + E2*E2*Math.cos(wt+delta)*Math.cos(wt+delta)) / Z;
+    const Sav = (E1*E1 + E2*E2) / (2*Z);
+    const Smax = Math.max(E1*E1, E2*E2) / Z;
+    const Smin = Math.min(E1*E1, E2*E2) / Z;
+
+    // E vector at time t: E = E1 cos(wt) yhat + E2 cos(wt+delta) zhat
+    const Ey = E1 * Math.cos(wt);
+    const Ez = E2 * Math.cos(wt + delta);
+    const Evec = new THREE.Vector3(0, Ey, Ez);
+    const Emag = Evec.length();
+
+    // H = (1/Z) xhat cross E  => H = (1/Z)(0, -Ez, Ey) for x cross (0,Ey,Ez)
+    const Hy = -Ez / Z;
+    const Hz = Ey / Z;
+    const Hvec = new THREE.Vector3(0, Hy, Hz);
+    const Hmag = Hvec.length();
+
+    // update arrows
+    if (Emag > 1e-6) {
+      this.eArrow.position.set(0,0,0);
+      this.eArrow.setDirection(Evec.clone().normalize());
+      this.eArrow.setLength(Emag, 0.25, 0.15);
+    } else {
+      this.eArrow.setLength(0.001, 0.001, 0.001);
+    }
+
+    if (Hmag > 1e-6) {
+      this.hArrow.position.set(0,0,0);
+      this.hArrow.setDirection(Hvec.clone().normalize());
+      this.hArrow.setLength(Hmag, 0.25, 0.15);
+    } else {
+      this.hArrow.setLength(0.001, 0.001, 0.001);
+    }
+
+    // S arrow: magnitude Sinst, direction +x
+    const sLen = Math.max(0.05, Sinst);
+    this.sArrow.position.set(0,0,0);
+    this.sArrow.setDirection(new THREE.Vector3(1,0,0));
+    this.sArrow.setLength(sLen, 0.3, 0.18);
+
+    // ellipse guide: points (0, E1 cos phi, E2 cos(phi+delta)) for phi in [0,2pi]
+    const pts = [];
+    for (let i = 0; i <= 64; i++) {
+      const phi = (i / 64) * Math.PI * 2;
+      pts.push(new THREE.Vector3(0, E1 * Math.cos(phi), E2 * Math.cos(phi + delta)));
+    }
+    this.ellipse.geometry.dispose();
+    this.ellipse.geometry = new THREE.BufferGeometry().setFromPoints(pts);
+
+    // HUD
+    const eq = 'S(t)=\\frac{E_1^2\\cos^2(\\omega t)+E_2^2\\cos^2(\\omega t+\\delta)}{Z}';
+    setHud(
+      'Poynting Vector: CP vs EP',
+      eq,
+      [
+        { k: 'S_av', v: Sav.toFixed(3) },
+        { k: 'S_max', v: Smax.toFixed(3) },
+        { k: 'S_min', v: Smin.toFixed(3) },
+        { k: 'S(t)', v: Sinst.toFixed(3) },
+        { k: '|E|', v: Emag.toFixed(3) },
+        { k: '|H|', v: Hmag.toFixed(3) }
+      ]
+    );
+  },
+
+  tick(dt) {
+    const st = this.state;
+    if (st.animate) {
+      st.t += dt * 2.0;
+      this.update();
+    }
+  },
+
+  lesson: `
+    <h3>4-12 Poynting Vector for CP & EP Waves</h3>
+    <p>For a plane wave propagating along <b>x</b>, the instantaneous Poynting vector is
+    <b>S(t) = (E₁² cos²(ωt) + E₂² cos²(ωt+δ)) / Z</b>.</p>
+    <p>When <b>E₁ = E₂</b> and <b>δ = ±90°</b>, the wave is <b>circularly polarized (CP)</b>:
+    the sum of the two cos² terms is constant, so <b>S(t) = S_av</b> — the energy flow is steady.</p>
+    <p>For other amplitudes or phases, the wave is <b>elliptically polarized (EP)</b>:
+    S(t) oscillates between <b>S_min</b> and <b>S_max</b>, with average <b>S_av = (E₁²+E₂²)/(2Z)</b>.</p>
+    <p>Rotate the phase δ and adjust E₁, E₂ to see the E-vector trace an ellipse (or a circle when E₁=E₂, δ=90°).
+    The orange arrow shows the instantaneous longitudinal energy flow S(t).</p>
+  `,
+
+  quiz: [
+    {
+      q: 'For a circularly polarized wave (E₁ = E₂, δ = 90°), what is S(t)?',
+      options: [
+        'S(t) oscillates between 0 and E₁²/Z',
+        'S(t) is constant and equals E₁²/Z',
+        'S(t) is zero on average',
+        'S(t) oscillates between E₁²/Z and 2E₁²/Z'
+      ],
+      answer: 1
+    },
+    {
+      q: 'For an elliptically polarized wave with E₁ ≠ E₂, the time-averaged Poynting vector is:',
+      options: [
+        'S_av = (E₁² + E₂²)/(2Z)',
+        'S_av = (E₁² − E₂²)/(2Z)',
+        'S_av = E₁E₂/Z',
+        'S_av = 0'
+      ],
+      answer: 0
+    }
+  ]
+});
+
+modules.push({
+  id: 'poincare_sphere',
+  title: '4-13 Polarization Ellipse & Poincare Sphere',
+  controls: [
+    { id: 'tau_deg', label: 'Azimuth τ (deg)', type: 'range', min: 0, max: 180, step: 1, value: 30 },
+    { id: 'ellip_deg', label: 'Ellipticity ε (deg)', type: 'range', min: -45, max: 45, step: 1, value: 20 }
+  ],
+  build() {
+    const g = new THREE.Group();
+    const sph = new THREE.Mesh(
+      new THREE.SphereGeometry(1, 32, 20),
+      new THREE.MeshBasicMaterial({ color: 0x3a6ea5, wireframe: true, transparent: true, opacity: 0.35 })
+    );
+    g.add(sph);
+    const eq = new THREE.LineLoop(
+      new THREE.BufferGeometry().setFromPoints(
+        Array.from({ length: 64 }, (_, i) => {
+          const a = i / 64 * Math.PI * 2;
+          return new THREE.Vector3(Math.cos(a), 0, Math.sin(a));
+        })
+      ),
+      new THREE.LineBasicMaterial({ color: 0x9fb8d6 })
+    );
+    g.add(eq);
+    const mer = new THREE.LineLoop(
+      new THREE.BufferGeometry().setFromPoints(
+        Array.from({ length: 64 }, (_, i) => {
+          const a = i / 64 * Math.PI * 2;
+          return new THREE.Vector3(Math.cos(a), Math.sin(a), 0);
+        })
+      ),
+      new THREE.LineBasicMaterial({ color: 0x6f8fb3, transparent: true, opacity: 0.6 })
+    );
+    g.add(mer);
+    const axes = new THREE.Group();
+    const mkAxis = (dir, color) => {
+      const geo = new THREE.BufferGeometry().setFromPoints([dir.clone().multiplyScalar(-1.15), dir.clone().multiplyScalar(1.15)]);
+      axes.add(new THREE.Line(geo, new THREE.LineBasicMaterial({ color })));
+    };
+    mkAxis(new THREE.Vector3(1, 0, 0), 0xd98b5a);
+    mkAxis(new THREE.Vector3(0, 1, 0), 0x7fbf7f);
+    mkAxis(new THREE.Vector3(0, 0, 1), 0x8f8fd9);
+    g.add(axes);
+    const poleN = new THREE.Mesh(new THREE.SphereGeometry(0.035, 12, 8), new THREE.MeshBasicMaterial({ color: 0x7fbf7f }));
+    poleN.position.set(0, 1, 0);
+    const poleS = poleN.clone();
+    poleS.position.set(0, -1, 0);
+    g.add(poleN, poleS);
+    const arrow = new THREE.Group();
+    const shaft = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.018, 0.018, 1, 10),
+      new THREE.MeshBasicMaterial({ color: 0xffcc33 })
+    );
+    shaft.position.y = 0.5;
+    const head = new THREE.Mesh(
+      new THREE.ConeGeometry(0.06, 0.16, 12),
+      new THREE.MeshBasicMaterial({ color: 0xffcc33 })
+    );
+    head.position.y = 1.08;
+    arrow.add(shaft, head);
+    g.add(arrow);
+    const dot = new THREE.Mesh(new THREE.SphereGeometry(0.055, 16, 12), new THREE.MeshBasicMaterial({ color: 0xffcc33 }));
+    g.add(dot);
+    content.add(g);
+    this.group = g;
+    this.arrow = arrow;
+    this.dot = dot;
+  },
+  update() {
+    const st = this.state;
+    const tau = THREE.MathUtils.degToRad(st.tau_deg);
+    const eps = THREE.MathUtils.degToRad(st.ellip_deg);
+    const s1 = Math.cos(2 * eps) * Math.cos(2 * tau);
+    const s2 = Math.cos(2 * eps) * Math.sin(2 * tau);
+    const s3 = Math.sin(2 * eps);
+    const v = new THREE.Vector3(s1, s3, s2);
+    this.dot.position.copy(v);
+    this.arrow.position.copy(v);
+    this.arrow.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), v.clone().normalize());
+    const AR = Math.sqrt(s1 * s1 + s2 * s2 + s3 * s3);
+    setHud(
+      'Polarization state on Poincaré sphere',
+      '\\mathbf{S}=(s_1,s_2,s_3)=(\\cos 2\\epsilon\\cos 2\\tau,\\;\\cos 2\\epsilon\\sin 2\\tau,\\;\\sin 2\\epsilon)',
+      [
+        { k: 'AR', v: AR.toFixed(3) },
+        { k: 's1', v: s1.toFixed(3) },
+        { k: 's2', v: s2.toFixed(3) },
+        { k: 's3', v: s3.toFixed(3) }
+      ]
+    );
+  },
+  tick(dt) {
+    this.group.rotation.y += dt * 0.15;
+  },
+  lesson: `<p>The Stokes vector <b>S</b> = (s<sub>1</sub>, s<sub>2</sub>, s<sub>3</sub>) lies on the unit Poincaré sphere. The azimuth angle τ sets the polarization ellipse orientation, while ellipticity ε sets its shape: ε = 0 gives linear polarization on the equator, and ε = ±45° gives circular polarization at the poles.</p>
+  <p>Here s<sub>1</sub> = cos 2ε cos 2τ, s<sub>2</sub> = cos 2ε sin 2τ, s<sub>3</sub> = sin 2ε. The arrow shows the state; its length is the degree of polarization AR.</p>`,
+  quiz: [
+    { q: 'At ε = 0°, the Stokes point lies on which part of the Poincaré sphere?', options: ['The equator', 'The north pole', 'The south pole', 'The center'], answer: 0 },
+    { q: 'For circular polarization, what is |s₃|?', options: ['0', '0.5', '1', '2'], answer: 2 }
+  ]
+});
+
+modules.push({
+  id: 'oblique_incidence_fresnel',
+  title: '4-14 Oblique Incidence: Fresnel Equations',
+  controls: [
+    { id: 'pol', label: 'Polarization', type: 'select', options: ['Parallel', 'Perpendicular'], value: 'Parallel' },
+    { id: 'theta_i', label: 'Incidence angle θᵢ (°)', type: 'range', min: 0, max: 89, step: 0.1, value: 56.3 },
+    { id: 'n1', label: 'n₁', type: 'range', min: 1, max: 2.5, step: 0.01, value: 1 },
+    { id: 'n2', label: 'n₂', type: 'range', min: 1, max: 3.5, step: 0.01, value: 1.5 }
+  ],
+  build() {
+    const st = this.state;
+    this.interface = new THREE.Mesh(
+      new THREE.PlaneGeometry(8, 8),
+      new THREE.MeshStandardMaterial({ color: 0x334455, transparent: true, opacity: 0.35, side: THREE.DoubleSide })
+    );
+    this.interface.rotation.x = -Math.PI / 2;
+    content.add(this.interface);
+
+    this.normal = new THREE.Line(
+      new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, -2, 0), new THREE.Vector3(0, 2, 0)]),
+      new THREE.LineBasicMaterial({ color: 0x8899aa })
+    );
+    content.add(this.normal);
+
+    this.incident = new THREE.Line(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: 0xffcc44 }));
+    this.reflected = new THREE.Line(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: 0x44ccff }));
+    this.transmitted = new THREE.Line(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: 0xff6688 }));
+    content.add(this.incident, this.reflected, this.transmitted);
+
+    this.incidentArrow = new THREE.ArrowHelper(new THREE.Vector3(0, -1, 0), new THREE.Vector3(0, 0, 0), 1, 0xffcc44);
+    this.reflectedArrow = new THREE.ArrowHelper(new THREE.Vector3(0, 1, 0), new THREE.Vector3(0, 0, 0), 1, 0x44ccff);
+    this.transmittedArrow = new THREE.ArrowHelper(new THREE.Vector3(0, -1, 0), new THREE.Vector3(0, 0, 0), 1, 0xff6688);
+    content.add(this.incidentArrow, this.reflectedArrow, this.transmittedArrow);
+
+    this.update();
+  },
+  update() {
+    const st = this.state;
+    const ti = THREE.MathUtils.degToRad(st.theta_i);
+    const n1 = st.n1, n2 = st.n2;
+    const sinTt = n1 * Math.sin(ti) / n2;
+    const tir = sinTt > 1;
+    const tt = tir ? NaN : Math.asin(sinTt);
+    const cosi = Math.cos(ti), cost = tir ? 0 : Math.cos(tt);
+
+    let rho;
+    if (st.pol === 'Parallel') {
+      rho = tir ? 1 : (n2 * cosi - n1 * cost) / (n2 * cosi + n1 * cost);
+    } else {
+      rho = tir ? 1 : (n1 * cosi - n2 * cost) / (n1 * cosi + n2 * cost);
+    }
+    const R = rho * rho;
+
+    const L = 2.4;
+    const dirI = new THREE.Vector3(Math.sin(ti), -Math.cos(ti), 0);
+    const dirR = new THREE.Vector3(Math.sin(ti), Math.cos(ti), 0);
+    const dirT = tir ? new THREE.Vector3(0, 0, 0) : new THREE.Vector3(Math.sin(tt), -Math.cos(tt), 0);
+
+    this.incident.geometry.setFromPoints([dirI.clone().multiplyScalar(L), new THREE.Vector3(0, 0, 0)]);
+    this.reflected.geometry.setFromPoints([new THREE.Vector3(0, 0, 0), dirR.clone().multiplyScalar(L)]);
+    this.transmitted.geometry.setFromPoints([new THREE.Vector3(0, 0, 0), dirT.clone().multiplyScalar(L)]);
+
+    this.incidentArrow.position.set(0, 0, 0);
+    this.incidentArrow.setDirection(dirI.clone().negate());
+    this.incidentArrow.setLength(L, 0.18, 0.1);
+    this.reflectedArrow.position.set(0, 0, 0);
+    this.reflectedArrow.setDirection(dirR);
+    this.reflectedArrow.setLength(L, 0.18, 0.1);
+    this.transmittedArrow.position.set(0, 0, 0);
+    this.transmittedArrow.setDirection(dirT);
+    this.transmittedArrow.setLength(tir ? 0.001 : L, 0.18, 0.1);
+    this.transmittedArrow.visible = !tir;
+
+    const thetaTStr = tir ? 'TIR' : tt.toFixed(2);
+    const eq = tir
+      ? '\\sin\\theta_t>1\\;\\Rightarrow\\;\\text{total internal reflection}'
+      : 'n_1\\sin\\theta_i=n_2\\sin\\theta_t';
+    setHud('Oblique Incidence: Fresnel Equations', eq, [
+      { k: 'θᵢ', v: st.theta_i.toFixed(1) + '°' },
+      { k: 'θₜ', v: thetaTStr },
+      { k: 'ρ', v: rho.toFixed(3) },
+      { k: 'R', v: R.toFixed(3) }
+    ]);
+  },
+  tick(dt) {},
+  lesson: `<p>At an interface, Snell's law gives <b>n₁ sin θᵢ = n₂ sin θₜ</b>. The Fresnel reflection coefficient depends on polarization:</p>
+  <p><b>Parallel:</b> ρ∥ = (n₂ cos θᵢ − n₁ cos θₜ)/(n₂ cos θᵢ + n₁ cos θₜ)</p>
+  <p><b>Perpendicular:</b> ρ⊥ = (n₁ cos θᵢ − n₂ cos θₜ)/(n₁ cos θᵢ + n₂ cos θₜ)</p>
+  <p>Reflectance is R = ρ². At Brewster's angle, parallel reflection vanishes. When n₁ sin θᵢ > n₂, total internal reflection occurs.</p>`,
+  quiz: [
+    { q: 'For parallel polarization, what happens at Brewster’s angle?', options: ['ρ = 1', 'ρ = 0', 'ρ = −1', 'TIR occurs'], answer: 1 },
+    { q: 'Total internal reflection occurs when:', options: ['n₁ sin θᵢ = n₂ sin θₜ', 'n₁ sin θᵢ > n₂', 'n₁ < n₂', 'θᵢ = 0'], answer: 1 }
+  ]
+});
+
 /* === UI CONTROLLER === */
 
 let activeIdx = 0;
