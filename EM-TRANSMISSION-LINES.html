@@ -1,0 +1,2189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>EM Transmission Lines — Chapter 3</title>
+
+<!-- KaTeX 0.16.9 (CSS + JS + auto-render) -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" crossorigin="anonymous" />
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js" crossorigin="anonymous"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js" crossorigin="anonymous"></script>
+
+<!-- Three.js import map (exact) -->
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+
+<style>
+  :root{
+    --bg:#0a0e13;
+    --panel:#111820;
+    --panel-2:#0d141b;
+    --line:#1e2a36;
+    --ink:#d8e4ef;
+    --dim:#8ea2b6;
+    --accent:#4fd1c5;
+    --accent-2:#f6ad55;
+    --ok:#68d391;
+    --bad:#fc8181;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  }
+  *{ box-sizing:border-box; }
+  html, body{ height:100%; margin:0; }
+  body{
+    background:var(--bg);
+    color:var(--ink);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    font-size:13px;
+    overflow:hidden;
+  }
+</style>
+</head>
+<body>
+<div id="shell">
+  <header id="topbar">
+    <h1>Transmission Lines</h1>
+    <span class="sub">Kraus &amp; Fleisch, <em>Electromagnetics with Applications</em>, 5th ed. — Chapter 3</span>
+    <span class="badge" id="status-badge">0 / 9</span>
+  </header>
+
+  <div id="body">
+    <aside id="sidebar">
+      <h2>Modules</h2>
+      <div id="module-list"></div>
+    </aside>
+
+    <section id="main">
+      <div id="stage">
+        <canvas id="chart-canvas"></canvas>
+        <div id="controls"></div>
+        <div id="hud">
+          <div id="hud-title">—</div>
+          <div id="hud-eq"></div>
+          <div id="hud-values"></div>
+        </div>
+      </div>
+
+      <div id="bottom">
+        <div id="lesson"></div>
+        <div id="quiz"></div>
+      </div>
+    </section>
+  </div>
+</div>
+
+<script type="module">
+import * as THREE from "three";
+import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+
+const stageEl    = document.getElementById("stage");
+const chartEl    = document.getElementById("chart-canvas");
+const controlsEl = document.getElementById("controls");
+const hudTitle   = document.getElementById("hud-title");
+const hudEq      = document.getElementById("hud-eq");
+const hudValues  = document.getElementById("hud-values");
+const lessonEl   = document.getElementById("lesson");
+const quizEl     = document.getElementById("quiz");
+const moduleList = document.getElementById("module-list");
+const badgeEl    = document.getElementById("status-badge");
+
+const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+const initW = Math.max(1, stageEl.clientWidth || window.innerWidth - 240);
+const initH = Math.max(1, stageEl.clientHeight || Math.round(window.innerHeight * 0.6));
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+renderer.setSize(initW, initH);
+renderer.setClearColor(0x0a0e13, 1);
+renderer.domElement.classList.add("webgl");
+stageEl.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.fog = new THREE.FogExp2(0x0a0e13, 0.03);
+const camera = new THREE.PerspectiveCamera(50, initW / initH, 0.1, 200);
+camera.position.set(4.6, 3.6, 5.6);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.08;
+
+scene.add(new THREE.AmbientLight(0xffffff, 0.65));
+const dirLight = new THREE.DirectionalLight(0xffffff, 0.9);
+dirLight.position.set(5, 8, 6);
+scene.add(dirLight);
+
+const content = new THREE.Group();
+scene.add(content);
+
+function disposeObj(o) {
+  o.traverse(n => {
+    const isSharedArrowGeo = n.isArrowHelper || (n.parent && n.parent.isArrowHelper);
+    if (!isSharedArrowGeo && n.geometry) n.geometry.dispose();
+    if (n.material) {
+      if (Array.isArray(n.material)) n.material.forEach(m => m.dispose());
+      else n.material.dispose();
+    }
+  });
+}
+
+function clearContent() {
+  while (content.children.length) disposeObj(content.children.pop());
+}
+
+function addAxes(group, len = 3.2) {
+  const mk = (color, a, b) => new THREE.Line(
+    new THREE.BufferGeometry().setFromPoints([a, b]),
+    new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.75 })
+  );
+  group.add(mk(0xef4444, new THREE.Vector3(-len, 0, 0), new THREE.Vector3(len, 0, 0)));
+  group.add(mk(0x22c55e, new THREE.Vector3(0, -len, 0), new THREE.Vector3(0, len, 0)));
+  group.add(mk(0x3b82f6, new THREE.Vector3(0, 0, -len), new THREE.Vector3(0, 0, len)));
+}
+
+function addGrid(group, size = 8, y = -2.2) {
+  const g = new THREE.GridHelper(size, 16, 0x1e2a36, 0x1e2a36);
+  g.position.y = y;
+  group.add(g);
+}
+
+function addArrowField(group, fn, opts = {}) {
+  const { range = 1.8, step = 0.6, color = 0x4fd1c5, scale = 0.35, maxLen = 0.55 } = opts;
+  const arrows = [];
+  for (let x = -range; x <= range + 1e-9; x += step) {
+    for (let y = -range; y <= range + 1e-9; y += step) {
+      for (let z = -range; z <= range + 1e-9; z += step) {
+        const v = fn(x, y, z);
+        const len = Math.hypot(v[0], v[1], v[2]);
+        if (len < 1e-6) continue;
+        const dir = new THREE.Vector3(v[0], v[1], v[2]).normalize();
+        const L = Math.min(len * scale, maxLen);
+        const arrow = new THREE.ArrowHelper(dir, new THREE.Vector3(x, y, z), L, color, L * 0.35, L * 0.2);
+        group.add(arrow);
+        arrows.push(arrow);
+      }
+    }
+  }
+  return arrows;
+}
+
+function renderMath(el, tex, display = true) {
+  if (window.katex) {
+    try { katex.render(tex, el, { throwOnError: false, displayMode: display }); return; } catch (e) {}
+  }
+  el.textContent = tex;
+}
+
+function renderAllMath(root) {
+  root.querySelectorAll("[data-tex]").forEach(el => {
+    renderMath(el, el.getAttribute("data-tex"), el.classList.contains("eq") || el.classList.contains("eqblock"));
+  });
+}
+
+function setHud(title, eqTex, rows) {
+  hudTitle.textContent = title;
+  renderMath(hudEq, eqTex, true);
+  hudValues.innerHTML = rows.map(r => `<span class="k">${r.k}</span><span class="v">${r.v}</span>`).join("");
+}
+
+function fmt(v, d = 3) {
+  return isFinite(v) ? (v >= 0 ? "+" : "") + v.toFixed(d) : "—";
+}
+
+const modules = [];
+
+
+/* ===================== MODULE 1: CIRCUIT THEORY ===================== */
+modules.push({
+  id: 'circuit_theory',
+  title: 'Circuit Theory & Distributed R, L, G, C',
+  chapter: 'Kraus §3-1–3-2',
+
+  controls: [
+    { id: 'R',        label: 'R (Ω/m)',   type: 'range',    min: 0,  max: 20,  step: 0.1, value: 2 },
+    { id: 'L',        label: 'L (nH/m)',  type: 'range',    min: 50, max: 500, step: 1,   value: 250 },
+    { id: 'G',        label: 'G (mS/m)',  type: 'range',    min: 0,  max: 10,  step: 0.1, value: 0.5 },
+    { id: 'C',        label: 'C (pF/m)',  type: 'range',    min: 20, max: 200, step: 1,   value: 100 },
+    { id: 'freq',     label: 'f (MHz)',   type: 'range',    min: 10, max: 1000, step: 1,  value: 300 },
+    { id: 'lossless', label: 'Lossless (R = G = 0)', type: 'check', value: false }
+  ],
+
+  compute(state) {
+    const R = state.lossless ? 0 : state.R;
+    const G = state.lossless ? 0 : state.G * 1e-3;
+    const L = state.L * 1e-9;
+    const C = state.C * 1e-12;
+    const w = 2 * Math.PI * state.freq * 1e6;
+
+    const aRe = R, aIm = w * L;          // R + jωL
+    const bRe = G, bIm = w * C;          // G + jωC
+    const pRe = aRe * bRe - aIm * bIm;   // (R+jωL)(G+jωC)
+    const pIm = aRe * bIm + aIm * bRe;
+    const pr  = Math.hypot(pRe, pIm);
+    const gRe = Math.sqrt((pr + pRe) / 2);
+    const gIm = Math.sqrt(Math.max(0, (pr - pRe) / 2)) * (pIm < 0 ? -1 : 1);
+
+    const bAbs2 = bRe * bRe + bIm * bIm; // |G+jωC|²
+    const qRe = (aRe * bRe + aIm * bIm) / bAbs2;
+    const qIm = (aIm * bRe - aRe * bIm) / bAbs2;
+    const qr  = Math.hypot(qRe, qIm);
+    const z0Re = Math.sqrt((qr + qRe) / 2);
+    const z0Im = Math.sqrt(Math.max(0, (qr - qRe) / 2)) * (qIm < 0 ? -1 : 1);
+
+    const beta = gIm;
+    const vp = beta !== 0 ? w / beta : Infinity;
+    return { R, G, L, C, w, alpha: gRe, beta, z0Re, z0Im, vp };
+  },
+
+  build(root) {
+    const group = new THREE.Group();
+    const N = 12, zA = -6, zB = 6, dz = (zB - zA) / N;
+    const yTop = 1.2, yBot = -1.2;
+
+    const matTop = new THREE.MeshStandardMaterial({ color: 0x4fd1c5, metalness: 0.55, roughness: 0.35 });
+    const matBot = new THREE.MeshStandardMaterial({ color: 0x8ea2b6, metalness: 0.55, roughness: 0.45 });
+    const matR   = new THREE.MeshStandardMaterial({ color: 0xf6ad55, metalness: 0.3, roughness: 0.6 });
+    const matL   = new THREE.MeshStandardMaterial({ color: 0x7fd1ff, metalness: 0.7, roughness: 0.3 });
+    const matC   = new THREE.MeshStandardMaterial({ color: 0xd8e4ef, metalness: 0.2, roughness: 0.7 });
+    const matG   = new THREE.MeshStandardMaterial({ color: 0xfc8181, metalness: 0.2, roughness: 0.8 });
+
+    // conductors
+    const topBar = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, zB - zA, 12), matTop);
+    topBar.rotation.x = Math.PI / 2; topBar.position.set(0, yTop, 0); group.add(topBar);
+    const botBar = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, zB - zA, 12), matBot);
+    botBar.rotation.x = Math.PI / 2; botBar.position.set(0, yBot, 0); group.add(botBar);
+
+    const helixCurve = (len, radius, turns) => {
+      const pts = [], n = 72;
+      for (let i = 0; i <= n; i++) {
+        const t = i / n;
+        pts.push(new THREE.Vector3(radius * Math.cos(2 * Math.PI * turns * t),
+                                   radius * Math.sin(2 * Math.PI * turns * t),
+                                   len * t));
+      }
+      return new THREE.CatmullRomCurve3(pts);
+    };
+
+    const nodes = [];
+    for (let i = 0; i <= N; i++) nodes.push(zA + i * dz);
+
+    for (let i = 0; i < N; i++) {
+      const zm = zA + (i + 0.5) * dz;
+
+      // series R box
+      const rBox = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.24, dz * 0.42), matR);
+      rBox.position.set(0, yTop, zm - dz * 0.22); group.add(rBox);
+
+      // series helical inductor
+      const coil = new THREE.Mesh(new THREE.TubeGeometry(helixCurve(dz * 0.42, 0.16, 4), 72, 0.035, 8, false), matL);
+      coil.position.set(0, yTop, zm + dz * 0.22); group.add(coil);
+
+      // shunt capacitor plates
+      const plateGeo = new THREE.BoxGeometry(0.55, 0.05, 0.42);
+      const p1 = new THREE.Mesh(plateGeo, matC); p1.position.set(0, yTop - 0.42, zm); group.add(p1);
+      const p2 = new THREE.Mesh(plateGeo, matC); p2.position.set(0, yBot + 0.42, zm); group.add(p2);
+
+      // shunt conductance post
+      const post = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, yTop - yBot - 0.9, 10), matG);
+      post.position.set(0.42, 0, zm); group.add(post);
+    }
+
+    // voltage spheres + current arrows
+    const spheres = [], arrows = [];
+    for (let i = 0; i <= N; i++) {
+      const z = nodes[i];
+      const sph = new THREE.Mesh(new THREE.SphereGeometry(0.16, 20, 16),
+        new THREE.MeshStandardMaterial({ color: 0x68d391, emissive: 0x1f5c33, emissiveIntensity: 0.9 }));
+      sph.position.set(0, yTop, z);
+      sph.userData.z = z;
+      group.add(sph); spheres.push(sph);
+    }
+    for (let i = 0; i < N; i++) {
+      const z = zA + (i + 0.5) * dz;
+      const arr = new THREE.ArrowHelper(new THREE.Vector3(0, 0, 1), new THREE.Vector3(0, yTop + 0.55, z), 0.6, 0x7fd1ff, 0.18, 0.1);
+      arr.userData.z = z;
+      group.add(arr); arrows.push(arr);
+    }
+
+    this._refs = { group, spheres, arrows, zA, yTop };
+    if (root && root.add) root.add(group);
+    else if (typeof content !== 'undefined') content.add(group);
+    return group;
+  },
+
+  update(t, state, p) {
+    const refs = this._refs;
+    if (!refs) return;
+    const { spheres, arrows, zA } = refs;
+    const w = p.w, beta = p.beta, alpha = p.alpha;
+    const z0mag = Math.hypot(p.z0Re, p.z0Im) || 1;
+
+    for (const s of spheres) {
+      const z = s.userData.z;
+      const V = Math.exp(-alpha * (z - zA)) * Math.cos(w * t - beta * (z - zA));
+      s.scale.setScalar(0.35 + 0.75 * Math.abs(V));
+      s.material.color.setHex(V >= 0 ? 0x68d391 : 0xfc8181);
+      s.material.emissive.setHex(V >= 0 ? 0x1f5c33 : 0x5c1f1f);
+    }
+    for (const a of arrows) {
+      const z = a.userData.z;
+      const V = Math.exp(-alpha * (z - zA)) * Math.cos(w * t - beta * (z - zA));
+      const I = V / z0mag;
+      a.setLength(0.25 + 0.95 * Math.abs(I), 0.18, 0.1);
+      a.setColor(I >= 0 ? 0x7fd1ff : 0xf6ad55);
+    }
+  },
+
+  hud(p) {
+    const f = (x, d = 3) => (Number.isFinite(x) ? x.toFixed(d) : '∞');
+    return `
+      <div class="hud">
+        <div class="hud-title">Telegrapher's Equations</div>
+        <div class="hud-row">∂V/∂z = −(R + jωL) I &nbsp;·&nbsp; ∂I/∂z = −(G + jωC) V</div>
+        <div class="hud-row">γ = α + jβ = √((R + jωL)(G + jωC))</div>
+        <div class="hud-row">Z₀ = √((R + jωL)/(G + jωC)) = ${f(p.z0Re, 2)} ${p.z0Im >= 0 ? '+' : '−'} j${f(Math.abs(p.z0Im), 2)} Ω</div>
+        <div class="hud-row">α = ${f(p.alpha)} Np/m &nbsp;·&nbsp; β = ${f(p.beta)} rad/m</div>
+        <div class="hud-row">v_p = ω/β = ${f(p.vp, 0)} m/s</div>
+      </div>`;
+  },
+
+  lesson: `
+    <h3>Distributed Circuit Model</h3>
+    <p>A transmission line is a cascade of infinitesimal sections Δz, each carrying four distributed
+    parameters: series resistance <b>R</b> (Ω/m), series inductance <b>L</b> (H/m), shunt conductance
+    <b>G</b> (S/m) and shunt capacitance <b>C</b> (F/m). Applying Kirchhoff's laws to one Δz and taking
+    Δz → 0 gives the <b>Telegrapher's equations</b>:</p>
+    <p>∂V/∂z = −(R + jωL) I, &nbsp; ∂I/∂z = −(G + jωC) V</p>
+    <p>Their solution is a wave V(z) = V₀ e^{−γz} with the propagation constant
+    γ = α + jβ = √((R + jωL)(G + jωC)). The real part α is attenuation (Np/m); the imaginary part β
+    is phase constant (rad/m), giving phase velocity v_p = ω/β. The characteristic impedance is
+    Z₀ = √((R + jωL)/(G + jωC)).</p>
+    <p>Two special cases matter: a <b>lossless</b> line (R = G = 0) has γ = jω√(LC), so α = 0,
+    β = ω√(LC), v_p = 1/√(LC) and Z₀ = √(L/C) — purely real. A <b>distortionless</b> line satisfies
+    Heaviside's condition <b>RC = LG</b>, which makes α = √(RG) and β = ω√(LC) independent of
+    frequency, so all spectral components travel at the same speed and the pulse shape is preserved.</p>
+  `,
+
+  quiz: [
+    {
+      q: 'For a lossless line (R = G = 0), the characteristic impedance is:',
+      options: ['√(L/C)', '√(C/L)', '√(LC)', 'R + jωL'],
+      answer: 0,
+      explain: 'With R = G = 0, Z₀ = √((jωL)/(jωC)) = √(L/C), which is purely real.'
+    },
+    {
+      q: 'Heaviside’s distortionless condition for a transmission line is:',
+      options: ['RC = LG', 'R = L', 'G = C', 'R/L = C/G'],
+      answer: 0,
+      explain: 'RC = LG makes α = √(RG) and β = ω√(LC) frequency-independent, so no dispersion occurs.'
+    }
+  ]
+});
+
+
+modules.push({
+  id: 'field_theory',
+  title: 'Field Theory & Poynting Vector (TEM)',
+  chapter: 'Kraus §3-2–3-3',
+  controls: [
+    { id: 'V0',       label: 'Voltage V0 (V)', type: 'range', min: 1,   max: 10,  step: 0.1,  value: 5 },
+    { id: 'ratio_ba', label: 'Radius Ratio b/a', type: 'range', min: 1.5, max: 5.0, step: 0.05, value: 2.3 },
+    { id: 'epsr',     label: 'Dielectric εr',  type: 'range', min: 1,   max: 9.8, step: 0.1,  value: 2.2 },
+    { id: 'speed',    label: 'Wave Speed',     type: 'range', min: 0.2, max: 2.0, step: 0.05, value: 1.0 }
+  ],
+  blurb: `
+    <h3>TEM Fields &amp; Poynting Vector</h3>
+    <p>In a coaxial TEM line, the electric field is radial and the magnetic field is azimuthal:</p>
+    <div class="eq" data-tex="\\mathbf{E} = \\frac{V_0}{r\\ln(b/a)}\\hat{r}, \\qquad \\mathbf{H} = \\frac{I}{2\\pi r}\\hat{\\phi}"></div>
+    <p>Power flows exclusively in the dielectric region between conductors via the Poynting vector:</p>
+    <div class="eq" data-tex="\\mathbf{S} = \\mathbf{E}\\times\\mathbf{H}, \\qquad P = \\iint \\mathbf{S}\\cdot d\\mathbf{A} = \\frac{V_0^2}{2Z_0}"></div>
+  `,
+  quiz: [
+    { q: 'In a TEM transmission line, E, H, and the direction of propagation z are:', options: ['Mutually perpendicular', 'All parallel', 'E parallel to z', 'H parallel to z'], answer: 0, explain: 'Transverse Electromagnetic (TEM) waves have both E and H purely transverse to z.' },
+    { q: 'Where is electromagnetic power transported along a transmission line?', options: ['In the dielectric space between conductors via S = E × H', 'Inside the copper core', 'Only on the outer shield', 'Nowhere in steady state'], answer: 0, explain: 'E = 0 inside ideal conductors, so S = E × H exists in the dielectric.' }
+  ],
+  build() {
+    clearContent();
+    addGrid(content);
+    addAxes(content);
+    camera.position.set(4.8, 3.4, 5.4);
+    controls.target.set(0, 0, 0);
+    this._t = 0;
+    const L = 6.0;
+    this._inner = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.45, 0.45, L, 28),
+      new THREE.MeshStandardMaterial({ color: 0xf6ad55, metalness: 0.85, roughness: 0.25 })
+    );
+    this._inner.rotation.x = Math.PI / 2;
+    content.add(this._inner);
+
+    this._outer = new THREE.Mesh(
+      new THREE.CylinderGeometry(1.0, 1.0, L, 48, 1, true, 0, Math.PI * 1.45),
+      new THREE.MeshStandardMaterial({ color: 0x8ea2b6, metalness: 0.8, roughness: 0.35, side: THREE.DoubleSide })
+    );
+    this._outer.rotation.x = Math.PI / 2;
+    content.add(this._outer);
+
+    this._diel = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.98, 0.98, L, 48, 1, true),
+      new THREE.MeshStandardMaterial({ color: 0x4fd1c5, transparent: true, opacity: 0.14, side: THREE.DoubleSide, depthWrite: false })
+    );
+    this._diel.rotation.x = Math.PI / 2;
+    content.add(this._diel);
+    this._arrows = [];
+    this.update();
+  },
+  update() {
+    const st = this.state;
+    const a = 0.45;
+    const b = a * st.ratio_ba;
+    this._outer.scale.set(b, 1, b);
+    this._diel.scale.set(b, 1, b);
+
+    for (const ar of this._arrows) { content.remove(ar); disposeObj(ar); }
+    this._arrows = [];
+
+    const rMid = 0.5 * (a + b);
+    const zSlices = [-2.0, -0.7, 0.7, 2.0];
+    zSlices.forEach(z => {
+      const wave = Math.cos(1.4 * z - 3.0 * this._t);
+      const amp = Math.abs(wave) * (st.V0 / 5.0);
+      if (amp < 0.05) return;
+      const sgn = wave >= 0 ? 1 : -1;
+      for (let k = 0; k < 6; k++) {
+        const phi = (k / 6) * Math.PI * 2;
+        const pos = new THREE.Vector3(Math.cos(phi) * rMid, Math.sin(phi) * rMid, z);
+        const er = new THREE.Vector3(Math.cos(phi) * sgn, Math.sin(phi) * sgn, 0);
+        const ephi = new THREE.Vector3(-Math.sin(phi) * sgn, Math.cos(phi) * sgn, 0);
+        const ez = new THREE.Vector3(0, 0, 1);
+
+        const lenE = Math.min((b - a) * 0.65 * amp, 0.75);
+        const lenH = Math.min(0.45 * amp, 0.55);
+        const lenS = Math.min(0.65 * amp * amp, 0.75);
+
+        const aE = new THREE.ArrowHelper(er, pos, lenE, 0x38bdf8, lenE * 0.35, lenE * 0.2);
+        const aH = new THREE.ArrowHelper(ephi, pos, lenH, 0xf472b6, lenH * 0.35, lenH * 0.2);
+        const aS = new THREE.ArrowHelper(ez, pos, lenS, 0x68d391, lenS * 0.35, lenS * 0.2);
+        content.add(aE); content.add(aH); content.add(aS);
+        this._arrows.push(aE, aH, aS);
+      }
+    });
+
+    const Z0 = (60 / Math.sqrt(st.epsr)) * Math.log(st.ratio_ba);
+    const eta = 376.73 / Math.sqrt(st.epsr);
+    const vp = 2.998e8 / Math.sqrt(st.epsr);
+    const P = (st.V0 * st.V0) / (2 * Z0);
+    setHud("Field Theory & Poynting Vector (TEM)",
+      "\\mathbf{S} = \\mathbf{E}\\times\\mathbf{H}, \\quad Z_0 = \\frac{60}{\\sqrt{\\varepsilon_r}}\\ln(b/a)",
+      [
+        { k: "Z0 (Ω)", v: fmt(Z0, 2) },
+        { k: "η (Ω)", v: fmt(eta, 2) },
+        { k: "v_p (m/s)", v: vp.toExponential(3) },
+        { k: "Avg Power P (W)", v: fmt(P, 4) }
+      ]);
+  },
+  tick(dt) { this._t += dt * (this.state.speed || 1); this.update(); }
+});
+
+
+modules.push({
+  id: 'microstrip',
+  title: 'Microstrip & Impedance Formulas',
+  chapter: 'Kraus §3-3',
+  controls: [
+    { id: 'geom', label: 'Geometry', type: 'select', options: ['Microstrip', 'Coaxial', 'Two-Wire'], value: 'Microstrip' },
+    { id: 'ratio', label: 'Ratio (w/h, b/a, D/d)', type: 'range', min: 0.2, max: 5.0, step: 0.1, value: 2.0 },
+    { id: 'epsr', label: 'Relative permittivity (eps_r)', type: 'range', min: 1.0, max: 10.0, step: 0.1, value: 4.4 }
+  ],
+  build() {
+    const g = new THREE.Group();
+    content.add(g);
+    this.group = g;
+    return g;
+  },
+  update(state) {
+    state = state || this.state || {};
+    const geom = state.geom || 'Microstrip';
+    const ratio = Math.max(0.2, Math.min(5.0, Number(state.ratio ?? 2.0)));
+    const epsr = Math.max(1.0, Math.min(10.0, Number(state.epsr ?? 4.4)));
+    const g = this.group;
+    while (g.children.length) {
+      const c = g.children.pop();
+      if (c.geometry) c.geometry.dispose();
+      if (c.material) c.material.dispose();
+    }
+    let z0 = 0, eeff = epsr, label = '';
+
+    if (geom === 'Microstrip') {
+      const h = 1.2, w = ratio * h;
+      const slab = new THREE.Mesh(
+        new THREE.BoxGeometry(w + 2.4, h, 3.2),
+        new THREE.MeshStandardMaterial({ color: 0x2f6f8f, transparent: true, opacity: 0.55 })
+      );
+      g.add(slab);
+
+      const ground = new THREE.Mesh(
+        new THREE.BoxGeometry(w + 2.4, 0.12, 3.2),
+        new THREE.MeshStandardMaterial({ color: 0xc9a227, metalness: 0.8, roughness: 0.35 })
+      );
+      ground.position.y = -h / 2 - 0.06;
+      g.add(ground);
+
+      const strip = new THREE.Mesh(
+        new THREE.BoxGeometry(w, 0.1, 3.2),
+        new THREE.MeshStandardMaterial({ color: 0xe0b84a, metalness: 0.9, roughness: 0.25 })
+      );
+      strip.position.y = h / 2 + 0.05;
+      g.add(strip);
+
+      const fieldMat = new THREE.MeshBasicMaterial({ color: 0x7fd1ff, transparent: true, opacity: 0.8 });
+      for (const s of [-1, 1]) {
+        for (let i = 0; i < 3; i++) {
+          const z = -1.1 + i * 1.1;
+          const x0 = s * w / 2;
+          const x1 = s * (w / 2 + 0.55 + 0.25 * i);
+          const curve = new THREE.QuadraticBezierCurve3(
+            new THREE.Vector3(x0, h / 2 + 0.05, z),
+            new THREE.Vector3(x1, 0.0, z),
+            new THREE.Vector3(s * (w / 2 + 0.35), -h / 2 - 0.06, z)
+          );
+          g.add(new THREE.Mesh(new THREE.TubeGeometry(curve, 24, 0.035, 8, false), fieldMat));
+        }
+      }
+
+      const u = ratio;
+      eeff = (epsr + 1) / 2 + (epsr - 1) / 2 * (1 / Math.sqrt(1 + 12 / u));
+      if (u <= 1) {
+        z0 = (60 / Math.sqrt(eeff)) * Math.log(8 / u + u / 4);
+      } else {
+        z0 = (120 * Math.PI) / (Math.sqrt(eeff) * (u + 1.393 + 0.667 * Math.log(u + 1.444)));
+      }
+      label = 'Microstrip  w/h = ' + u.toFixed(2);
+    } else if (geom === 'Coaxial') {
+      const b = 1.6, a = b / ratio;
+      const outer = new THREE.Mesh(
+        new THREE.CylinderGeometry(b, b, 3.2, 40, 1, true),
+        new THREE.MeshStandardMaterial({ color: 0xc9a227, metalness: 0.8, roughness: 0.35, side: THREE.DoubleSide })
+      );
+      outer.rotation.x = Math.PI / 2;
+      g.add(outer);
+
+      const diel = new THREE.Mesh(
+        new THREE.CylinderGeometry(b * 0.98, b * 0.98, 3.2, 40),
+        new THREE.MeshStandardMaterial({ color: 0x2f6f8f, transparent: true, opacity: 0.35 })
+      );
+      diel.rotation.x = Math.PI / 2;
+      g.add(diel);
+
+      const inner = new THREE.Mesh(
+        new THREE.CylinderGeometry(a, a, 3.2, 32),
+        new THREE.MeshStandardMaterial({ color: 0xe0b84a, metalness: 0.9, roughness: 0.25 })
+      );
+      inner.rotation.x = Math.PI / 2;
+      g.add(inner);
+
+      eeff = epsr;
+      z0 = (60 / Math.sqrt(epsr)) * Math.log(b / a);
+      label = 'Coaxial  b/a = ' + ratio.toFixed(2);
+    } else {
+      const d = 0.5, D = d * ratio;
+      const mat = new THREE.MeshStandardMaterial({ color: 0xe0b84a, metalness: 0.9, roughness: 0.25 });
+      for (const s of [-1, 1]) {
+        const wire = new THREE.Mesh(new THREE.CylinderGeometry(d / 2, d / 2, 3.2, 24), mat);
+        wire.rotation.x = Math.PI / 2;
+        wire.position.x = s * D / 2;
+        g.add(wire);
+      }
+      eeff = epsr;
+      z0 = (120 / Math.sqrt(epsr)) * Math.acosh(Math.max(1.0001, D / d));
+      label = 'Two-Wire  D/d = ' + ratio.toFixed(2);
+    }
+
+    setHud(label,
+      "Z_0 = \\frac{60}{\\sqrt{\\varepsilon_{\\text{eff}}}}\\ln\\left(\\frac{8h}{w}+\\frac{w}{4h}\\right)",
+      [
+        { k: "ε_r", v: epsr.toFixed(2) },
+        { k: "Z0 (Ω)", v: z0.toFixed(1) },
+        { k: "ε_eff", v: eeff.toFixed(3) },
+        { k: "λ_g / λ_0", v: (1 / Math.sqrt(eeff)).toFixed(3) }
+      ]);
+  },
+  lesson: 'Microstrip: the top copper strip over a grounded dielectric slab supports a quasi-TEM mode. Widening the trace (larger w/h) raises shunt capacitance per unit length, so Z0 falls. Because the field lines split between air above and substrate below, the effective permittivity satisfies 1 < eps_eff < eps_r, so the guided wavelength lambda_g = lambda_0 / sqrt(eps_eff) is longer than in a fully dielectric-filled line. Coaxial: Z0 = (60/sqrt(eps_r)) ln(b/a). Two-wire: Z0 = (120/sqrt(eps_r)) acosh(D/d).',
+  quiz: [
+    {
+      q: 'Why does increasing the microstrip trace width w/h lower Z0?',
+      options: [
+        'Shunt capacitance per unit length increases, so Z0 = sqrt(L/C) decreases',
+        'Series inductance per unit length increases',
+        'The effective permittivity drops to 1',
+        'The ground plane separation h grows'
+      ],
+      answer: 0
+    },
+    {
+      q: 'Why is 1 < eps_eff < eps_r for a microstrip line?',
+      options: [
+        'The dielectric is lossy',
+        'Field lines split between the air above the strip and the substrate below',
+        'The strip is infinitely thin',
+        'eps_eff equals eps_r for all w/h'
+      ],
+      answer: 1
+    }
+  ]
+});
+
+modules.push({
+  id: 'vswr_line',
+  title: 'Terminated Line & VSWR',
+  chapter: 'Kraus §3-4',
+  controls: [
+    { id: 'rL', label: 'R_L / Z0', type: 'range', min: 0, max: 5, step: 0.05, value: 2.5 },
+    { id: 'xL', label: 'X_L / Z0', type: 'range', min: -4, max: 4, step: 0.1, value: 1.0 },
+    { id: 'preset', label: 'Preset', type: 'select', options: ['Custom', 'Matched (1+j0)', 'Open Circuit', 'Short Circuit'], value: 'Custom' }
+  ],
+  lesson: 'A load Z_L = R_L + jX_L reflects with Gamma_L = (Z_L - Z0)/(Z_L + Z0). |Gamma_L| sets VSWR = (1+|Gamma_L|)/(1-|Gamma_L|) and return loss = -20 log10|Gamma_L| dB. Voltage maxima are lambda/2 apart and a max-to-min span is lambda/4. A matched load (Gamma=0) gives a flat line; a short (Gamma=-1) gives V_min = 0 at the load.',
+  quiz: [
+    { q: 'A matched load Z_L = Z0 gives which reflection coefficient and VSWR?', options: ['Gamma_L = 0, VSWR = 1', 'Gamma_L = 1, VSWR = infinity', 'Gamma_L = -1, VSWR = 1', 'Gamma_L = 0.5, VSWR = 3'], answer: 0 },
+    { q: 'For a short-circuit load, where is the voltage minimum?', options: ['At the load (z = 0), V_min = 0', 'At z = lambda/4', 'At z = lambda/2', 'Nowhere - no minimum'], answer: 0 },
+    { q: 'How far apart are adjacent voltage minima?', options: ['lambda/2', 'lambda/4', 'lambda', '3 lambda/2'], answer: 0 }
+  ],
+  build() {
+    const g = new THREE.Group();
+    const L = 6 * Math.PI;
+    const wire = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, L, 12), new THREE.MeshStandardMaterial({ color: 0x8fa3bb, metalness: 0.6, roughness: 0.4 }));
+    wire.rotation.x = Math.PI / 2; wire.position.z = L / 2; g.add(wire);
+    const load = new THREE.Mesh(new THREE.SphereGeometry(0.16, 16, 16), new THREE.MeshStandardMaterial({ color: 0xff8a3d, emissive: 0x552200 }));
+    load.position.z = 0; g.add(load);
+    const maxM = new THREE.Mesh(new THREE.SphereGeometry(0.09, 12, 12), new THREE.MeshStandardMaterial({ color: 0x66e0ff, emissive: 0x113344 }));
+    const minM = new THREE.Mesh(new THREE.SphereGeometry(0.09, 12, 12), new THREE.MeshStandardMaterial({ color: 0xff5f7a, emissive: 0x441122 }));
+    g.add(maxM, minM);
+    const wave = new THREE.Line(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: 0x7fd1ff }));
+    const envU = new THREE.Line(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: 0xffc46b }));
+    const envL = new THREE.Line(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: 0xffc46b }));
+    g.add(wave, envU, envL);
+    content.add(g);
+    this._wave = wave; this._envU = envU; this._envL = envL;
+    this._maxM = maxM; this._minM = minM; this._L = L;
+    return g;
+  },
+  update(state) {
+    state = state || this.state || {};
+    let rL = +state.rL, xL = +state.xL;
+    if (state.preset === 'Matched (1+j0)') { rL = 1; xL = 0; }
+    else if (state.preset === 'Open Circuit') { rL = 100; xL = 0; }
+    else if (state.preset === 'Short Circuit') { rL = 0; xL = 0; }
+    const mag = Math.hypot(rL - 1, xL) / Math.hypot(rL + 1, xL);
+    const ang = Math.atan2(xL, rL - 1) - Math.atan2(xL, rL + 1);
+    const vswr = mag >= 0.9999 ? Infinity : (1 + mag) / (1 - mag);
+    const rloss = mag > 0 ? -20 * Math.log10(mag) : Infinity;
+    const den = rL * rL + xL * xL;
+    const zinR = den > 0 ? rL / den : 0, zinI = den > 0 ? -xL / den : 0;
+    setHud("Terminated Line & VSWR",
+      "\\Gamma_L = \\frac{Z_L - Z_0}{Z_L + Z_0}, \\quad \\text{VSWR} = \\frac{1+|\\Gamma_L|}{1-|\\Gamma_L|}",
+      [
+        { k: "Γ_L", v: mag.toFixed(3) + " ∠ " + (ang * 180 / Math.PI).toFixed(1) + "°" },
+        { k: "VSWR", v: isFinite(vswr) ? vswr.toFixed(2) : "∞" },
+        { k: "Return Loss", v: (isFinite(rloss) ? rloss.toFixed(1) : "∞") + " dB" },
+        { k: "Z_in(λ/4)", v: zinR.toFixed(2) + (zinI >= 0 ? " + j" : " - j") + Math.abs(zinI).toFixed(2) }
+      ]);
+    const L = this._L, N = 240, t = performance.now() * 0.001;
+    const wp = [], up = [], lp = [];
+    for (let i = 0; i <= N; i++) {
+      const z = L * i / N;
+      const vr = Math.cos(z) + mag * Math.cos(z + ang);
+      const vi = -Math.sin(z) + mag * Math.sin(z + ang);
+      const inst = vr * Math.cos(t) - vi * Math.sin(t);
+      const env = Math.hypot(vr, vi) * 0.45;
+      wp.push(0, inst * 0.45, z);
+      up.push(0, env, z);
+      lp.push(0, -env, z);
+    }
+    this._wave.geometry.setAttribute('position', new THREE.Float32BufferAttribute(wp, 3));
+    this._envU.geometry.setAttribute('position', new THREE.Float32BufferAttribute(up, 3));
+    this._envL.geometry.setAttribute('position', new THREE.Float32BufferAttribute(lp, 3));
+    this._wave.geometry.computeBoundingSphere();
+    this._envU.geometry.computeBoundingSphere();
+    this._envL.geometry.computeBoundingSphere();
+    const zmax = ((-ang / 2) % Math.PI + Math.PI) % Math.PI;
+    const zmin = (zmax + Math.PI / 2) % L;
+    const show = mag > 0.001;
+    this._maxM.visible = show; this._minM.visible = show;
+    this._maxM.position.set(0, (1 + mag) * 0.45, zmax);
+    this._minM.position.set(0, (1 - mag) * 0.45, zmin);
+  },
+  tick() { this.update(); }
+});
+
+
+modules.push({
+  id: 'smith_chart',
+  title: 'Using the Smith Chart',
+  chapter: 'Kraus §3-4',
+  controls: [
+    { id: 'rL', label: 'r_L', type: 'range', min: 0, max: 5, step: 0.05, value: 0.5 },
+    { id: 'xL', label: 'x_L', type: 'range', min: -3, max: 3, step: 0.05, value: 0.8 },
+    { id: 'd_lam', label: 'd (λ)', type: 'range', min: 0, max: 0.5, step: 0.01, value: 0.15 },
+    { id: 'showY', label: 'Admittance y_L', type: 'check', value: true }
+  ],
+  update() {
+    const st = this.state;
+    const rL = st.rL, xL = st.xL, d = st.d_lam;
+
+    const gammaOf = (r, x) => {
+      const den = (r + 1) * (r + 1) + x * x;
+      return { re: (r * r + x * x - 1) / den, im: (2 * x) / den };
+    };
+    const invGamma = (g) => {
+      const den = (1 + g.re) * (1 + g.re) + g.im * g.im;
+      return { r: (1 - g.re * g.re - g.im * g.im) / den, x: (2 * g.im) / den };
+    };
+
+    const gL = gammaOf(rL, xL);
+    const mag = Math.hypot(gL.re, gL.im);
+    const ang = Math.atan2(gL.im, gL.re);
+    const theta = -4 * Math.PI * d;
+    const gd = { re: mag * Math.cos(ang + theta), im: mag * Math.sin(ang + theta) };
+
+    const zin = invGamma(gd);
+    const yin = { r: zin.r / (zin.r * zin.r + zin.x * zin.x), x: -zin.x / (zin.r * zin.r + zin.x * zin.x) };
+    const vswr = mag < 1 ? (1 + mag) / (1 - mag) : Infinity;
+
+    chartEl.style.display = 'block';
+    renderer.domElement.style.display = 'none';
+
+    const ctx = chartEl.getContext('2d');
+    const W = chartEl.width, H = chartEl.height;
+    ctx.clearRect(0, 0, W, H);
+    const cx = W / 2, cy = H / 2, R = Math.min(W, H) * 0.42;
+    const toXY = (re, im) => [cx + R * re, cy - R * im];
+
+    ctx.strokeStyle = '#556'; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.arc(cx, cy, R, 0, 2 * Math.PI); ctx.stroke();
+
+    ctx.strokeStyle = 'rgba(120,160,220,0.35)'; ctx.lineWidth = 1;
+    for (let r = 0; r <= 5; r += 0.5) {
+      const c = r / (1 + r), rad = 1 / (1 + r);
+      const [px, py] = toXY(c, 0);
+      ctx.beginPath(); ctx.arc(px, py, rad * R, 0, 2 * Math.PI); ctx.stroke();
+    }
+
+    ctx.strokeStyle = 'rgba(220,160,120,0.35)'; ctx.lineWidth = 1;
+    for (let x = -3; x <= 3; x += 0.5) {
+      if (Math.abs(x) < 0.05) continue;
+      const rad = 1 / Math.abs(x);
+      const [px, py] = toXY(1, 1 / x);
+      ctx.beginPath(); ctx.arc(px, py, rad * R, 0, 2 * Math.PI); ctx.stroke();
+    }
+
+    ctx.strokeStyle = '#4caf50'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(cx, cy, mag * R, 0, 2 * Math.PI); ctx.stroke();
+
+    ctx.fillStyle = '#aaa'; ctx.font = '10px sans-serif'; ctx.textAlign = 'center';
+    for (let i = 0; i <= 10; i++) {
+      const lam = i * 0.05;
+      const a = -2 * Math.PI * lam;
+      const x1 = cx + R * Math.cos(a), y1 = cy - R * Math.sin(a);
+      const x2 = cx + (R + 8) * Math.cos(a), y2 = cy - (R + 8) * Math.sin(a);
+      ctx.strokeStyle = '#888'; ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+      ctx.fillText(lam.toFixed(2), cx + (R + 20) * Math.cos(a), cy - (R + 20) * Math.sin(a));
+    }
+
+    const [lx, ly] = toXY(gL.re, gL.im);
+    ctx.fillStyle = '#ff5252'; ctx.beginPath(); ctx.arc(lx, ly, 5, 0, 2 * Math.PI); ctx.fill();
+    ctx.fillText('z_L', lx + 10, ly - 8);
+
+    const [zx, zy] = toXY(gd.re, gd.im);
+    ctx.fillStyle = '#4caf50'; ctx.beginPath(); ctx.arc(zx, zy, 5, 0, 2 * Math.PI); ctx.fill();
+    ctx.fillText('z_in', zx + 10, zy - 8);
+
+    if (st.showY) {
+      const yL = { r: rL / (rL * rL + xL * xL), x: -xL / (rL * rL + xL * xL) };
+      const gy = gammaOf(yL.r, yL.x);
+      const [yx, yy] = toXY(gy.re, gy.im);
+      ctx.fillStyle = '#ffb300'; ctx.beginPath(); ctx.arc(yx, yy, 5, 0, 2 * Math.PI); ctx.fill();
+      ctx.fillText('y_L', yx + 10, yy - 8);
+    }
+
+    setHud(
+      'Smith Chart: z_L = ' + rL.toFixed(2) + ' + j' + xL.toFixed(2) + ', d = ' + d.toFixed(2) + 'λ',
+      '\\Gamma(d)=\\Gamma_L e^{-j4\\pi d/\\lambda}',
+      [
+        { k: '|Γ_L|', v: mag.toFixed(3) },
+        { k: 'z_in(d)', v: zin.r.toFixed(3) + ' + j' + zin.x.toFixed(3) },
+        { k: 'y_in(d)', v: yin.r.toFixed(3) + ' + j' + yin.x.toFixed(3) },
+        { k: 'VSWR', v: vswr.toFixed(3) }
+      ]
+    );
+  },
+  lesson: 'The Smith chart maps normalized impedance z = Z/Z0 onto the reflection-coefficient plane Γ = (z-1)/(z+1). Constant-r circles and constant-x arcs form the grid; the center is z = 1 (Γ = 0). Moving toward the generator rotates the point clockwise by 2βd = 4πd/λ, tracing the constant-|Γ| (VSWR) circle. A 0.25λ rotation (180°) maps z to 1/z, i.e. normalized admittance.',
+  quiz: [
+    { q: 'Rotating 0.25λ (180°) on the Smith chart inverts impedance to normalized admittance y = 1/z.', options: ['True', 'False'], answer: 0 },
+    { q: 'Moving toward the generator rotates clockwise on the Smith chart.', options: ['True', 'False'], answer: 0 },
+    { q: 'The center of the Smith chart represents Z_L = Z0 (Γ = 0).', options: ['True', 'False'], answer: 0 }
+  ]
+});
+
+/* ---- Module: Single-Stub Matching (Smith chart geometry) ---- */
+modules.push({
+  id: 'stub_matching',
+  title: 'Single-Stub Matching',
+  lesson: 'A shunt stub of length d placed at distance L from the load cancels the load susceptance at the stub plane. On the Smith chart: rotate the load reflection coefficient toward the generator (clockwise, constant |Gamma|) until it crosses the g = 1 circle; the arc length gives L. At that point the susceptance b must be cancelled by the stub, whose length is found by moving from the open circuit (Gamma = +1) toward the short (Gamma = 0) by the required susceptance.',
+  controls: [
+    { id: 'zLoad', label: 'Load impedance Z_L (ohm)', type: 'range', min: 5, max: 300, step: 1, value: 100 },
+    { id: 'z0', label: 'Line impedance Z0 (ohm)', type: 'range', min: 20, max: 150, step: 1, value: 50 },
+    { id: 'showGrid', label: 'Show Smith grid', type: 'check', value: true }
+  ],
+  state: {},
+
+  // ---- helpers ----
+  _norm(s) {
+    const zL = s.zLoad, z0 = s.z0;
+    // normalised load impedance
+    const rn = zL / z0;
+    return { rn, xn: 0 };
+  },
+
+  build() {
+    const st = this.state;
+    st.zLoad = st.zLoad ?? 100;
+    st.z0 = st.z0 ?? 50;
+    st.showGrid = st.showGrid ?? true;
+
+    const RADIUS = 4.0;
+    const group = new THREE.Group();
+    group.name = 'stubMatching';
+    this._group = group;
+    content.add(group);
+
+    // Smith chart plane: reflection coefficient plane (Re Gamma, Im Gamma)
+    // Outline (|Gamma| = 1) circle
+    const outlinePts = [];
+    for (let i = 0; i <= 128; i++) {
+      const a = (i / 128) * Math.PI * 2;
+      outlinePts.push(new THREE.Vector3(Math.cos(a) * RADIUS, Math.sin(a) * RADIUS, 0));
+    }
+    const outlineGeo = new THREE.BufferGeometry().setFromPoints(outlinePts);
+    const outlineMat = new THREE.LineBasicMaterial({ color: 0x9fb8cc });
+    this._outline = new THREE.Line(outlineGeo, outlineMat);
+    group.add(this._outline);
+
+    // Equator / axes
+    const axGeo = new THREE.BufferGeometry().setFromPoints([
+      new THREE.Vector3(-RADIUS, 0, 0), new THREE.Vector3(RADIUS, 0, 0)
+    ]);
+    const axMat = new THREE.LineBasicMaterial({ color: 0x5b7a90 });
+    const axis = new THREE.Line(axGeo, axMat);
+    axis.position.z = -0.01;
+    group.add(axis);
+
+    // Constant resistance circles: center = r/(1+r) on real axis, radius = 1/(1+r)
+    const constR = [];
+    for (const r of [0.2, 0.5, 1, 2, 5]) {
+      const c = r / (1 + r);
+      const rad = 1 / (1 + r);
+      const pts = [];
+      for (let i = 0; i <= 64; i++) {
+        const a = (i / 64) * Math.PI * 2;
+        pts.push(new THREE.Vector3((c + rad * Math.cos(a)) * RADIUS, rad * Math.sin(a) * RADIUS, 0));
+      }
+      const g = new THREE.BufferGeometry().setFromPoints(pts);
+      const m = new THREE.LineBasicMaterial({ color: r === 1 ? 0xffd166 : 0x33506a });
+      const ln = new THREE.Line(g, m);
+      ln.position.z = -0.02;
+      constR.push(ln);
+      group.add(ln);
+    }
+
+    // Constant reactance arcs (upper half): circle through (1,0) with center (1, 1/x)
+    const constX = [];
+    for (const x of [0.5, 1, 2]) {
+      const cx = 1, cy = 1 / x;
+      const rad = Math.hypot(0, cy - 0) ; // dist from center to (1,0) = |cy|
+      const pts = [];
+      // parameterise the arc that stays inside the unit circle
+      const start = Math.atan2(0 - cy, 1 - cx);
+      for (let i = 0; i <= 64; i++) {
+        const t = start + (i / 64) * Math.PI * 0.99;
+        const px = cx + rad * Math.cos(t);
+        const py = cy + rad * Math.sin(t);
+        if (Math.hypot(px, py) <= 1.0 + 1e-6) pts.push(new THREE.Vector3(px * RADIUS, py * RADIUS, 0));
+      }
+      const g = new THREE.BufferGeometry().setFromPoints(pts);
+      const m = new THREE.LineBasicMaterial({ color: 0x35596f });
+      const ln = new THREE.Line(g, m);
+      ln.position.z = -0.03;
+      constX.push(ln);
+      group.add(ln);
+    }
+    this._gridLines = constR.concat(constX);
+
+    // ---- dynamic elements ----
+    // reflection coefficient curve from load toward generator (clockwise)
+    const gammaGeo = new THREE.BufferGeometry();
+    const gammaMat = new THREE.LineBasicMaterial({ color: 0x7fd1ff, linewidth: 2 });
+    this._gammaLine = new THREE.Line(gammaGeo, gammaMat);
+    this._gammaLine.position.z = 0.05;
+    group.add(this._gammaLine);
+
+    // matching point marker (sphere)
+    const matchMat = new THREE.MeshStandardMaterial({ color: 0xffd166, roughness: 0.3, metalness: 0.4 });
+    this._matchDot = new THREE.Mesh(new THREE.SphereGeometry(0.16, 20, 16), matchMat);
+    this._matchDot.position.z = 0.12;
+    group.add(this._matchDot);
+
+    // load marker
+    const loadMat = new THREE.MeshStandardMaterial({ color: 0xff6b6b, roughness: 0.35, metalness: 0.3 });
+    this._loadDot = new THREE.Mesh(new THREE.SphereGeometry(0.13, 18, 14), loadMat);
+    this._loadDot.position.z = 0.12;
+    group.add(this._loadDot);
+
+    // ---- 2D chart ----
+    const ctx = chartEl.getContext('2d');
+    this._ctx = ctx;
+
+    // ---- lighting for the sphere markers ----
+    if (!st._lights) {
+      const key = new THREE.DirectionalLight(0xffffff, 1.4);
+      key.position.set(3, 5, 8);
+      const fill = new THREE.AmbientLight(0x88aacc, 0.6);
+      scene.add(key);
+      scene.add(fill);
+      st._lights = true;
+    }
+
+    camera.position.set(0, -6.6, 9.0);
+    camera.lookAt(0, 0, 0);
+
+    this.update();
+  },
+
+  // Solve for shortest (or chosen) stub-match solution.
+  _solve() {
+    const st = this.state;
+    const z0 = st.z0;
+    const rn = st.zLoad / z0;   // real load, xn = 0
+    const gx = (rn - 1) / (rn + 1);
+    // Reflection coefficient of load
+    const gammaLoad = new THREE.Vector2(gx, 0);
+    const thetaLoad = Math.atan2(gammaLoad.y, gammaLoad.x); // 0 or pi
+
+    // Rotate toward generator = clockwise = decreasing angle.
+    // Need the first point on |Gamma| = |gammaLoad| hitting the g = 1 circle:
+    // g = 1 circle: points Gamma with Re(Gamma) = |Gamma|^2 ... in general
+    // On the g=1 circle: Gamma = 1 - (1)/(1 + j b) -> equivalently 1|Re line
+    // Using relation for Y = (1-Gamma)/(1+Gamma); Re(Y) = 1 means Re((1-G)/(1+G)) = 1
+    // Let G = u + jv. Re((1-G)/(1+G)) = ((1-u)(1+u) + v^2)/((1+u)^2+v^2) = 1 iff
+    // (1 - u^2 + v^2) = (1 + 2u + u^2 + v^2) -> -u^2 + v^2 = 2u + u^2 + v^2 -> -2u^2 = 2u -> u = 0 or u = -1.
+    // So on g = 1: u = 0 (all points on the vertical diameter) or the point u = -1 (short).
+    // So matching requires reaching u = 0 (i.e. Gamma purely imaginary).
+    const mag = Math.abs(gx);
+    let found = null;
+    if (mag > 0.0001) {
+      // clockwise rotation from thetaLoad; target u = 0 => theta = -pi/2 or +pi/2
+      const candidates = [-Math.PI / 2, Math.PI / 2];
+      let bestArc = Infinity;
+      for (const c of candidates) {
+        let d = thetaLoad - c;            // clockwise distance
+        while (d < 0) d += Math.PI * 2;
+        while (d > Math.PI * 2) d -= Math.PI * 2;
+        const arc = d;
+        if (arc < bestArc) {
+          bestArc = arc;
+          const L = arc / (Math.PI * 4); // fraction of a wavelength: 2pi rotation = lambda/2
+          const gammaMatch = new THREE.Vector2(Math.cos(c) * mag, Math.sin(c) * mag);
+          // susceptance at match: Y = (1-G)/(1+G), G = j*ym with ym = +-mag
+          const gv = mag * Math.sin(c); // imaginary part of Gamma
+          const Yim = (-2 * gv) / (1 + gv * gv);
+          found = { L, arc, gammaMatch, Yim, thetaTarget: c };
+        }
+      }
+    }
+
+    // Shunt stub: length d chosen so susceptance cancels Yim. Stub (shunt, open-circuit)
+    // input admittance = j * tan(beta*d). Want Ystub = -Yim.
+    // tan(beta*d) = -Yim => beta*d = atan(-Yim) mod pi
+    let dLen = 0;
+    if (found) {
+      let betaD = Math.atan(-found.Yim);
+      while (betaD < 0) betaD += Math.PI;
+      dLen = (betaD / Math.PI) * 0.5; // fraction of wavelength
+    }
+    return { mag, gx, rn, found, dLen };
+  },
+
+  update() {
+    const st = this.state;
+    if (!this._group) return;
+    const sol = this._solve();
+
+    // Load marker at Gamma_Load
+    this._loadDot.position.set(sol.gx * 4.0, 0, 0.12);
+
+    // Gamma path: clockwise arc from load angle to target
+    const mag = sol.mag;
+    const pts = [];
+    const N = 96;
+    if (sol.found) {
+      const t0 = Math.atan2(0, sol.gx);
+      let t = t0;
+      const target = sol.found.thetaTarget;
+      // go clockwise by sol.found.arc
+      for (let i = 0; i <= N; i++) {
+        const a = t0 - (sol.found.arc * i) / N;
+        pts.push(new THREE.Vector3(Math.cos(a) * mag * 4.0, Math.sin(a) * mag * 4.0, 0.05));
+      }
+      this._matchDot.position.set(Math.cos(target) * mag * 4.0, Math.sin(target) * mag * 4.0, 0.12);
+      this._matchDot.visible = true;
+    } else {
+      // Already matched load? mag ~ 0
+      pts.push(new THREE.Vector3(sol.gx * 4.0, 0, 0.05));
+      this._matchDot.position.set(sol.gx * 4.0, 0, 0.12);
+      this._matchDot.visible = true;
+    }
+    this._gammaLine.geometry.dispose();
+    this._gammaLine.geometry = new THREE.BufferGeometry().setFromPoints(pts);
+
+    // Grid visibility
+    for (const ln of this._gridLines) ln.visible = !!st.showGrid;
+    this._outline.visible = !!st.showGrid;
+
+    // ---- 2D chart ----
+    this._drawChart(sol);
+
+    const L = sol.found ? sol.found.L : 0;
+    const d = sol.dLen;
+    const Yim = sol.found ? sol.found.Yim : 0;
+    setHud(
+      'Single-Stub Matching',
+      'L = \\frac{\\Delta\\theta}{4\\pi}\\lambda, \\quad d = \\frac{1}{2\\pi}\\arctan(-b)\\lambda',
+      [
+        { k: 'Normalised load r', v: sol.rn.toFixed(3) },
+        { k: '|Gamma|', v: sol.mag.toFixed(3) },
+        { k: 'Stub position L', v: `${L.toFixed(4)} λ (${sol.found ? (sol.found.arc * 180 / Math.PI).toFixed(1) : 0}°)` },
+        { k: 'Susceptance to cancel b', v: Yim.toFixed(3) },
+        { k: 'Stub length d', v: `${d.toFixed(4)} λ` },
+        { k: 'VSWR at load', v: (sol.rn >= 1 ? sol.rn : 1 / sol.rn).toFixed(3) }
+      ]
+    );
+  },
+
+  _drawChart(sol) {
+    const ctx = this._ctx;
+    if (!ctx) return;
+    const w = chartEl.width || 520;
+    const h = chartEl.height || 320;
+    ctx.clearRect(0, 0, w, h);
+
+    // background
+    ctx.fillStyle = '#0d1520';
+    ctx.fillRect(0, 0, w, h);
+
+    const cx = w / 2, cy = h / 2, R = Math.min(w, h) * 0.42;
+    // map Gamma (real, imag) in [-1,1] to canvas
+    const map = (u, v) => [cx + u * R, cy - v * R];
+
+    // outline
+    ctx.strokeStyle = '#3d5568';
+    ctx.lineWidth = 1.4;
+    ctx.beginPath();
+    ctx.arc(cx, cy, R, 0, Math.PI * 2);
+    ctx.stroke();
+
+    if (this.state.showGrid) {
+      ctx.strokeStyle = 'rgba(80,120,150,0.45)';
+      ctx.lineWidth = 1;
+      // constant resistance circles
+      for (const r of [0.2, 0.5, 1, 2, 5]) {
+        const c = r / (1 + r), rad = 1 / (1 + r);
+        ctx.beginPath();
+        ctx.arc(cx + c * R, cy, rad * R, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+      // vertical diameter (g = 1 boundary)
+      ctx.strokeStyle = 'rgba(255,209,102,0.55)';
+      ctx.beginPath();
+      ctx.moveTo(cx, cy - R);
+      ctx.lineTo(cx, cy + R);
+      ctx.stroke();
+    }
+
+    // horizontal axis
+    ctx.strokeStyle = '#7fa8c0';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(cx - R, cy);
+    ctx.lineTo(cx + R, cy);
+    ctx.stroke();
+
+    // labels
+    ctx.fillStyle = '#9fc4dc';
+    ctx.font = '12px system-ui, sans-serif';
+    ctx.fillText('Γ plane', 10, 18);
+    ctx.fillText('short (−1)', cx - R - 40, cy + 4);
+    ctx.fillText('open (+1)', cx + R + 6, cy + 4);
+
+    // gamma arc
+    if (sol.mag > 1e-4 && sol.found) {
+      ctx.strokeStyle = '#7fd1ff';
+      ctx.lineWidth = 2.2;
+      ctx.beginPath();
+      const t0 = Math.atan2(0, sol.gx);
+      const N = 120;
+      for (let i = 0; i <= N; i++) {
+        const a = t0 - (sol.found.arc * i) / N;
+        const [x, y] = map(Math.cos(a) * sol.mag, Math.sin(a) * sol.mag);
+        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+    }
+
+    // load point
+    const [lx, ly] = map(sol.gx, 0);
+    ctx.fillStyle = '#ff6b6b';
+    ctx.beginPath();
+    ctx.arc(lx, ly, 4.5, 0, Math.PI * 2);
+    ctx.fill();
+
+    // match point
+    if (sol.found) {
+      const [mx, my] = map(Math.cos(sol.found.thetaTarget) * sol.mag, Math.sin(sol.found.thetaTarget) * sol.mag);
+      ctx.fillStyle = '#ffd166';
+      ctx.beginPath();
+      ctx.arc(mx, my, 4.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#ffd166';
+      ctx.setLineDash([4, 4]);
+      ctx.beginPath();
+      ctx.moveTo(mx, cy - R);
+      ctx.lineTo(mx, cy + R);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+
+    // legend
+    ctx.fillStyle = '#7fd1ff';
+    ctx.fillText('● load', 12, h - 30);
+    ctx.fillStyle = '#ffd166';
+    ctx.fillText('● match', 12, h - 12);
+  },
+
+  tick(dt) {
+    // gentle auto-rotation of camera azimuth-free, just keep static; nothing animated
+  },
+
+  quiz: [
+    {
+      q: 'In a shunt single-stub match, what does the stub cancel at the stub plane?',
+      options: ['The load resistance', 'The susceptance seen at that plane', 'The characteristic impedance', 'The VSWR'],
+      answer: 1
+    },
+    {
+      q: 'On the Smith chart, matching a load requires moving clockwise to intersect which locus?',
+      options: ['The g = 0 circle', 'The g = 1 (constant-conductance) locus', 'The |Γ| = 0 point only', 'The real axis'],
+      answer: 1
+    },
+    {
+      q: 'A shunt stub of length d = λ/4 behaves as which termination at the main line?',
+      options: ['A short circuit', 'An open circuit', 'A matched load', 'A pure inductor'],
+      answer: 0
+    }
+  ]
+});
+
+/* ---- Module: Quarter-Wave Transformer Bandwidth ---- */
+modules.push({
+  id: 'bandwidth',
+  title: 'Quarter-Wave Transformer Bandwidth',
+  lesson: 'A quarter-wave matching section has characteristic impedance Z1 = sqrt(Z0 Z_L) and length lambda/4 at the design frequency f0. It is perfectly matched only at f0. As frequency moves away from f0, the electrical length departs from 90 degrees and the input impedance changes, raising the VSWR. The usable bandwidth is the frequency range around f0 for which the VSWR stays below a chosen limit.',
+  controls: [
+    { id: 'z0', label: 'Line impedance Z0 (ohm)', type: 'range', min: 20, max: 150, step: 1, value: 50 },
+    { id: 'zL', label: 'Load impedance Z_L (ohm)', type: 'range', min: 5, max: 300, step: 1, value: 100 },
+    { id: 'vswrLimit', label: 'Maximum VSWR', type: 'range', min: 1.05, max: 3, step: 0.05, value: 1.5 },
+    { id: 'showBand', label: 'Show usable band', type: 'check', value: true }
+  ],
+  state: {},
+
+  _vswrAt(fRatio) {
+    const st = this.state;
+    const z0 = st.z0;
+    const zL = st.zL;
+    const z1 = Math.sqrt(z0 * zL);
+    const theta = (Math.PI / 2) * fRatio;
+    const c = Math.cos(theta);
+    const s = Math.sin(theta);
+    const numRe = zL * c;
+    const numIm = z1 * s;
+    const denRe = z1 * c;
+    const denIm = zL * s;
+    const denMag = denRe * denRe + denIm * denIm;
+    if (denMag < 1e-12) return Infinity;
+    const zinRe = z1 * (numRe * denRe + numIm * denIm) / denMag;
+    const zinIm = z1 * (numIm * denRe - numRe * denIm) / denMag;
+    const a = zinRe - z0;
+    const b = zinIm;
+    const cc = zinRe + z0;
+    const d = zinIm;
+    const magDen = cc * cc + d * d;
+    if (magDen < 1e-12) return Infinity;
+    const gr = (a * cc + b * d) / magDen;
+    const gi = (b * cc - a * d) / magDen;
+    const gamma = Math.hypot(gr, gi);
+    return (1 + gamma) / (1 - gamma);
+  },
+
+  _band(limit) {
+    const step = 0.002;
+    const fMin = 0.05;
+    const fMax = 2.0;
+    const at = (r) => this._vswrAt(r);
+    let lo = 1.0;
+    let hi = 1.0;
+    // If already above limit at design point (only possible for extreme inputs), return empty.
+    if (at(1.0) > limit) return { lo: 1.0, hi: 1.0, width: 0, empty: true };
+    while (lo - step >= fMin && at(lo - step) <= limit) lo -= step;
+    while (hi + step <= fMax && at(hi + step) <= limit) hi += step;
+    // Bisection refine the crossing points.
+    let lowEdge = lo;
+    let a = lo - step;
+    let b = lo;
+    if (a >= fMin) {
+      for (let i = 0; i < 32; i++) {
+        const m = (a + b) / 2;
+        if (at(m) <= limit) b = m; else a = m;
+      }
+      lowEdge = b;
+    }
+    let highEdge = hi;
+    a = hi;
+    b = hi + step;
+    if (b <= fMax) {
+      for (let i = 0; i < 32; i++) {
+        const m = (a + b) / 2;
+        if (at(m) <= limit) a = m; else b = m;
+      }
+      highEdge = a;
+    }
+    return { lo: lowEdge, hi: highEdge, width: highEdge - lowEdge, empty: false };
+  },
+
+  build() {
+    const st = this.state;
+    st.z0 = st.z0 ?? 50;
+    st.zL = st.zL ?? 100;
+    st.vswrLimit = st.vswrLimit ?? 1.5;
+    st.showBand = st.showBand ?? true;
+
+    const group = new THREE.Group();
+    group.name = 'quarterWaveBandwidth';
+    this._group = group;
+    content.add(group);
+
+    // Main line (feed) and quarter-wave transformer section.
+    const lineMat = new THREE.MeshStandardMaterial({ color: 0x8fb8d8, roughness: 0.45, metalness: 0.35 });
+    const sectionMat = new THREE.MeshStandardMaterial({ color: 0xffd166, roughness: 0.35, metalness: 0.5 });
+
+    const feed = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.075, 2.2, 20), lineMat);
+    feed.rotation.z = Math.PI / 2;
+    feed.position.set(-2.1, 0, 0);
+    group.add(feed);
+
+    const section = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.075, 2.0, 20), sectionMat);
+    section.rotation.z = Math.PI / 2;
+    section.position.set(0.0, 0, 0);
+    group.add(section);
+    this._section = section;
+
+    // Source block and load block.
+    const srcMat = new THREE.MeshStandardMaterial({ color: 0x3a8fbf, roughness: 0.4, metalness: 0.4 });
+    const src = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.9, 0.55), srcMat);
+    src.position.set(-3.35, 0, 0);
+    group.add(src);
+
+    const loadMat = new THREE.MeshStandardMaterial({ color: 0xff6b6b, roughness: 0.4, metalness: 0.3 });
+    const load = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.9, 0.55), loadMat);
+    load.position.set(3.45, 0, 0);
+    group.add(load);
+    this._load = load;
+
+    // Reference tick at the design frequency position along the line.
+    const tickPts = [
+      new THREE.Vector3(0.0, -0.55, 0.0),
+      new THREE.Vector3(0.0, 0.55, 0.0)
+    ];
+    const tickGeo = new THREE.BufferGeometry().setFromPoints(tickPts);
+    const tickMat = new THREE.LineBasicMaterial({ color: 0x9fc4dc });
+    group.add(new THREE.Line(tickGeo, tickMat));
+
+    // Incident and reflected wave arrows (static visual cue).
+    addArrowField([
+      { origin: new THREE.Vector3(-2.6, 0.55, 0.15), dir: new THREE.Vector3(1, 0, 0), len: 1.1 },
+      { origin: new THREE.Vector3(2.6, 0.55, 0.15), dir: new THREE.Vector3(-1, 0, 0), len: 0.8 }
+    ], 0x7fd1ff);
+
+    // Lighting.
+    if (!st._lights) {
+      const key = new THREE.DirectionalLight(0xffffff, 1.3);
+      key.position.set(3, 5, 8);
+      const fill = new THREE.AmbientLight(0x88aacc, 0.6);
+      scene.add(key);
+      scene.add(fill);
+      st._lights = true;
+    }
+
+    camera.position.set(0, -6.8, 9.2);
+    camera.lookAt(0, 0, 0);
+
+    this.update();
+  },
+
+  update() {
+    const st = this.state;
+    if (!this._group) return;
+
+    const z1 = Math.sqrt(st.z0 * st.zL);
+    const band = this._band(st.vswrLimit);
+    const designVswr = this._vswrAt(1.0);
+    const fractional = band.empty ? 0 : (band.width / 1.0) * 100;
+
+    // Colour the matching section by how wide the band is relative to the limit.
+    if (this._section && this._section.material) {
+      const t = Math.max(0, Math.min(1, band.empty ? 0 : band.width / 1.0));
+      this._section.material.color.setRGB(0.35 + 0.65 * t, 0.42 + 0.45 * t, 0.55);
+      this._section.material.needsUpdate = true;
+    }
+    if (this._load && this._load.material) {
+      this._load.material.color.setRGB(1.0, 0.42 + (1 - Math.min(1, fractional / 100)) * 0.25, 0.42);
+      this._load.material.needsUpdate = true;
+    }
+
+    this._drawChart(band, st.vswrLimit);
+
+    setHud(
+      'Quarter-Wave Transformer Bandwidth',
+      'Z_1 = \\sqrt{Z_0 Z_L}, \\quad \\theta = \\frac{\\pi}{2}\\frac{f}{f_0}',
+      [
+        { k: 'Transformer impedance Z1', v: `${z1.toFixed(2)} Ω` },
+        { k: 'VSWR at design frequency', v: designVswr.toFixed(3) },
+        { k: 'Usable frequency range', v: band.empty ? 'none' : `${band.lo.toFixed(3)} – ${band.hi.toFixed(3)} f0` },
+        { k: 'Fractional bandwidth', v: `${fractional.toFixed(1)} %` },
+        { k: 'Max VSWR limit', v: st.vswrLimit.toFixed(2) },
+        { k: 'Section electrical length', v: 'λ/4 at f0' }
+      ]
+    );
+  },
+
+  _drawChart(band, limit) {
+    const ctx = chartEl.getContext('2d');
+    if (!ctx) return;
+    const w = chartEl.width || 520;
+    const h = chartEl.height || 320;
+    ctx.clearRect(0, 0, w, h);
+    ctx.fillStyle = '#0d1520';
+    ctx.fillRect(0, 0, w, h);
+
+    const left = 48;
+    const right = w - 18;
+    const top = 22;
+    const bottom = h - 36;
+    const plotW = right - left;
+    const plotH = bottom - top;
+    const fMin = 0.05;
+    const fMax = 2.0;
+    const mapX = (r) => left + ((r - fMin) / (fMax - fMin)) * plotW;
+
+    // Find maximum VSWR in scan window for vertical scaling.
+    let maxV = limit;
+    for (let i = 0; i <= 200; i++) {
+      const r = fMin + (i / 200) * (fMax - fMin);
+      const v = this._vswrAt(r);
+      if (Number.isFinite(v)) maxV = Math.max(maxV, v);
+    }
+    maxV = Math.min(maxV, 10);
+    const vMin = 1;
+    const mapY = (v) => bottom - ((Math.min(v, maxV) - vMin) / (maxV - vMin)) * plotH;
+
+    // Shaded usable band.
+    if (band && !band.empty && this.state.showBand) {
+      ctx.fillStyle = 'rgba(127,209,255,0.18)';
+      const x0 = mapX(band.lo);
+      const x1 = mapX(band.hi);
+      ctx.fillRect(x0, top, Math.max(1, x1 - x0), plotH);
+      ctx.strokeStyle = 'rgba(127,209,255,0.75)';
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.moveTo(x0, top);
+      ctx.lineTo(x0, bottom);
+      ctx.moveTo(x1, top);
+      ctx.lineTo(x1, bottom);
+      ctx.stroke();
+    }
+
+    // Axes.
+    ctx.strokeStyle = '#5b7a90';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(left, top);
+    ctx.lineTo(left, bottom);
+    ctx.lineTo(right, bottom);
+    ctx.stroke();
+
+    // Grid/tick labels.
+    ctx.fillStyle = '#9fc4dc';
+    ctx.font = '12px system-ui, sans-serif';
+    for (const r of [0.5, 1.0, 1.5, 2.0]) {
+      const x = mapX(r);
+      ctx.strokeStyle = 'rgba(80,120,150,0.35)';
+      ctx.beginPath();
+      ctx.moveTo(x, top);
+      ctx.lineTo(x, bottom);
+      ctx.stroke();
+      ctx.fillText(r.toFixed(1), x - 8, bottom + 16);
+    }
+    ctx.fillText('f / f0', right - 36, bottom + 16);
+
+    for (const v of [1, limit, maxV]) {
+      const y = mapY(v);
+      if (y < top || y > bottom) continue;
+      ctx.strokeStyle = 'rgba(80,120,150,0.35)';
+      ctx.beginPath();
+      ctx.moveTo(left, y);
+      ctx.lineTo(right, y);
+      ctx.stroke();
+      ctx.fillText(v.toFixed(2), 6, y + 4);
+    }
+    ctx.save();
+    ctx.translate(14, top + plotH / 2);
+    ctx.rotate(-Math.PI / 2);
+    ctx.fillText('VSWR', -14, 0);
+    ctx.restore();
+
+    // VSWR limit line.
+    ctx.strokeStyle = '#ffd166';
+    ctx.setLineDash([5, 4]);
+    ctx.lineWidth = 1.6;
+    ctx.beginPath();
+    ctx.moveTo(left, mapY(limit));
+    ctx.lineTo(right, mapY(limit));
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // VSWR curve.
+    ctx.strokeStyle = '#7fd1ff';
+    ctx.lineWidth = 2.2;
+    ctx.beginPath();
+    let started = false;
+    for (let i = 0; i <= 400; i++) {
+      const r = fMin + (i / 400) * (fMax - fMin);
+      const v = this._vswrAt(r);
+      if (!Number.isFinite(v)) continue;
+      const x = mapX(r);
+      const y = mapY(v);
+      if (!started) {
+        ctx.moveTo(x, y);
+        started = true;
+      } else {
+        ctx.lineTo(x, y);
+      }
+    }
+    ctx.stroke();
+
+    // Design-frequency marker.
+    ctx.strokeStyle = 'rgba(255,107,107,0.8)';
+    ctx.beginPath();
+    ctx.moveTo(mapX(1.0), top);
+    ctx.lineTo(mapX(1.0), bottom);
+    ctx.stroke();
+    ctx.fillStyle = '#ff6b6b';
+    ctx.fillText('design f0', mapX(1.0) - 32, top - 6);
+
+    // Legend.
+    ctx.fillStyle = '#7fd1ff';
+    ctx.fillText('VSWR', 12, h - 8);
+    ctx.fillStyle = '#9fc4dc';
+    ctx.fillText('quarter-wave transformer', left + 8, h - 20);
+  },
+
+  tick(dt) {
+    // The visualization is static; no continuous animation is required.
+  },
+
+  quiz: [
+    {
+      q: 'For a quarter-wave transformer matching Z0 to ZL, what is the section characteristic impedance?',
+      options: ['Z0 + ZL', 'sqrt(Z0 ZL)', 'Z0 ZL', 'ZL / Z0'],
+      answer: 1
+    },
+    {
+      q: 'At the design frequency, the transformer section has what electrical length?',
+      options: ['lambda/8', 'lambda/4', 'lambda/2', 'one full wavelength'],
+      answer: 1
+    },
+    {
+      q: 'Why does the VSWR increase away from the design frequency?',
+      options: [
+        'The line resistance changes',
+        'The electrical length departs from 90 degrees, changing the input impedance',
+        'The load impedance itself changes',
+        'The characteristic impedance becomes zero'
+      ],
+      answer: 1
+    }
+  ]
+});
+
+/* Module registry (verified): circuit_theory, field_theory, microstrip, vswr_line, smith_chart, stub_matching, bandwidth */
+/* ---- Module: Transients on Transmission Lines & TDR ---- */
+modules.push({
+  id: 'transients_tdr',
+  title: 'Transients & TDR',
+  lesson: 'A step launched from a source travels down a line of length l at speed v = vf*c. At the load it reflects with coefficient Gamma_L = (Z_L - Z0)/(Z_L + Z0). The reflected wave returns after a round-trip delay 2l/v, producing a staircase at the load (or a visible echo in a time-domain reflectometer trace). With multiple reflections the load voltage converges to the DC value V_L = V_s * Z_L / (Z0 + Z_L) for a source matched to Z0.',
+  controls: [
+    { id: 'z0', label: 'Line impedance Z0 (ohm)', type: 'range', min: 10, max: 200, step: 1, value: 50 },
+    { id: 'zL', label: 'Load impedance Z_L (ohm)', type: 'range', min: 0, max: 500, step: 1, value: 150 },
+    { id: 'vf', label: 'Velocity factor vf', type: 'range', min: 0.3, max: 1, step: 0.01, value: 0.66 },
+    { id: 'length', label: 'Line length l (m)', type: 'range', min: 1, max: 50, step: 0.5, value: 10 },
+    { id: 'vs', label: 'Source step voltage V_s (V)', type: 'range', min: 1, max: 10, step: 0.5, value: 5 },
+    { id: 'showRays', label: 'Show reflection rays', type: 'check', value: true }
+  ],
+  state: {},
+
+  build() {
+    const st = this.state;
+    st.z0 = st.z0 ?? 50;
+    st.zL = st.zL ?? 150;
+    st.vf = st.vf ?? 0.66;
+    st.length = st.length ?? 10;
+    st.vs = st.vs ?? 5;
+    st.showRays = st.showRays ?? true;
+
+    const group = new THREE.Group();
+    group.name = 'transientsTdr';
+    this._group = group;
+    content.add(group);
+
+    // Long line drawn along the +x axis, centred at origin.
+    const lineGeo = new THREE.CylinderGeometry(0.16, 0.16, 8, 20);
+    lineGeo.rotateZ(Math.PI / 2);
+    const lineMat = new THREE.MeshStandardMaterial({ color: 0x4f7f9e, roughness: 0.4, metalness: 0.5 });
+    this._line = new THREE.Mesh(lineGeo, lineMat);
+    group.add(this._line);
+
+    // Source (step generator) at left end.
+    const srcMat = new THREE.MeshStandardMaterial({ color: 0x7fd1ff, roughness: 0.3, metalness: 0.4 });
+    this._source = new THREE.Mesh(new THREE.BoxGeometry(0.9, 1.2, 0.9), srcMat);
+    this._source.position.set(-4.45, 0, 0);
+    group.add(this._source);
+
+    // Load at right end.
+    const loadMat = new THREE.MeshStandardMaterial({ color: 0xff6b6b, roughness: 0.35, metalness: 0.3 });
+    this._load = new THREE.Mesh(new THREE.SphereGeometry(0.45, 24, 18), loadMat);
+    this._load.position.set(4.45, 0, 0);
+    group.add(this._load);
+
+    // Moving pulse marker along the line.
+    const pulseMat = new THREE.MeshStandardMaterial({ color: 0xffd166, emissive: 0x805500, roughness: 0.25, metalness: 0.2 });
+    this._pulse = new THREE.Mesh(new THREE.SphereGeometry(0.28, 20, 16), pulseMat);
+    this._pulse.position.set(-4.0, 0, 0);
+    group.add(this._pulse);
+
+    // Reflection-ray arrows (forward incident, and two reflected waves).
+    const arrowColor = 0xffd166;
+    const a1 = new THREE.ArrowHelper(new THREE.Vector3(1, 0, 0), new THREE.Vector3(-3.2, 0.7, 0), 2.2, arrowColor);
+    const a2 = new THREE.ArrowHelper(new THREE.Vector3(-1, 0, 0), new THREE.Vector3(3.2, 0.7, 0), 2.2, arrowColor);
+    const a3 = new THREE.ArrowHelper(new THREE.Vector3(1, 0, 0), new THREE.Vector3(0.0, -0.7, 0), 2.2, arrowColor);
+    group.add(a1, a2, a3);
+    this._arrows = [a1, a2, a3];
+
+    // Ensure a light exists for the mesh materials.
+    if (!st._lights) {
+      const key = new THREE.DirectionalLight(0xffffff, 1.3);
+      key.position.set(4, 6, 9);
+      const fill = new THREE.AmbientLight(0x88aacc, 0.65);
+      scene.add(key);
+      scene.add(fill);
+      st._lights = true;
+    }
+
+    this._ctx = chartEl.getContext('2d');
+
+    camera.position.set(0, -8.5, 11.0);
+    camera.lookAt(0, 0, 0);
+
+    this.update();
+  },
+
+  // Compute reflection coefficient, delays and the load staircase samples.
+  _solve() {
+    const st = this.state;
+    const z0 = Math.max(1, st.z0);
+    const zL = Math.max(0, st.zL);
+    const gamma = (zL - z0) / (zL + z0);
+    const vs = st.vs;
+    const c = 2.99792458e8;
+    const v = Math.max(1e-9, st.vf) * c;
+    const tau = (2 * st.length) / v; // round-trip time in seconds
+
+    // Voltage at the load: sum of incident + successively reflected waves.
+    const samples = [];
+    const N = 40;
+    let vl = 0;
+    for (let k = 0; k < N; k++) {
+      // each arriving wave amplitude: vs * gamma^k (k = 0 incident, etc.)
+      if (k > 0) vl += vs * Math.pow(gamma, k);
+      const amp = k === 0 ? vs : vs * Math.pow(gamma, k);
+      samples.push({ t: k * tau, v: vl, amp, k });
+    }
+    const vdc = vs * zL / (z0 + zL);
+    const vswr = gamma >= 0 ? (1 + gamma) / Math.max(1e-6, 1 - gamma) : (1 - gamma) / (1 + gamma);
+
+    return { z0, zL, gamma, vs, v, tau, samples, vdc, vswr };
+  },
+
+  update() {
+    const st = this.state;
+    if (!this._group) return;
+    const sol = this._solve();
+
+    // Scale line display proportional to requested physical length (visual only).
+    const scale = Math.min(1.4, Math.max(0.6, sol.length ? 1 : 1));
+    this._line.scale.x = 8 * scale / 8; // keep constant visual length
+
+    // Colour the load by its reflection character.
+    if (sol.gamma > 0.15) this._load.material.color.setHex(0xff6b6b);
+    else if (sol.gamma < -0.15) this._load.material.color.setHex(0x6bff8f);
+    else this._load.material.color.setHex(0xffd166);
+
+    // Pulse marker simply sits near the source end (static snapshot of the launch).
+    this._pulse.position.set(-3.6 * scale + 0.2, 0, 0.25);
+
+    // Reflection-ray arrows, rescaled by reflection strength.
+    for (const a of this._arrows) a.visible = !!st.showRays;
+    if (st.showRays) {
+      const a1 = this._arrows[0], a2 = this._arrows[1], a3 = this._arrows[2];
+      const baseLen = 2.2 * scale;
+      a1.setLength(baseLen, 0.35, 0.22);
+      a2.setLength(Math.max(0.05, baseLen * Math.abs(sol.gamma)), 0.35, 0.22);
+      a3.setLength(Math.max(0.05, baseLen * sol.gamma * sol.gamma), 0.35, 0.22);
+      a1.position.set(-3.2 * scale, 0.7, 0);
+      a2.position.set(3.2 * scale, 0.7, 0);
+      a3.position.set(0.0, -0.7, 0);
+    }
+
+    // Camera framing
+    camera.lookAt(0, 0, 0);
+
+    this._drawChart(sol);
+
+    const tauNs = sol.tau * 1e9;
+    setHud(
+      'Transients & TDR',
+      '\\Gamma_L = \\frac{Z_L - Z_0}{Z_L + Z_0}, \\quad t_d = \\frac{2l}{v_f c}, \\quad V_L \\to V_s\\frac{Z_L}{Z_0+Z_L}',
+      [
+        { k: 'Reflection coefficient Γ_L', v: sol.gamma.toFixed(3) },
+        { k: 'Load voltage V_L (DC)', v: sol.vdc.toFixed(3) + ' V' },
+        { k: 'Round-trip delay', v: tauNs.toFixed(2) + ' ns' },
+        { k: 'Propagation speed', v: (sol.v / 1e8).toFixed(3) + ' ×10^8 m/s' },
+        { k: 'VSWR', v: sol.vswr.toFixed(3) },
+        { k: 'Line length', v: st.length.toFixed(1) + ' m' }
+      ]
+    );
+  },
+
+  _drawChart(sol) {
+    const ctx = this._ctx;
+    if (!ctx) return;
+    const w = chartEl.width || 520;
+    const h = chartEl.height || 320;
+    ctx.clearRect(0, 0, w, h);
+
+    ctx.fillStyle = '#0d1520';
+    ctx.fillRect(0, 0, w, h);
+
+    const padL = 52, padR = 16, padT = 26, padB = 44;
+    const plotW = w - padL - padR;
+    const plotH = h - padT - padB;
+
+    // Time axis covers the first several round trips.
+    const tMax = sol.tau * 8;
+    const vMax = Math.max(sol.vs, sol.vdc) * 1.1;
+
+    // Grid
+    ctx.strokeStyle = 'rgba(80,120,150,0.35)';
+    ctx.lineWidth = 1;
+    for (let i = 0; i <= 4; i++) {
+      const y = padT + (plotH * i) / 4;
+      ctx.beginPath();
+      ctx.moveTo(padL, y);
+      ctx.lineTo(padL + plotW, y);
+      ctx.stroke();
+    }
+    for (let i = 0; i <= 4; i++) {
+      const x = padL + (plotW * i) / 4;
+      ctx.beginPath();
+      ctx.moveTo(x, padT);
+      ctx.lineTo(x, padT + plotH);
+      ctx.stroke();
+    }
+
+    // Axes
+    ctx.strokeStyle = '#7fa8c0';
+    ctx.lineWidth = 1.4;
+    ctx.beginPath();
+    ctx.moveTo(padL, padT);
+    ctx.lineTo(padL, padT + plotH);
+    ctx.lineTo(padL + plotW, padT + plotH);
+    ctx.stroke();
+
+    // Labels
+    ctx.fillStyle = '#9fc4dc';
+    ctx.font = '12px system-ui, sans-serif';
+    ctx.fillText('V_L(t)  (TDR staircase)', padL, 16);
+    ctx.fillText('t (round trips, τ = 2l/v)', padL + plotW - 150, h - 12);
+    ctx.save();
+    ctx.translate(16, padT + plotH / 2);
+    ctx.rotate(-Math.PI / 2);
+    ctx.fillText('voltage (V)', 0, 0);
+    ctx.restore();
+
+    const mapX = (t) => padL + (t / tMax) * plotW;
+    const mapY = (v) => padT + plotH - (v / vMax) * plotH;
+
+    // Incident amplitude guide (source step)
+    ctx.strokeStyle = 'rgba(127,209,255,0.5)';
+    ctx.setLineDash([4, 4]);
+    ctx.beginPath();
+    ctx.moveTo(padL, mapY(sol.vs));
+    ctx.lineTo(padL + plotW, mapY(sol.vs));
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Staircase of load voltage
+    ctx.strokeStyle = '#7fd1ff';
+    ctx.lineWidth = 2.2;
+    ctx.beginPath();
+    const pts = sol.samples;
+    for (let i = 0; i < pts.length; i++) {
+      const x = mapX(pts[i].t);
+      const y = mapY(pts[i].v);
+      if (i === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, mapY(pts[i - 1].v)), ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // DC asymptote
+    ctx.strokeStyle = '#ffd166';
+    ctx.lineWidth = 1.6;
+    ctx.setLineDash([6, 5]);
+    ctx.beginPath();
+    ctx.moveTo(padL, mapY(sol.vdc));
+    ctx.lineTo(padL + plotW, mapY(sol.vdc));
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Echo markers (amplitude of arriving waves)
+    ctx.fillStyle = 'rgba(255,209,102,0.85)';
+    for (const p of pts) {
+      if (p.k > 0 && Math.abs(p.amp) > 1e-3) {
+        const x = mapX(p.t);
+        ctx.beginPath();
+        ctx.arc(x, padT + plotH, 2.2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    // Legend
+    ctx.fillStyle = '#7fd1ff';
+    ctx.fillText('— load voltage', 12, h - 30);
+    ctx.fillStyle = '#ffd166';
+    ctx.fillText('- - DC asymptote', 12, h - 12);
+    ctx.fillStyle = '#ff6b6b';
+    ctx.fillText(`Γ_L = ${sol.gamma.toFixed(3)}`, w - 130, h - 30);
+  },
+
+  tick(dt) {
+    // Static explanatory snapshot; no per-frame animation required.
+  },
+
+  quiz: [
+    {
+      q: 'What is the reflection coefficient of a load Z_L = Z0 (matched line)?',
+      options: ['-1', '0', '+1', '0.5'],
+      answer: 1
+    },
+    {
+      q: 'The round-trip delay of a pulse on a line of length l is:',
+      options: ['l/v', '2l/v', '4l/v', 'v/(2l)'],
+      answer: 1
+    },
+    {
+      q: 'For a load resistance greater than Z0, the reflection coefficient is:',
+      options: ['positive (same polarity)', 'negative (inverted polarity)', 'zero', 'imaginary'],
+      answer: 0
+    },
+    {
+      q: 'A TDR displays an echo at time t; the distance to the fault is approximately:',
+      options: ['v*t', 'v*t/2', '2v*t', 'V_s*t'],
+      answer: 1
+    }
+  ]
+});
+
+modules.push({
+  id: 'conclusions_problems',
+  title: 'Conclusions & Design Problems',
+  controls: [
+    { id: 'conclusionMargin', label: 'Design margin (%)', type: 'range', min: 0, max: 100, step: 5, value: 50 }
+  ],
+  state: { conclusionMargin: 50 },
+  build() {
+    this._bars = [];
+    this._baseHeights = [1.9, 1.4, 1.0];
+
+    const specs = [
+      { x: -1.6, color: 0x3d7dff, tag: 'reflection' },
+      { x: 0.0, color: 0x37d39a, tag: 'loss' },
+      { x: 1.6, color: 0xffb454, tag: 'bandwidth' }
+    ];
+
+    specs.forEach((spec) => {
+      const geo = new THREE.BoxGeometry(0.8, 1, 0.8);
+      const mat = new THREE.MeshStandardMaterial({
+        color: spec.color,
+        roughness: 0.35,
+        metalness: 0.15,
+        emissive: spec.color,
+        emissiveIntensity: 0.12
+      });
+      const bar = new THREE.Mesh(geo, mat);
+      bar.position.set(spec.x, 0.5, 0);
+      bar.userData.tag = spec.tag;
+      content.add(bar);
+      this._bars.push(bar);
+    });
+
+    const plate = new THREE.Mesh(
+      new THREE.BoxGeometry(4.6, 0.12, 1.8),
+      new THREE.MeshStandardMaterial({ color: 0x223047, roughness: 0.8, metalness: 0.2 })
+    );
+    plate.position.set(0, -0.06, 0);
+    content.add(plate);
+
+    addArrowField([
+      { origin: new THREE.Vector3(-2.25, 0.16, 0), dir: new THREE.Vector3(1, 0, 0), len: 0.75 },
+      { origin: new THREE.Vector3(2.25, 0.16, 0), dir: new THREE.Vector3(-1, 0, 0), len: 0.75 }
+    ], 0x7fd1ff);
+  },
+  update() {
+    const st = this.state || {};
+    const marginPct = st.conclusionMargin === undefined ? 50 : st.conclusionMargin;
+    const m = Math.max(0, Math.min(1, marginPct / 100));
+
+    const heights = [
+      0.65 + 1.55 * (1 - m),
+      0.75 + 1.05 * m,
+      0.85 + 1.45 * m
+    ];
+
+    if (this._bars) {
+      this._bars.forEach((bar, i) => {
+        const h = Math.max(0.05, heights[i]);
+        bar.scale.y = h;
+        bar.position.y = h / 2;
+      });
+    }
+
+    const gamma = Math.max(0.01, Math.min(0.99, 1 - m));
+    const vswr = (1 + gamma) / (1 - gamma);
+    const returnLoss = -20 * Math.log10(Math.max(1e-3, gamma));
+
+    setHud(
+      'Conclusions & Design Problems',
+      '\\Gamma=\\frac{Z_L-Z_0}{Z_L+Z_0},\\quad \\mathrm{VSWR}=\\frac{1+|\Gamma|}{1-|\Gamma|}',
+      [
+        { k: 'Design margin', v: marginPct.toFixed(0) + '%' },
+        { k: 'Reflection |Γ|', v: gamma.toFixed(3) },
+        { k: 'VSWR', v: vswr.toFixed(2) },
+        { k: 'Return loss', v: returnLoss.toFixed(1) + ' dB' },
+        { k: 'Trade-off bars', v: heights.map((h) => h.toFixed(2)).join(' / ') }
+      ]
+    );
+  },
+  lesson: 'A transmission-line design is always a trade-off between reflection, loss, and bandwidth. Check the characteristic impedance, electrical length, termination, and frequency range together. Increase margin until the VSWR and return loss meet the system budget, then verify the result against the physical microstrip dimensions and the transient response. Common problems include mismatched terminations, overlooked frequency dependence, stub lengths that are off by a quarter wavelength, and losses that grow with frequency.',
+  quiz: [
+    {
+      q: 'Which quantity is directly determined by the reflection coefficient?',
+      options: ['VSWR and return loss', 'Only the physical length', 'Only the conductor width', 'The dielectric constant alone'],
+      answer: 0
+    },
+    {
+      q: 'A design with a larger impedance margin generally has:',
+      options: ['Lower VSWR and lower reflection', 'Higher VSWR and higher reflection', 'No change in reflection', 'Infinite return loss always'],
+      answer: 0
+    },
+    {
+      q: 'A key trade-off in line design is between:',
+      options: ['Reflection, loss, and bandwidth', 'Color and temperature', 'Only cost and length', 'Only voltage and current'],
+      answer: 0
+    }
+  ]
+});
+
+/* === UI CONTROLLER === */
+let activeIdx = 0;
+const progress = {};
+
+function buildModuleList() {
+  moduleList.innerHTML = "";
+  modules.forEach((m, i) => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "mod-btn";
+    b.dataset.idx = String(i);
+    b.innerHTML = `<span class="num">${i + 1}.</span>${m.title}`;
+    b.addEventListener("click", () => selectModule(i));
+    moduleList.appendChild(b);
+  });
+}
+
+function buildControls(mod) {
+  controlsEl.innerHTML = "";
+  if (!mod.state) mod.state = {};
+  (mod.controls || []).forEach(c => {
+    if (!(c.id in mod.state)) mod.state[c.id] = c.value;
+    const row = document.createElement("div");
+    row.className = "ctl";
+    const lab = document.createElement("label");
+    lab.textContent = c.label || c.id;
+    row.appendChild(lab);
+
+    if (c.type === "select") {
+      const sel = document.createElement("select");
+      (c.options || []).forEach(opt => {
+        const o = document.createElement("option");
+        o.value = opt; o.textContent = opt;
+        if (opt === mod.state[c.id]) o.selected = true;
+        sel.appendChild(o);
+      });
+      sel.addEventListener("change", () => { mod.state[c.id] = sel.value; mod.update(); });
+      row.appendChild(sel);
+    } else if (c.type === "button") {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.textContent = c.label;
+      btn.addEventListener("click", () => { if (c.onClick) c.onClick(mod); mod.update(); });
+      row.appendChild(btn);
+    } else if (c.type === "check") {
+      const inp = document.createElement("input");
+      inp.type = "checkbox";
+      inp.checked = !!mod.state[c.id];
+      inp.addEventListener("change", () => { mod.state[c.id] = inp.checked; mod.update(); });
+      row.appendChild(inp);
+    } else {
+      const inp = document.createElement("input");
+      inp.type = "range";
+      inp.min = c.min ?? 0; inp.max = c.max ?? 1; inp.step = c.step ?? 0.01;
+      inp.value = mod.state[c.id];
+      const val = document.createElement("span");
+      val.className = "val";
+      val.textContent = Number(mod.state[c.id]).toFixed(2);
+      inp.addEventListener("input", () => {
+        mod.state[c.id] = parseFloat(inp.value);
+        val.textContent = Number(mod.state[c.id]).toFixed(2);
+        mod.update();
+      });
+      row.appendChild(inp);
+      row.appendChild(val);
+    }
+    controlsEl.appendChild(row);
+  });
+}
+
+function buildLesson(mod) {
+  const raw = mod.lesson || mod.blurb || "";
+  lessonEl.innerHTML = raw.trim().startsWith("<") ? raw : `<h3>${mod.title}</h3><p>${raw}</p>`;
+  renderAllMath(lessonEl);
+}
+
+function buildQuiz(mod) {
+  quizEl.innerHTML = "<h3>Concept Check</h3>";
+  const key = mod.id || String(activeIdx);
+  progress[key] = progress[key] || {};
+  (mod.quiz || []).forEach((q, qi) => {
+    const card = document.createElement("div");
+    card.className = "qcard";
+    const qt = document.createElement("div");
+    qt.className = "qtext";
+    qt.textContent = `${qi + 1}. ${q.q}`;
+    card.appendChild(qt);
+    const opts = document.createElement("div");
+    opts.className = "opts";
+    const fb = document.createElement("div");
+    fb.className = "fb";
+    q.options.forEach((opt, oi) => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.textContent = opt;
+      btn.addEventListener("click", () => {
+        progress[key][qi] = oi;
+        opts.querySelectorAll("button").forEach((b, idx) => {
+          b.classList.toggle("correct", idx === q.answer);
+          b.classList.toggle("wrong", idx === oi && oi !== q.answer);
+        });
+        fb.textContent = oi === q.answer ? ("✓ " + (q.explain || "Correct")) : ("✗ " + (q.explain || "Try again"));
+        updateBadge();
+      });
+      opts.appendChild(btn);
+    });
+    card.appendChild(opts);
+    card.appendChild(fb);
+    quizEl.appendChild(card);
+  });
+  updateBadge();
+}
+
+function updateBadge() {
+  let correct = 0, total = 0;
+  modules.forEach((m, i) => {
+    const saved = progress[m.id || String(i)] || {};
+    (m.quiz || []).forEach((q, qi) => { total++; if (saved[qi] === q.answer) correct++; });
+  });
+  badgeEl.textContent = `${correct} / ${total} CORRECT`;
+}
+
+function selectModule(idx) {
+  if (!modules.length || idx < 0 || idx >= modules.length) return;
+  activeIdx = idx;
+  const mod = modules[idx];
+  moduleList.querySelectorAll(".mod-btn").forEach(b => b.classList.toggle("active", Number(b.dataset.idx) === idx));
+  buildControls(mod);
+  buildLesson(mod);
+  buildQuiz(mod);
+  clearContent();
+  chartEl.style.display = "none";
+  renderer.domElement.style.display = "block";
+  if (typeof mod.build === "function") mod.build();
+  mod._built = true;
+  if (typeof mod.update === "function") mod.update();
+  renderer.render(scene, camera);
+}
+
+function onResize() {
+  const rect = stageEl.getBoundingClientRect();
+  const w = Math.max(1, Math.round(rect.width || stageEl.clientWidth));
+  const h = Math.max(1, Math.round(rect.height || stageEl.clientHeight));
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+  renderer.setSize(w, h);
+  chartEl.width = Math.round(w * Math.min(window.devicePixelRatio || 1, 2));
+  chartEl.height = Math.round(h * Math.min(window.devicePixelRatio || 1, 2));
+  const mod = modules[activeIdx];
+  if (mod && mod._built && typeof mod.update === "function") {
+    mod.update();
+    renderer.render(scene, camera);
+  }
+}
+
+buildModuleList();
+selectModule(0);
+window.addEventListener("resize", onResize);
+if (window.ResizeObserver) new ResizeObserver(onResize).observe(stageEl);
+onResize();
+
+let last = performance.now();
+function animate(now) {
+  const dt = Math.min(0.05, (now - last) / 1000);
+  last = now;
+  const mod = modules[activeIdx];
+  if (mod && mod._built && typeof mod.tick === "function") mod.tick(dt);
+  controls.update();
+  renderer.render(scene, camera);
+  requestAnimationFrame(animate);
+}
+requestAnimationFrame(animate);
+</script>
+</body>
+</html>
+<script type="module">
+import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
+import { OrbitControls } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/controls/OrbitControls.js';
+
+const stage = document.getElementById('stage');
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setSize(stage.clientWidth, stage.clientHeight);
+renderer.domElement.classList.add('webgl');
+stage.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0b1020);
+
+const camera = new THREE.PerspectiveCamera(45, stage.clientWidth / stage.clientHeight, 0.1, 500);
+camera.position.set(6, 4.5, 8);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.08;
+controls.target.set(0, 0, 0);
+
+const content = new THREE.Group();
+scene.add(content);
+
+const sharedArrowGeoms = new Set();
+
+function disposeObj(obj) {
+  obj.traverse((o) => {
+    if (o.geometry && !sharedArrowGeoms.has(o.geometry)) o.geometry.dispose();
+    if (o.material) {
+      if (Array.isArray(o.material)) o.material.forEach((m) => m.dispose());
+      else o.material.dispose();
+    }
+  });
+}
+
+function clearContent() {
+  while (content.children.length) {
+    const c = content.children.pop();
+    disposeObj(c);
+  }
+}
+
+function addAxes(len = 4) {
+  const g = new THREE.Group();
+  const axes = [
+    [new THREE.Vector3(1, 0, 0), 0xff5a5a],
+    [new THREE.Vector3(0, 1, 0), 0x5aff8a],
+    [new THREE.Vector3(0, 0, 1), 0x5aa8ff],
+  ];
+  for (const [dir, color] of axes) {
+    const arrow = new THREE.ArrowHelper(dir, new THREE.Vector3(0, 0, 0), len, color, 0.35, 0.2);
+    sharedArrowGeoms.add(arrow.line.geometry);
+    sharedArrowGeoms.add(arrow.cone.geometry);
+    g.add(arrow);
+  }
+  content.add(g);
+  return g;
+}
+
+function addGrid(size = 10, div = 10) {
+  const grid = new THREE.GridHelper(size, div, 0x2a3550, 0x1a2236);
+  grid.position.y = -0.001;
+  content.add(grid);
+  return grid;
+}
+
+function addArrowField(vectors, color = 0x7fd1ff) {
+  const g = new THREE.Group();
+  for (const v of vectors) {
+    const dir = v.dir.clone().normalize();
+    const arrow = new THREE.ArrowHelper(dir, v.origin, v.len ?? 1, color, 0.18, 0.1);
+    sharedArrowGeoms.add(arrow.line.geometry);
+    sharedArrowGeoms.add(arrow.cone.geometry);
+    g.add(arrow);
+  }
+  content.add(g);
+  return g;
+}
