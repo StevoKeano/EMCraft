@@ -6594,6 +6594,12 @@ modules.push({
     ctx.fillStyle = closed ? 'rgba(102,255,153,0.9)' : 'rgba(255,120,140,0.9)';
     ctx.fillText(closed ? 'LINK CLOSED' : 'LINK OUTAGE', W - padR, 16);
 
+    if (!Number.isFinite(fspl)) {
+      const lam_m = 0.299792458 / Math.max(1e-6, st.freq_GHz);
+      const R_m = Math.max(1, st.R_km) * 1000;
+      fspl = 20 * Math.log10((4 * Math.PI * R_m) / lam_m);
+    }
+
     // ---- HUD ----
     setHud(
       'Ch. 5 Capstone — ' + modeLabel + ' Budget',
