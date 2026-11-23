@@ -41,4 +41,10 @@
     "category": "Simulation",
     "description": "propagation of waves through space and media, their polarization, reflection, refraction, and diffraction",
   },
+  {
+    "file": "EM-ANTENNAS-CH5.html",
+    "title": "EM-ANTENNAS-CH5,
+    "category": "Simulation",
+    "description": "Chapter 5 explores the physics of electromagnetic radiation and antenna engineering, covering fundamental radiation parameters, wire and aperture antenna architectures, and phased-array beam steering.",
+  },
 ]
