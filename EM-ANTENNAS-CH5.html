@@ -5075,6 +5075,505 @@ modules.push({
     { q: 'A pulse Doppler radar with PRF = 1500 Hz and λ = 0.0535 m has Nyquist velocity closest to:', options: ['20 m/s', '40 m/s', '80 m/s', '150 m/s'], answer: 0 }
   ]
 });
+modules.push({
+  id: 'gps_satellites_relativity',
+  title: '5-13 Global Positioning Satellites & Relativity',
+  controls: [
+    { id: 'elev_deg', label: 'Constellation elevation (deg)', type: 'range', min: 10, max: 85, step: 5, value: 45 },
+    { id: 'rel_corr', label: 'Apply relativistic clock correction', type: 'check', value: true },
+    { id: 'hours_elapsed', label: 'Mission time since sync (h)', type: 'range', min: 0.5, max: 24, step: 0.5, value: 6 },
+    { id: 'freq_band', label: 'GPS carrier', type: 'select', options: ['L1 (1575.42 MHz)', 'L2 (1227.60 MHz)'], value: 'L1 (1575.42 MHz)' }
+  ],
+
+  build() {
+    const g = this.group = new THREE.Group();
+    content.add(g);
+
+    // Earth
+    const earth = new THREE.Mesh(
+      new THREE.SphereGeometry(1.5, 48, 32),
+      new THREE.MeshStandardMaterial({ color: 0x2a6fa8, roughness: 0.75, metalness: 0.05 })
+    );
+    g.add(earth);
+    this.earth = earth;
+
+    // Atmosphere / grid wire
+    const wire = new THREE.Mesh(
+      new THREE.SphereGeometry(1.505, 32, 20),
+      new THREE.MeshBasicMaterial({ color: 0x7fd1ff, wireframe: true, transparent: true, opacity: 0.12 })
+    );
+    g.add(wire);
+
+    // Receiver pin at equator
+    const pin = new THREE.Mesh(
+      new THREE.ConeGeometry(0.055, 0.22, 12),
+      new THREE.MeshStandardMaterial({ color: 0xffd166, emissive: 0x553300 })
+    );
+    pin.position.set(1.5, 0.11, 0);
+    pin.rotation.z = -Math.PI / 2;
+    g.add(pin);
+    this.pin = pin;
+
+    // Satellites
+    this.sats = [];
+    const satMat = new THREE.MeshStandardMaterial({ color: 0xdfe9f3, roughness: 0.4, metalness: 0.6 });
+    for (let i = 0; i < 4; i++) {
+      const s = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.16, 0.16), satMat);
+      g.add(s);
+      const panel = new THREE.Mesh(
+        new THREE.BoxGeometry(0.34, 0.02, 0.14),
+        new THREE.MeshStandardMaterial({ color: 0x3f7fbf, metalness: 0.8, roughness: 0.3 })
+      );
+      s.add(panel);
+      this.sats.push(s);
+    }
+
+    // Pseudorange spheres (wireframe, transparent)
+    this.spheres = [];
+    for (let i = 0; i < 4; i++) {
+      const sp = new THREE.Mesh(
+        new THREE.SphereGeometry(1, 24, 16),
+        new THREE.MeshBasicMaterial({ color: 0x7fd1ff, wireframe: true, transparent: true, opacity: 0.16 })
+      );
+      g.add(sp);
+      this.spheres.push(sp);
+    }
+
+    // Position error halo
+    const halo = new THREE.Mesh(
+      new THREE.SphereGeometry(0.16, 20, 14),
+      new THREE.MeshBasicMaterial({ color: 0xff5a5a, transparent: true, opacity: 0.35 })
+    );
+    halo.position.set(1.5, 0.11, 0);
+    g.add(halo);
+    this.halo = halo;
+
+    // Orbit ring
+    const ring = new THREE.Mesh(
+      new THREE.TorusGeometry(2.55, 0.012, 8, 96),
+      new THREE.MeshBasicMaterial({ color: 0x4a7fa8, transparent: true, opacity: 0.5 })
+    );
+    ring.rotation.x = Math.PI / 2;
+    g.add(ring);
+
+    // Light
+    const light = new THREE.DirectionalLight(0xffffff, 1.4);
+    light.position.set(4, 6, 5);
+    g.add(light);
+    g.add(new THREE.AmbientLight(0x88aacc, 0.55));
+
+    // Constants
+    this.C = 299792458;
+    this.R_E = 6378e3;
+    this.R_SAT = 26560e3;
+    this.V_SAT = 3874;
+    this.DAY = 86400;
+    this.SR = -7.21;   // us/day
+    this.GR = +45.68;  // us/day
+    this.NET = +38.47; // us/day
+    this.SCALE = 2.55 / this.R_SAT; // scene units per metre
+  },
+
+  update() {
+    const st = this.state;
+    const elev = st.elev_deg * Math.PI / 180;
+    const h = st.hours_elapsed;
+    const corrected = st.rel_corr;
+
+    // Satellite positions: 4 sats spread in azimuth, elevation sets polar angle from equator
+    const rScene = this.R_SAT * this.SCALE;
+    const az = [0, Math.PI / 2, Math.PI, 3 * Math.PI / 2];
+    const positions = [];
+    for (let i = 0; i < 4; i++) {
+      const a = az[i];
+      const x = rScene * Math.cos(elev) * Math.cos(a);
+      const y = rScene * Math.sin(elev);
+      const z = rScene * Math.cos(elev) * Math.sin(a);
+      const p = new THREE.Vector3(x, y, z);
+      positions.push(p);
+      this.sats[i].position.copy(p);
+      this.sats[i].lookAt(0, 0, 0);
+    }
+
+    // Pseudorange spheres: radius = distance from satellite to receiver pin
+    const pinPos = new THREE.Vector3(1.5, 0.11, 0);
+    for (let i = 0; i < 4; i++) {
+      const d = positions[i].distanceTo(pinPos);
+      this.spheres[i].position.copy(positions[i]);
+      this.spheres[i].scale.setScalar(d);
+      this.spheres[i].material.opacity = 0.14;
+    }
+
+    // Position error: uncorrected drift
+    const driftUs = corrected ? 0 : this.NET * (h / 24);
+    const errKm = corrected ? 0 : 11.53 * (h / 24);
+    const errScene = Math.min(errKm * 1000 * this.SCALE, 0.55);
+    this.halo.scale.setScalar(Math.max(0.35, errScene / 0.16));
+    this.halo.material.opacity = corrected ? 0.0 : 0.42;
+    this.halo.visible = !corrected;
+
+    // Chart
+    const ctx = chartEl.getContext('2d');
+    const W = chartEl.width, H = chartEl.height;
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = 'rgba(8,16,26,0.82)';
+    ctx.fillRect(0, 0, W, H);
+    ctx.strokeStyle = 'rgba(120,180,220,0.35)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(0.5, 0.5, W - 1, H - 1);
+
+    const padL = 42, padR = 14, padT = 26, padB = 30;
+    const plotW = W - padL - padR, plotH = H - padT - padB;
+    const x0 = padL, y0 = padT;
+
+    // axes
+    ctx.strokeStyle = 'rgba(160,200,230,0.55)';
+    ctx.beginPath();
+    ctx.moveTo(x0, y0 + plotH);
+    ctx.lineTo(x0 + plotW, y0 + plotH);
+    ctx.moveTo(x0, y0);
+    ctx.lineTo(x0, y0 + plotH);
+    ctx.stroke();
+
+    // y range: -10 to +50 us
+    const yMin = -10, yMax = 50;
+    const yOf = v => y0 + plotH * (1 - (v - yMin) / (yMax - yMin));
+    const xOf = t => x0 + plotW * (t / 24);
+
+    // gridlines
+    ctx.strokeStyle = 'rgba(120,180,220,0.18)';
+    ctx.font = '10px monospace';
+    ctx.fillStyle = 'rgba(180,215,240,0.8)';
+    for (let v = -10; v <= 50; v += 10) {
+      const yy = yOf(v);
+      ctx.beginPath(); ctx.moveTo(x0, yy); ctx.lineTo(x0 + plotW, yy); ctx.stroke();
+      ctx.fillText(v.toString(), 6, yy + 3);
+    }
+    for (let t = 0; t <= 24; t += 6) {
+      const xx = xOf(t);
+      ctx.beginPath(); ctx.moveTo(xx, y0); ctx.lineTo(xx, y0 + plotH); ctx.stroke();
+      ctx.fillText(t.toString(), xx - 4, y0 + plotH + 14);
+    }
+
+    // curves
+    const drawCurve = (fn, color, width) => {
+      ctx.strokeStyle = color;
+      ctx.lineWidth = width;
+      ctx.beginPath();
+      for (let t = 0; t <= 24; t += 0.25) {
+        const v = fn(t);
+        const xx = xOf(t), yy = yOf(v);
+        if (t === 0) ctx.moveTo(xx, yy); else ctx.lineTo(xx, yy);
+      }
+      ctx.stroke();
+    };
+    drawCurve(t => this.SR * (t / 24), '#5aa9ff', 1.6);
+    drawCurve(t => this.GR * (t / 24), '#ffb347', 1.6);
+    drawCurve(t => this.NET * (t / 24), '#ff5a5a', 2.0);
+
+    // current marker
+    const curV = this.NET * (h / 24);
+    ctx.fillStyle = '#ff5a5a';
+    ctx.beginPath();
+    ctx.arc(xOf(h), yOf(curV), 3.5, 0, Math.PI * 2);
+    ctx.fill();
+
+    // labels
+    ctx.font = '10px monospace';
+    ctx.fillStyle = '#5aa9ff'; ctx.fillText('SR -7.2', x0 + plotW - 62, yOf(this.SR) - 4);
+    ctx.fillStyle = '#ffb347'; ctx.fillText('GR +45.7', x0 + plotW - 70, yOf(this.GR) - 4);
+    ctx.fillStyle = '#ff5a5a'; ctx.fillText('Net +38.5', x0 + plotW - 72, yOf(this.NET) - 4);
+
+    ctx.fillStyle = 'rgba(200,225,245,0.9)';
+    ctx.font = '11px monospace';
+    ctx.fillText('Clock drift (us) vs time (h)', x0, 14);
+
+    // HUD
+    const band = st.freq_band.startsWith('L1') ? 1575.42e6 : 1227.60e6;
+    const lambdaCm = (this.C / band) * 100;
+    const drift = corrected ? 0 : this.NET * (h / 24);
+    const errM = corrected ? 0 : 11.53 * (h / 24) * 1000;
+
+    setHud(
+      'GPS Relativistic Clock Correction',
+      '\\frac{\\Delta f}{f} = \\frac{\\Delta \\Phi}{c^2} - \\frac{v^2}{2c^2} \\approx +4.465\\times 10^{-10}\\;(+38.5\\,\\mu\\mathrm{s/day})',
+      [
+        { k: 'SR offset', v: '-7.21 us/day' },
+        { k: 'GR offset', v: '+45.68 us/day' },
+        { k: 'Net offset', v: '+38.47 us/day' },
+        { k: 'Clock drift', v: drift.toFixed(2) + ' us' },
+        { k: 'Position error', v: corrected ? '0 m (corrected)' : errM.toFixed(0) + ' m' },
+        { k: 'Wavelength', v: lambdaCm.toFixed(2) + ' cm' }
+      ]
+    );
+  },
+
+  tick(dt) {
+    // gentle satellite spin for visual life
+    for (const s of this.sats) s.rotation.y += dt * 0.6;
+  },
+
+  lesson: `<p>GPS satellites orbit at r<sub>s</sub> = 26,560 km with v ≈ 3,874 m/s. Special relativity makes the satellite clock run slow by Δf/f = −v²/(2c²) ≈ −8.35×10⁻¹¹ (−7.21 μs/day). General relativity makes it run fast because the satellite sits higher in Earth's gravitational potential: Δf/f = (GM/c²)(1/R<sub>E</sub> − 1/r<sub>s</sub>) ≈ +5.29×10⁻¹⁰ (+45.68 μs/day). The net is +38.47 μs/day, so factory clocks are detuned from 10.23 MHz to 10.22999999543 MHz. Without correction, pseudoranges drift by c·38.47 μs/day ≈ 11.53 km/day, ruining the fix. Trilateration needs four satellites to solve x, y, z and the receiver clock bias.</p>`,
+  quiz: [
+    { q: 'Which effect dominates the GPS clock offset?', options: ['Special relativistic slowing', 'General relativistic speeding', 'They cancel exactly', 'Doppler shift'], answer: 1 },
+    { q: 'Uncorrected, roughly how much position error accumulates per day?', options: ['11.5 m', '11.5 km', '38.5 km', '0.38 km'], answer: 1 },
+    { q: 'Why are at least four satellites needed?', options: ['To resolve x, y, z and clock bias', 'To measure carrier frequency', 'To correct for weather', 'To avoid relativistic effects'], answer: 0 }
+  ]
+});
+modules.push({
+  id: 'far_field_near_field_fourier',
+  title: '5-14 Far Field, Near Field & Fourier Transform',
+  controls: [
+    { id: 'D_lambda', label: 'Aperture D / lambda', type: 'range', min: 2, max: 20, step: 0.5, value: 8.0 },
+    { id: 'taper', label: 'Aperture illumination', type: 'select', options: ['Uniform (sinc pattern)', 'Cosine Taper (low sidelobes)', 'Triangular Taper (sinc^2)'], value: 'Uniform (sinc pattern)' },
+    { id: 'r_ratio', label: 'Observer distance r / R_ff', type: 'range', min: 0.1, max: 1.5, step: 0.05, value: 1.0 }
+  ],
+
+  build() {
+    this.aperture = new THREE.Group();
+    this.rings = new THREE.Group();
+    this.pattern = new THREE.Group();
+    this.rays = new THREE.Group();
+    content.add(this.aperture, this.rings, this.pattern, this.rays);
+
+    // aperture plate
+    const plateGeo = new THREE.BoxGeometry(1, 0.08, 0.5);
+    const plateMat = new THREE.MeshStandardMaterial({ color: 0x2b4a6f, metalness: 0.4, roughness: 0.5 });
+    this.plate = new THREE.Mesh(plateGeo, plateMat);
+    this.plate.position.set(0, 0, 0);
+    this.aperture.add(this.plate);
+
+    // aperture illumination strip
+    const stripGeo = new THREE.BoxGeometry(1, 0.02, 0.12);
+    this.stripMat = new THREE.MeshStandardMaterial({ color: 0x7fd1ff, emissive: 0x1a4a6a, emissiveIntensity: 0.8 });
+    this.strip = new THREE.Mesh(stripGeo, this.stripMat);
+    this.strip.position.set(0, 0.06, 0);
+    this.aperture.add(this.strip);
+
+    // aperture edge markers
+    this.edgeL = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.15, 0.55), new THREE.MeshStandardMaterial({ color: 0xffb347 }));
+    this.edgeR = this.edgeL.clone();
+    this.aperture.add(this.edgeL, this.edgeR);
+
+    // rings (phasefront transition)
+    this.ringMeshes = [];
+    for (let i = 0; i < 6; i++) {
+      const g = new THREE.TorusGeometry(1, 0.012, 8, 64);
+      const m = new THREE.MeshBasicMaterial({ color: 0x4a7fb5, transparent: true, opacity: 0.35 });
+      const ring = new THREE.Mesh(g, m);
+      ring.rotation.x = Math.PI / 2;
+      this.rings.add(ring);
+      this.ringMeshes.push(ring);
+    }
+
+    // far-field pattern: vertical polar-ish lobes in x-y plane
+    this.lobeMeshes = [];
+    for (let i = 0; i < 9; i++) {
+      const g = new THREE.ConeGeometry(0.08, 1, 12);
+      const m = new THREE.MeshStandardMaterial({ color: 0x7fd1ff, emissive: 0x1a4a6a, emissiveIntensity: 0.6 });
+      const lobe = new THREE.Mesh(g, m);
+      lobe.position.set(0, 0, 0);
+      this.pattern.add(lobe);
+      this.lobeMeshes.push(lobe);
+    }
+
+    // observer ray
+    this.rayLine = new THREE.Line(
+      new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, 1)]),
+      new THREE.LineBasicMaterial({ color: 0xffb347 })
+    );
+    this.rays.add(this.rayLine);
+
+    this.observer = new THREE.Mesh(
+      new THREE.SphereGeometry(0.06, 12, 12),
+      new THREE.MeshStandardMaterial({ color: 0xffb347, emissive: 0x6a3a00, emissiveIntensity: 0.8 })
+    );
+    this.rays.add(this.observer);
+
+    // labels via sprites? keep simple: no text sprites needed
+    this._init = true;
+  },
+
+  update() {
+    const st = this.state;
+    const Dl = st.D_lambda;
+    const Rff = 2 * Dl * Dl; // in lambda units
+    const R1 = 0.62 * Math.sqrt(Dl * Dl * Dl);
+    const r = st.r_ratio * Rff;
+
+    // aperture width in scene units (scale lambda = 1)
+    const D = Dl;
+    this.plate.scale.x = D;
+    this.strip.scale.x = D;
+    this.edgeL.position.set(-D / 2, 0.06, 0);
+    this.edgeR.position.set(D / 2, 0.06, 0);
+
+    // rings at fractions of Rff
+    const ringFracs = [0.25, 0.5, 0.75, 1.0, 1.25, 1.5];
+    this.ringMeshes.forEach((ring, i) => {
+      const rr = ringFracs[i] * Rff;
+      ring.position.set(0, 0, rr);
+      ring.scale.set(rr, rr, 1);
+      ring.material.opacity = i === 3 ? 0.7 : 0.25;
+      ring.material.color.setHex(i === 3 ? 0xffb347 : 0x4a7fb5);
+    });
+
+    // far-field pattern lobes: compute F(u) for u = sin theta
+    const taper = st.taper;
+    const N = 9;
+    const lobeData = [];
+    for (let i = 0; i < N; i++) {
+      const theta = (i - (N - 1) / 2) * (Math.PI / 18); // -40..40 deg
+      const u = Math.sin(theta);
+      let F;
+      if (taper === 'Uniform (sinc pattern)') {
+        F = Math.abs(Math.sin(Math.PI * D * u) / (Math.PI * D * u + 1e-12));
+      } else if (taper === 'Cosine Taper (low sidelobes)') {
+        const a = Math.PI * D * u;
+        F = Math.abs(Math.cos(a / 2) / (1 - (a / Math.PI) ** 2 + 1e-12));
+      } else {
+        const a = Math.PI * D * u;
+        F = Math.abs((Math.sin(a / 2) / (a / 2 + 1e-12)) ** 2);
+      }
+      lobeData.push({ theta, F });
+    }
+
+    const maxF = Math.max(...lobeData.map(d => d.F), 1e-6);
+    this.lobeMeshes.forEach((lobe, i) => {
+      const d = lobeData[i];
+      const amp = d.F / maxF;
+      const len = 0.3 + 1.2 * amp;
+      lobe.scale.set(0.6 + 0.4 * amp, len, 0.6 + 0.4 * amp);
+      lobe.position.set(0, len / 2, 0);
+      lobe.rotation.z = -d.theta;
+      lobe.material.color.setHex(amp > 0.5 ? 0x7fd1ff : 0x3a6a9a);
+      lobe.material.emissiveIntensity = 0.3 + 0.7 * amp;
+    });
+
+    // observer position along z at distance r
+    this.observer.position.set(0, 0, r);
+    this.rayLine.geometry.setFromPoints([new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, r)]);
+
+    // HUD values
+    const hpbw = taper === 'Uniform (sinc pattern)' ? 50.8 / Dl : taper === 'Cosine Taper (low sidelobes)' ? 68.0 / Dl : 73.0 / Dl;
+    const sidelobe = taper === 'Uniform (sinc pattern)' ? -13.2 : taper === 'Cosine Taper (low sidelobes)' ? -23.0 : -26.5;
+
+    setHud(
+      'Far Field / Near Field & Fourier Transform',
+      'R_{\\mathrm{ff}} = \\frac{2D^2}{\\lambda},\\quad F(\\sin\\theta) = \\int_{-D/2}^{D/2} E_a(x) e^{j\\beta x \\sin\\theta}\\,dx',
+      [
+        { k: 'Aperture D/λ', v: Dl.toFixed(1) },
+        { k: 'Reactive R₁/λ', v: R1.toFixed(2) },
+        { k: 'Far-Field R_ff/λ', v: Rff.toFixed(2) },
+        { k: 'HPBW (deg)', v: hpbw.toFixed(1) },
+        { k: 'First Sidelobe (dB)', v: sidelobe.toFixed(1) }
+      ]
+    );
+
+    // chart
+    const ctx = chartEl.getContext('2d');
+    const W = chartEl.width, H = chartEl.height;
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = 'rgba(8,14,24,0.82)';
+    ctx.fillRect(0, 0, W, H);
+    ctx.strokeStyle = 'rgba(120,180,230,0.25)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(0.5, 0.5, W - 1, H - 1);
+
+    const padL = 42, padR = 14, padT = 26, padB = 34;
+    const plotW = W - padL - padR;
+    const plotH = H - padT - padB;
+
+    // axes
+    ctx.strokeStyle = 'rgba(160,200,240,0.5)';
+    ctx.beginPath();
+    ctx.moveTo(padL, padT);
+    ctx.lineTo(padL, padT + plotH);
+    ctx.lineTo(padL + plotW, padT + plotH);
+    ctx.stroke();
+
+    // x axis: aperture coordinate x / (D/2) from -1 to 1
+    const xMin = -1.2, xMax = 1.2;
+    const mapX = x => padL + (x - xMin) / (xMax - xMin) * plotW;
+
+    // aperture illumination curve (normalized)
+    ctx.strokeStyle = '#7fd1ff';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    for (let i = 0; i <= 200; i++) {
+      const x = xMin + (xMax - xMin) * i / 200;
+      const xn = x; // normalized to D/2
+      let Ea;
+      if (taper === 'Uniform (sinc pattern)') Ea = Math.abs(xn) <= 1 ? 1 : 0;
+      else if (taper === 'Cosine Taper (low sidelobes)') Ea = Math.abs(xn) <= 1 ? Math.cos(Math.PI * xn / 2) : 0;
+      else Ea = Math.abs(xn) <= 1 ? 1 - Math.abs(xn) : 0;
+      const y = padT + plotH - Ea * plotH * 0.55;
+      if (i === 0) ctx.moveTo(mapX(x), y); else ctx.lineTo(mapX(x), y);
+    }
+    ctx.stroke();
+
+    // far-field pattern in dB vs sin theta
+    const uMin = -1.0, uMax = 1.0;
+    const mapU = u => padL + (u - uMin) / (uMax - uMin) * plotW;
+    const dbMin = -40, dbMax = 0;
+    const mapDb = db => padT + plotH - (db - dbMin) / (dbMax - dbMin) * plotH;
+
+    ctx.strokeStyle = '#ffb347';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    for (let i = 0; i <= 300; i++) {
+      const u = uMin + (uMax - uMin) * i / 300;
+      let F;
+      if (taper === 'Uniform (sinc pattern)') {
+        const a = Math.PI * Dl * u;
+        F = Math.abs(Math.sin(a) / (a + 1e-12));
+      } else if (taper === 'Cosine Taper (low sidelobes)') {
+        const a = Math.PI * Dl * u;
+        F = Math.abs(Math.cos(a / 2) / (1 - (a / Math.PI) ** 2 + 1e-12));
+      } else {
+        const a = Math.PI * Dl * u;
+        F = Math.abs((Math.sin(a / 2) / (a / 2 + 1e-12)) ** 2);
+      }
+      const db = 20 * Math.log10(Math.max(F, 1e-6));
+      const y = mapDb(Math.max(db, dbMin));
+      if (i === 0) ctx.moveTo(mapU(u), y); else ctx.lineTo(mapU(u), y);
+    }
+    ctx.stroke();
+
+    // grid lines
+    ctx.strokeStyle = 'rgba(120,180,230,0.15)';
+    ctx.lineWidth = 1;
+    for (let db = -30; db <= 0; db += 10) {
+      const y = mapDb(db);
+      ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(padL + plotW, y); ctx.stroke();
+    }
+
+    // labels
+    ctx.fillStyle = '#9fc7e8';
+    ctx.font = '11px monospace';
+    ctx.fillText('E_a(x)', padL + 4, padT + 12);
+    ctx.fillStyle = '#ffb347';
+    ctx.fillText('|F(sinθ)| dB', padL + plotW - 92, padT + 12);
+    ctx.fillStyle = '#9fc7e8';
+    ctx.fillText('x/(D/2)', padL + plotW - 52, padT + plotH + 20);
+    ctx.fillText('sinθ', padL + plotW - 30, padT + plotH + 20);
+  },
+
+  tick(dt) {
+    // gentle rotation of far-field pattern for visual interest
+    if (this.pattern) this.pattern.rotation.y += dt * 0.15;
+  },
+
+  lesson: `<p>The aperture field <b>E_a(x)</b> radiates into space. Close to the aperture the field is <b>reactive</b> (stored energy, non-radiating) out to <b>R₁ = 0.62√(D³/λ)</b>. Beyond that, the <b>Fresnel</b> region has curved phase fronts; the <b>Fraunhofer far field</b> begins when the phase curvature across the aperture is small, at <b>R_ff = 2D²/λ</b>.</p>
+<p>In the far field the angular distribution is the Fourier transform of the aperture illumination: <b>F(sinθ) = ∫ E_a(x) e^{jβx sinθ} dx</b>. A uniform aperture gives a <b>sinc</b> pattern with first sidelobe −13.2 dB and HPBW ≈ 50.8/(D/λ)°. Cosine and triangular tapers broaden the main beam but suppress sidelobes (−23 dB and ≈−26.5 dB respectively).</p>
+<p>Limiting cases: small D/λ → broad diffraction beam; large D/λ → narrow beam and far-field boundary pushed farther out. The Fourier transform is exact only in the Fraunhofer region; in the near field the pattern is not simply the aperture transform.</p>`,
+
+  quiz: [
+    { q: 'The Fraunhofer far-field boundary for an aperture of width D is approximately:', options: ['D²/λ', '2D²/λ', '0.62√(D³/λ)', 'D/λ'], answer: 1 },
+    { q: 'A uniform aperture illumination produces a far-field pattern whose first sidelobe is about:', options: ['−13.2 dB', '−23 dB', '−3 dB', '0 dB'], answer: 0 },
+    { q: 'The far-field angular pattern is related to the aperture illumination by:', options: ['a Fourier transform', 'a Laplace transform', 'a convolution with a sinc', 'a derivative'], answer: 0 }
+  ]
+});
 /* === UI CONTROLLER === */
 
       let activeIdx = 0;
