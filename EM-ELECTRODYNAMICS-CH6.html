@@ -1194,6 +1194,494 @@ modules.push({
     { q: 'Relativistic corrections to the speed of an electron become significant above roughly:', options: ['1 V', '100 V', '10 kV', '10 MV'], answer: 2 }
   ]
 });
+modules.push({
+  id: 'crt_electrical_deflection',
+  title: '6-3 The Cathode-Ray Tube (CRT); Electrical Deflection',
+  controls: [
+    { id: 'Va_V', label: 'Anode voltage V_a (V)', type: 'range', min: 500, max: 5000, step: 100, value: 2000 },
+    { id: 'Vd_V', label: 'Deflection voltage V_d (V)', type: 'range', min: -150, max: 150, step: 5, value: 60 },
+    { id: 'plate_l_cm', label: 'Plate length l (cm)', type: 'range', min: 1.5, max: 5.0, step: 0.25, value: 3.0 },
+    { id: 'plate_d_cm', label: 'Plate separation d (cm)', type: 'range', min: 0.5, max: 2.0, step: 0.1, value: 1.0 },
+    { id: 'screen_L_cm', label: 'Center-to-screen distance L (cm)', type: 'range', min: 10, max: 30, step: 1, value: 20 }
+  ],
+  build() {
+    const g = new THREE.Group();
+    // CRT envelope (translucent glass)
+    const glass = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.55, 0.55, 6.2, 32, 1, true),
+      new THREE.MeshPhysicalMaterial({ color: 0x88ccff, transparent: true, opacity: 0.18, roughness: 0.1, metalness: 0.0, side: THREE.DoubleSide })
+    );
+    glass.rotation.z = Math.PI / 2;
+    glass.position.set(0, 0, 0);
+    g.add(glass);
+    // Screen face
+    const screen = new THREE.Mesh(
+      new THREE.CircleGeometry(0.55, 40),
+      new THREE.MeshStandardMaterial({ color: 0x0a1a2a, emissive: 0x113355, emissiveIntensity: 0.6, side: THREE.DoubleSide })
+    );
+    screen.rotation.y = Math.PI / 2;
+    screen.position.set(3.1, 0, 0);
+    g.add(screen);
+    // Cathode (heated)
+    const cathode = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.16, 0.16, 0.35, 20),
+      new THREE.MeshStandardMaterial({ color: 0xff8844, emissive: 0xff5522, emissiveIntensity: 1.2 })
+    );
+    cathode.rotation.z = Math.PI / 2;
+    cathode.position.set(-2.9, 0, 0);
+    g.add(cathode);
+    // Anode rings
+    const anodeMat = new THREE.MeshStandardMaterial({ color: 0x9fb8cc, emissive: 0x335577, emissiveIntensity: 0.5, metalness: 0.8, roughness: 0.3 });
+    for (let i = 0; i < 3; i++) {
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(0.28, 0.035, 12, 32), anodeMat);
+      ring.rotation.y = Math.PI / 2;
+      ring.position.set(-2.2 + i * 0.22, 0, 0);
+      g.add(ring);
+    }
+    // Deflection plates (two pairs: horizontal & vertical)
+    const plateMat = new THREE.MeshStandardMaterial({ color: 0x7fd1ff, emissive: 0x224466, emissiveIntensity: 0.6, metalness: 0.7, roughness: 0.25 });
+    const plateGeo = new THREE.BoxGeometry(1.0, 0.04, 0.5);
+    const plates = [];
+    for (let s = -1; s <= 1; s += 2) {
+      const p = new THREE.Mesh(plateGeo, plateMat.clone());
+      p.position.set(0, s * 0.35, 0);
+      g.add(p); plates.push(p);
+    }
+    // Vertical deflection plates (for completeness, smaller)
+    const vPlateGeo = new THREE.BoxGeometry(1.0, 0.5, 0.04);
+    for (let s = -1; s <= 1; s += 2) {
+      const p = new THREE.Mesh(vPlateGeo, plateMat.clone());
+      p.position.set(0, 0, s * 0.35);
+      g.add(p); plates.push(p);
+    }
+    // Beam line (curved inside plates, straight after)
+    const beamMat = new THREE.LineBasicMaterial({ color: 0x66ffcc, transparent: true, opacity: 0.9 });
+    const beamGeo = new THREE.BufferGeometry();
+    const beamPts = new Float32Array(64 * 3);
+    beamGeo.setAttribute('position', new THREE.BufferAttribute(beamPts, 3));
+    const beam = new THREE.Line(beamGeo, beamMat);
+    g.add(beam);
+    // Phosphor spot
+    const spot = new THREE.Mesh(
+      new THREE.SphereGeometry(0.07, 16, 16),
+      new THREE.MeshStandardMaterial({ color: 0x66ffcc, emissive: 0x66ffcc, emissiveIntensity: 2.0 })
+    );
+    spot.position.set(3.1, 0, 0);
+    g.add(spot);
+    // Dashed projection line to plate center
+    const dashMat = new THREE.LineDashedMaterial({ color: 0x88aacc, dashSize: 0.08, gapSize: 0.06, transparent: true, opacity: 0.7 });
+    const dashGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 0, 0), new THREE.Vector3(3.1, 0, 0)]);
+    const dash = new THREE.Line(dashGeo, dashMat);
+    dash.computeLineDistances();
+    g.add(dash);
+    content.add(g);
+    this.meshRefs = { g, glass, screen, cathode, plates, beam, beamGeo, spot, dash, dashGeo };
+  },
+  update() {
+    const st = this.state;
+    const Va = st.Va_V, Vd = st.Vd_V;
+    const l = st.plate_l_cm / 100, d = st.plate_d_cm / 100, L = st.screen_L_cm / 100;
+    const e = 1.602e-19, m = 9.109e-31;
+    const vx = Math.sqrt(2 * e * Va / m); // m/s
+    const a = e * Vd / (m * d);
+    const t1 = l / vx;
+    const vy = a * t1;
+    const tanA = vy / vx;
+    const alpha = Math.atan(tanA);
+    const De = (L * l * Vd) / (2 * d * Va); // meters
+    const Se = De / Vd; // m/V
+    const refs = this.meshRefs;
+
+    // Scale scene: 1 unit = 1 cm roughly; CRT length ~6.2 units
+    const scale = 100; // cm -> scene units? Actually scene uses ~cm units
+    // Map physical positions: cathode at -2.9, plates centered at 0, screen at 3.1
+    // Beam path: from cathode (-2.9) to plate entry (-0.5), curve inside (-0.5..0.5), then straight to screen (3.1)
+    const yEntry = 0;
+    const yExit = vy * t1 * scale * 0.5; // visual scaling
+    const yScreen = De * scale * 0.5;
+    const pts = refs.beamGeo.attributes.position.array;
+    const N = 64;
+    for (let i = 0; i < N; i++) {
+      const u = i / (N - 1);
+      let x, y;
+      if (u < 0.25) {
+        // cathode to plate entry
+        const t = u / 0.25;
+        x = -2.9 + t * 2.4;
+        y = 0;
+      } else if (u < 0.55) {
+        // inside plates: parabolic
+        const t = (u - 0.25) / 0.3;
+        x = -0.5 + t * 1.0;
+        y = 0.5 * a * (t * t1) * (t * t1) * scale * 0.5;
+      } else {
+        // straight to screen
+        const t = (u - 0.55) / 0.45;
+        x = 0.5 + t * 2.6;
+        y = yExit + (yScreen - yExit) * t;
+      }
+      pts[i * 3] = x;
+      pts[i * 3 + 1] = y;
+      pts[i * 3 + 2] = 0;
+    }
+    refs.beamGeo.attributes.position.needsUpdate = true;
+    refs.beamGeo.computeBoundingSphere();
+
+    // Spot position
+    refs.spot.position.set(3.1, yScreen, 0);
+
+    // Plate colors based on voltage
+    const intensity = Math.min(1, Math.abs(Vd) / 150);
+    refs.plates.forEach((p, idx) => {
+      if (idx < 2) {
+        p.material.color.setHex(Vd >= 0 ? 0x7fd1ff : 0xff7f7f);
+        p.material.emissive.setHex(Vd >= 0 ? 0x224466 : 0x662222);
+        p.material.emissiveIntensity = 0.4 + intensity * 1.2;
+      }
+    });
+
+    // Dashed line from plate center to screen spot
+    const dashPts = [new THREE.Vector3(0, 0, 0), new THREE.Vector3(3.1, yScreen, 0)];
+    refs.dashGeo.setFromPoints(dashPts);
+    refs.dash.computeLineDistances();
+
+    // Chart
+    const W = chartEl.width, H = chartEl.height;
+    const ctx = chartEl.getContext('2d');
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = '#0a0f18';
+    ctx.fillRect(0, 0, W, H);
+    // Axes
+    const pad = 40;
+    const x0 = pad, x1 = W - pad, y0 = H - pad, y1 = pad;
+    ctx.strokeStyle = '#334455';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(x0, y0); ctx.lineTo(x1, y0);
+    ctx.moveTo(x0, y0); ctx.lineTo(x0, y1);
+    ctx.stroke();
+    // Grid
+    ctx.strokeStyle = '#1a2535';
+    for (let i = 0; i <= 6; i++) {
+      const x = x0 + (x1 - x0) * i / 6;
+      ctx.beginPath(); ctx.moveTo(x, y0); ctx.lineTo(x, y1); ctx.stroke();
+    }
+    for (let i = 0; i <= 5; i++) {
+      const y = y0 - (y0 - y1) * i / 5;
+      ctx.beginPath(); ctx.moveTo(x0, y); ctx.lineTo(x1, y); ctx.stroke();
+    }
+    // Deflection curves
+    const VdMin = -150, VdMax = 150;
+    const DeMax = Math.abs((L * l * VdMax) / (2 * d * Va)) * 1000; // mm
+    const DeRefMax = Math.abs((L * l * VdMax) / (2 * d * 1000)) * 1000;
+    const yMax = Math.max(DeMax, DeRefMax, 1);
+    const mapX = v => x0 + (v - VdMin) / (VdMax - VdMin) * (x1 - x0);
+    const mapY = v => y0 - (v / yMax) * (y0 - y1);
+    // Reference curve Va=1000
+    ctx.strokeStyle = '#ffaa44';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    for (let i = 0; i <= 100; i++) {
+      const v = VdMin + (VdMax - VdMin) * i / 100;
+      const De = (L * l * v) / (2 * d * 1000) * 1000;
+      const px = mapX(v), py = mapY(De);
+      if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+    }
+    ctx.stroke();
+    // Current curve
+    ctx.strokeStyle = '#66ffcc';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    for (let i = 0; i <= 100; i++) {
+      const v = VdMin + (VdMax - VdMin) * i / 100;
+      const De = (L * l * v) / (2 * d * Va) * 1000;
+      const px = mapX(v), py = mapY(De);
+      if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+    }
+    ctx.stroke();
+    // Highlight current point
+    const DeNow = (L * l * Vd) / (2 * d * Va) * 1000;
+    ctx.fillStyle = '#66ffcc';
+    ctx.beginPath();
+    ctx.arc(mapX(Vd), mapY(DeNow), 4, 0, Math.PI * 2);
+    ctx.fill();
+    // Labels
+    ctx.fillStyle = '#aabbcc';
+    ctx.font = '12px sans-serif';
+    ctx.fillText('V_d (V)', x1 - 60, y0 + 20);
+    ctx.fillText('D_e (mm)', x0 - 30, y1 + 10);
+    ctx.fillStyle = '#ffaa44';
+    ctx.fillText('V_a = 1000 V', x1 - 110, y1 + 20);
+    ctx.fillStyle = '#66ffcc';
+    ctx.fillText('V_a = ' + Va + ' V', x1 - 110, y1 + 38);
+
+    setHud('CRT Electrostatic Deflection',
+      'D_e = \\frac{L\\,l\\,V_d}{2\\,d\\,V_a},\\quad S_e = \\frac{D_e}{V_d} = \\frac{L\\,l}{2\\,d\\,V_a}',
+      [
+        { k: 'Beam speed v_x', v: (vx / 1e6).toFixed(2) + ' Mm/s' },
+        { k: 'Exit angle alpha', v: (alpha * 180 / Math.PI).toFixed(2) + ' deg' },
+        { k: 'Screen deflection D_e', v: (De * 1000).toFixed(2) + ' mm' },
+        { k: 'Sensitivity S_e', v: (Se * 1000).toFixed(3) + ' mm/V' }
+      ]);
+  },
+  tick(dt) {},
+  lesson: `<p>The electron beam is accelerated by the anode potential \(V_a\), giving axial speed \(v_x=\sqrt{2eV_a/m_e}\). Inside the deflection plates of length \(l\) and separation \(d\), the transverse field \(V_d/d\) produces acceleration \(a_y=eV_d/(m_ed)\). The transit time is \(t_1=l/v_x\), so the exit slope is \(\tan\alpha=v_y/v_x=(V_d l)/(2dV_a)\).</p>
+<p>After leaving the plates the beam travels straight. Extrapolating this straight line backward, it intersects the axis at the geometric center of the deflection plates (a distance \(l/2\) before the exit). Hence the screen deflection measured from the plate center is \(D_e=(LlV_d)/(2dV_a)\). The sensitivity \(S_e=D_e/V_d=(Ll)/(2dV_a)\) is independent of \(e/m_e\) because the same charge-to-mass ratio appears in both the accelerating and deflecting stages and cancels.</p>
+<p>Increasing \(V_a\) speeds the electrons, reducing the time spent in the deflecting field and thus lowering sensitivity; it also raises beam energy and brightness. The deflection is linear in \(V_d\), which is why electrostatic deflection is used for fast, linear sweeps in oscilloscopes.</p>`,
+  quiz: [
+    { q: 'Why does the deflected beam appear to originate from the center of the deflection plates?', options: ['Because the beam is straight after the plates and its backward extrapolation meets the axis at the plate midpoint', 'Because the electric field is zero at the plate center', 'Because the electrons are accelerated only at the anode', 'Because the screen is placed at the plate center'], answer: 0 },
+    { q: 'The deflection sensitivity S_e = D_e/V_d is independent of e/m_e because:', options: ['e/m_e cancels between the acceleration and deflection stages', 'e/m_e is zero for electrons', 'the plates are equipotential', 'the screen distance L is fixed'], answer: 0 },
+    { q: 'Increasing the anode voltage V_a while keeping V_d fixed will:', options: ['Decrease the screen deflection and increase beam speed', 'Increase the screen deflection and decrease beam speed', 'Leave the deflection unchanged', 'Increase both deflection and beam speed'], answer: 0 }
+  ]
+});
+modules.push({
+  id: 'charged_particles_bfield',
+  title: '6-4 Charged Particles Moving in a Static Magnetic Field (Radius & Gyrofrequency)',
+  controls: [
+    { id: 'particle', label: 'Particle', type: 'select', options: ['Electron (-e)', 'Proton (+e)', 'Deuteron (+e, 2u)'], value: 'Electron (-e)' },
+    { id: 'B_mT', label: 'B_z (mT)', type: 'range', min: 1, max: 100, step: 1, value: 20 },
+    { id: 'v_kms', label: 'Speed v (km/s)', type: 'range', min: 500, max: 10000, step: 250, value: 4000 },
+    { id: 'pitch_deg', label: 'Pitch angle alpha (deg)', type: 'range', min: 15, max: 90, step: 5, value: 70 },
+    { id: 'animate', label: 'Animate gyration', type: 'check', value: true }
+  ],
+
+  build() {
+    const g = new THREE.Group();
+    content.add(g);
+
+    // Guiding-center axis (vertical B direction)
+    const axisMat = new THREE.MeshStandardMaterial({ color: 0x2b6f9e, emissive: 0x123a55, metalness: 0.3, roughness: 0.6 });
+    const axis = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 4.2, 12), axisMat);
+    axis.position.y = 0;
+    g.add(axis);
+
+    // B field arrows in a cylindrical volume
+    const bArrows = addArrowField([], 0x7fd1ff);
+    const bVecs = [];
+    for (let i = 0; i < 5; i++) {
+      for (let j = 0; j < 5; j++) {
+        const ang = (i / 5) * Math.PI * 2;
+        const r = 0.35 + (j / 4) * 0.9;
+        bVecs.push({
+          origin: new THREE.Vector3(r * Math.cos(ang), -1.8 + j * 0.9, r * Math.sin(ang)),
+          dir: new THREE.Vector3(0, 1, 0),
+          len: 0.55
+        });
+      }
+    }
+    bArrows.setVectors(bVecs);
+    g.add(bArrows);
+
+    // Helical trajectory tube (rebuilt in update)
+    const helixMat = new THREE.MeshStandardMaterial({ color: 0x9fe8ff, emissive: 0x3aa6d8, metalness: 0.4, roughness: 0.35 });
+    const helix = new THREE.Mesh(new THREE.BufferGeometry(), helixMat);
+    g.add(helix);
+
+    // Glowing particle
+    const particleMat = new THREE.MeshStandardMaterial({ color: 0xffd36b, emissive: 0xff9a2e, metalness: 0.2, roughness: 0.3 });
+    const particle = new THREE.Mesh(new THREE.SphereGeometry(0.075, 20, 16), particleMat);
+    g.add(particle);
+
+    // Centripetal force arrow (rebuilt each frame)
+    const forceArrow = addArrowField([], 0xff5a5a);
+    g.add(forceArrow);
+
+    // Guiding center marker
+    const centerMat = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0x88ccff, metalness: 0.2, roughness: 0.4 });
+    const center = new THREE.Mesh(new THREE.SphereGeometry(0.035, 12, 10), centerMat);
+    g.add(center);
+
+    this.meshRefs = { g, axis, helix, particle, forceArrow, center, bArrows };
+    this.phase = 0;
+  },
+
+  update() {
+    const st = this.state;
+    const B = st.B_mT * 1e-3; // Tesla
+    const v = st.v_kms * 1e3; // m/s
+    const alpha = st.pitch_deg * Math.PI / 180;
+
+    // Particle properties
+    let m, q, label;
+    if (st.particle === 'Electron (-e)') { m = 9.109e-31; q = -1.602e-19; label = 'e-'; }
+    else if (st.particle === 'Proton (+e)') { m = 1.673e-27; q = 1.602e-19; label = 'p+'; }
+    else { m = 3.346e-27; q = 1.602e-19; label = 'd+'; }
+
+    const vPerp = v * Math.sin(alpha);
+    const vPar = v * Math.cos(alpha);
+    const R = (m * vPerp) / (Math.abs(q) * B); // meters
+    const omega = (Math.abs(q) * B) / m;       // rad/s
+    const fc = omega / (2 * Math.PI);          // Hz
+    const Tc = 1 / fc;                         // s
+    const pitch = vPar * Tc;                   // m
+
+    // Scale for display: map R to scene units (R in mm)
+    const Rmm = R * 1e3;
+    const sceneR = Math.min(1.25, Math.max(0.12, Rmm / 60));
+    const scenePitch = Math.min(2.2, Math.max(0.15, pitch * 1e3 / 60));
+
+    const refs = this.meshRefs;
+
+    // Build helix geometry
+    const turns = 3;
+    const pts = [];
+    const N = 160;
+    for (let i = 0; i <= N; i++) {
+      const t = i / N;
+      const ang = t * turns * Math.PI * 2;
+      pts.push(new THREE.Vector3(
+        sceneR * Math.cos(ang),
+        -scenePitch * 0.5 + t * scenePitch,
+        sceneR * Math.sin(ang)
+      ));
+    }
+    const curve = new THREE.CatmullRomCurve3(pts);
+    refs.helix.geometry.dispose();
+    refs.helix.geometry = new THREE.TubeGeometry(curve, 180, 0.018, 8, false);
+
+    // Particle position along helix
+    const phase = this.phase;
+    const t = (phase % 1);
+    const ang = t * turns * Math.PI * 2;
+    const px = sceneR * Math.cos(ang);
+    const py = -scenePitch * 0.5 + t * scenePitch;
+    const pz = sceneR * Math.sin(ang);
+    refs.particle.position.set(px, py, pz);
+
+    // Guiding center at same y
+    refs.center.position.set(0, py, 0);
+
+    // Force arrow: points inward toward axis (centripetal)
+    const dir = new THREE.Vector3(-px, 0, -pz).normalize();
+    refs.forceArrow.setVectors([{
+      origin: new THREE.Vector3(px, py, pz),
+      dir: dir,
+      len: Math.min(0.55, sceneR * 0.9)
+    }]);
+
+    // HUD
+    setHud(
+      'Cyclotron Gyration Radius & Gyrofrequency',
+      'R = \\frac{m v_\\perp}{|q|B},\\quad f_c = \\frac{\\omega_c}{2\\pi} = \\frac{|q|B}{2\\pi m}',
+      [
+        { k: 'Particle', v: label },
+        { k: 'Gyroradius R', v: Rmm.toFixed(2) + ' mm' },
+        { k: 'Gyrofrequency f_c', v: (fc / 1e6).toFixed(3) + ' MHz' },
+        { k: 'Period T_c', v: (Tc * 1e9).toFixed(2) + ' ns' },
+        { k: 'Helical pitch p', v: (pitch * 1e3).toFixed(2) + ' mm' }
+      ]
+    );
+
+    // 2D chart
+    const W = chartEl.width, H = chartEl.height;
+    const ctx = chartEl.getContext('2d');
+    ctx.clearRect(0, 0, W, H);
+
+    const padL = 58, padR = 58, padT = 34, padB = 46;
+    const plotW = W - padL - padR;
+    const plotH = H - padT - padB;
+
+    // Background
+    ctx.fillStyle = '#0b1220';
+    ctx.fillRect(0, 0, W, H);
+
+    // Grid
+    ctx.strokeStyle = 'rgba(120,170,220,0.18)';
+    ctx.lineWidth = 1;
+    for (let i = 0; i <= 5; i++) {
+      const x = padL + (i / 5) * plotW;
+      ctx.beginPath(); ctx.moveTo(x, padT); ctx.lineTo(x, padT + plotH); ctx.stroke();
+      const y = padT + (i / 5) * plotH;
+      ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(padL + plotW, y); ctx.stroke();
+    }
+
+    // Axes
+    ctx.strokeStyle = '#9fb8d6';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(padL, padT); ctx.lineTo(padL, padT + plotH); ctx.lineTo(padL + plotW, padT + plotH); ctx.stroke();
+
+    // Compute traces
+    const Bmin = 1, Bmax = 100;
+    const Rvals = [], Fvals = [];
+    let Rmax = 0, Fmax = 0;
+    for (let i = 0; i <= 100; i++) {
+      const bmT = Bmin + (i / 100) * (Bmax - Bmin);
+      const b = bmT * 1e-3;
+      const r = (m * vPerp) / (Math.abs(q) * b);
+      const f = (Math.abs(q) * b) / (2 * Math.PI * m);
+      Rvals.push(r * 1e3); // mm
+      Fvals.push(f / 1e6); // MHz
+      Rmax = Math.max(Rmax, r * 1e3);
+      Fmax = Math.max(Fmax, f / 1e6);
+    }
+
+    // Draw R trace (cyan)
+    ctx.strokeStyle = '#5fd0ff';
+    ctx.lineWidth = 2.2;
+    ctx.beginPath();
+    for (let i = 0; i <= 100; i++) {
+      const x = padL + (i / 100) * plotW;
+      const y = padT + plotH - (Rvals[i] / Rmax) * plotH;
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // Draw f trace (orange)
+    ctx.strokeStyle = '#ffb45f';
+    ctx.lineWidth = 2.2;
+    ctx.beginPath();
+    for (let i = 0; i <= 100; i++) {
+      const x = padL + (i / 100) * plotW;
+      const y = padT + plotH - (Fvals[i] / Fmax) * plotH;
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // Cursor at current B
+    const cursorX = padL + ((st.B_mT - Bmin) / (Bmax - Bmin)) * plotW;
+    ctx.strokeStyle = 'rgba(255,255,255,0.55)';
+    ctx.setLineDash([4, 4]);
+    ctx.beginPath(); ctx.moveTo(cursorX, padT); ctx.lineTo(cursorX, padT + plotH); ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Labels
+    ctx.fillStyle = '#5fd0ff';
+    ctx.font = '12px sans-serif';
+    ctx.fillText('R (mm)', padL + 6, padT + 14);
+    ctx.fillStyle = '#ffb45f';
+    ctx.fillText('f_c (MHz)', padL + plotW - 78, padT + 14);
+
+    ctx.fillStyle = '#cfe3ff';
+    ctx.font = '13px sans-serif';
+    ctx.fillText('B (mT)', padL + plotW / 2 - 22, H - 12);
+    ctx.fillText('1', padL - 4, padT + plotH + 18);
+    ctx.fillText('100', padL + plotW - 16, padT + plotH + 18);
+
+    // Legend
+    ctx.fillStyle = '#5fd0ff';
+    ctx.fillRect(padL + 10, padT + plotH - 26, 14, 3);
+    ctx.fillStyle = '#cfe3ff';
+    ctx.fillText('R', padL + 30, padT + plotH - 20);
+    ctx.fillStyle = '#ffb45f';
+    ctx.fillRect(padL + 70, padT + plotH - 26, 14, 3);
+    ctx.fillStyle = '#cfe3ff';
+    ctx.fillText('f_c', padL + 90, padT + plotH - 20);
+  },
+
+  tick(dt) {
+    if (this.state.animate) {
+      this.phase += dt * 0.35;
+    }
+  },
+
+  lesson: `<p>A charge q moving with velocity <b>v</b> in a static magnetic field <b>B</b> experiences <b>F</b> = q(<b>v</b> × <b>B</b>). The component perpendicular to <b>B</b>, v<sub>⊥</sub> = v sin α, is bent into a circle: m v<sub>⊥</sub><sup>2</sup>/R = |q| v<sub>⊥</sub> B, giving <b>R = m v<sub>⊥</sub>/(|q|B)</b>. The angular gyrofrequency is ω<sub>c</sub> = |q|B/m, so f<sub>c</sub> = |q|B/(2πm) depends only on the charge-to-mass ratio and B — not on speed. This is the operating principle of cyclotrons and magnetrons. The parallel component v<sub>∥</sub> = v cos α is unaffected, producing a helix with pitch p = v<sub>∥</sub>T<sub>c</sub> = 2πm v cos α/(|q|B). At α = 90° the motion collapses to a flat circle; at small α it becomes a long, tightly wound helix.</p>`,
+
+  quiz: [
+    { q: 'If the particle speed is doubled while B stays fixed, what happens to the gyrofrequency f_c?', options: ['It doubles', 'It halves', 'It stays the same', 'It quadruples'], answer: 2 },
+    { q: 'For a fixed speed and pitch angle, increasing B makes the gyroradius R:', options: ['Larger', 'Smaller', 'Unchanged', 'Zero'], answer: 1 },
+    { q: 'A deuteron has roughly twice the mass of a proton with the same charge. Compared with a proton in the same B, its gyrofrequency is:', options: ['Twice as large', 'The same', 'Half as large', 'Four times as large'], answer: 2 }
+  ]
+});
 /* === UI CONTROLLER === */
 
       let activeIdx = 0;
