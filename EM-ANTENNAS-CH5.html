@@ -413,7 +413,6 @@
     <script type="module">
       import * as THREE from "three";
       import { OrbitControls } from "three/addons/controls/OrbitControls.js";
-      import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 
       const stageEl = document.getElementById("stage");
       const chartEl = document.getElementById("chart-canvas");
@@ -435,16 +434,12 @@
       renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
       renderer.setSize(initW, initH);
       renderer.setClearColor(0x0a0e13, 1);
-      renderer.toneMapping = THREE.ACESFilmicToneMapping;
-      renderer.toneMappingExposure = 1.35;
       renderer.domElement.classList.add("webgl");
       renderer.domElement.style.outline = "none";
       stageEl.appendChild(renderer.domElement);
 
       const scene = new THREE.Scene();
-      const pmrem = new THREE.PMREMGenerator(renderer);
-      scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
-      scene.environmentIntensity = 0.75;
+      scene.fog = new THREE.FogExp2(0x0a0e13, 0.025);
       const camera = new THREE.PerspectiveCamera(50, initW / initH, 0.1, 200);
       camera.position.set(4.8, 3.6, 5.8);
 
@@ -457,13 +452,10 @@
       controls.minDistance = 1.5;
       controls.maxDistance = 40;
 
-      scene.add(new THREE.HemisphereLight(0xdbeafe, 0x1e293b, 1.1));
-      const dirLight = new THREE.DirectionalLight(0xffffff, 1.4);
+      scene.add(new THREE.AmbientLight(0xffffff, 0.65));
+      const dirLight = new THREE.DirectionalLight(0xffffff, 0.9);
       dirLight.position.set(5, 8, 6);
       scene.add(dirLight);
-      const rimLight = new THREE.DirectionalLight(0x7fd1ff, 0.7);
-      rimLight.position.set(-6, -3, -5);
-      scene.add(rimLight);
 
       const content = new THREE.Group();
       scene.add(content);
@@ -4849,7 +4841,15 @@ modules.push({
     grid.position.y = -3.2;
     content.add(grid);
 
-
+    // lights
+    const amb = new THREE.AmbientLight(0xffffff, 0.55);
+    scene.add(amb);
+    const key = new THREE.DirectionalLight(0xffffff, 1.1);
+    key.position.set(8, 12, 10);
+    scene.add(key);
+    const fill = new THREE.PointLight(0x7fd1ff, 0.6, 40);
+    fill.position.set(-8, 4, 6);
+    scene.add(fill);
 
     this.t = 0;
   },
@@ -5160,7 +5160,9 @@ modules.push({
     const light = new THREE.DirectionalLight(0xffffff, 1.4);
     light.position.set(4, 6, 5);
     g.add(light);
-// Constants
+    g.add(new THREE.AmbientLight(0x88aacc, 0.55));
+
+    // Constants
     this.C = 299792458;
     this.R_E = 6378e3;
     this.R_SAT = 26560e3;
@@ -6238,6 +6240,397 @@ modules.push({
       options: ['Linear in d_f', 'd_f^0.6 (sub-linear)', 'd_f^2 (quadratic)', 'Independent of d_f'],
       answer: 1
     }
+  ]
+});
+modules.push({
+  id: 'ch5_link_radar_array_capstone',
+  title: '5-17 Ch. 5 Link Budget, Radar & Array Capstone Solver',
+  controls: [
+    { id: 'scenario', label: 'Scenario', type: 'select', options: ['SATCOM Downlink (Ku-Band)', '5G mmWave Urban Microcell', 'S-Band Weather Radar'], value: 'SATCOM Downlink (Ku-Band)' },
+    { id: 'freq_GHz', label: 'Frequency f (GHz)', type: 'range', min: 1, max: 60, step: 0.5, value: 12.0 },
+    { id: 'D_dish_m', label: 'Aperture diameter D (m)', type: 'range', min: 0.2, max: 5.0, step: 0.1, value: 1.2 },
+    { id: 'R_km', label: 'Link / radar range R (km)', type: 'range', min: 1, max: 1000, step: 5, value: 550 },
+    { id: 'Pt_W', label: 'Transmitter power P_t (W)', type: 'range', min: 1, max: 500, step: 1, value: 40 }
+  ],
+
+  build() {
+    const g = new THREE.Group();
+    content.add(g);
+
+    // ground plane
+    const ground = new THREE.Mesh(
+      new THREE.CircleGeometry(9, 48),
+      new THREE.MeshStandardMaterial({ color: 0x0d1b2a, roughness: 0.9, metalness: 0.1 })
+    );
+    ground.rotation.x = -Math.PI / 2;
+    ground.position.y = -0.05;
+    g.add(ground);
+
+    // dish (parabolic aperture) — lathe geometry
+    const pts = [];
+    for (let i = 0; i <= 24; i++) {
+      const r = i / 24;
+      pts.push(new THREE.Vector2(r * 1.0, r * r * 0.55));
+    }
+    const dishGeo = new THREE.LatheGeometry(pts, 48);
+    const dishMat = new THREE.MeshStandardMaterial({
+      color: 0x9fb8cc, metalness: 0.85, roughness: 0.25, side: THREE.DoubleSide
+    });
+    this.dish = new THREE.Mesh(dishGeo, dishMat);
+    this.dish.rotation.x = Math.PI / 2;
+    this.dish.position.set(0, 0.35, 0);
+    g.add(this.dish);
+
+    // dish rim
+    const rim = new THREE.Mesh(
+      new THREE.TorusGeometry(1.0, 0.035, 10, 48),
+      new THREE.MeshStandardMaterial({ color: 0xcfe3f2, metalness: 0.9, roughness: 0.2 })
+    );
+    rim.rotation.x = Math.PI / 2;
+    rim.position.set(0, 0.35 + 0.55, 0);
+    g.add(rim);
+
+    // feed horn
+    const feed = new THREE.Mesh(
+      new THREE.ConeGeometry(0.09, 0.28, 16),
+      new THREE.MeshStandardMaterial({ color: 0xffd27f, metalness: 0.8, roughness: 0.3 })
+    );
+    feed.position.set(0, 0.35 + 0.55 + 0.16, 0);
+    g.add(feed);
+
+    // main beam lobe (cone, semi-transparent)
+    this.beamMat = new THREE.MeshBasicMaterial({
+      color: 0x7fd1ff, transparent: true, opacity: 0.22, side: THREE.DoubleSide, depthWrite: false
+    });
+    this.beam = new THREE.Mesh(new THREE.ConeGeometry(1.0, 6, 40, 1, true), this.beamMat);
+    this.beam.position.set(0, 0.35 + 0.55 + 3.0, 0);
+    g.add(this.beam);
+
+    // beam axis line
+    const axisGeo = new THREE.BufferGeometry().setFromPoints([
+      new THREE.Vector3(0, 0.9, 0), new THREE.Vector3(0, 7.0, 0)
+    ]);
+    this.axis = new THREE.Line(axisGeo, new THREE.LineBasicMaterial({ color: 0x7fd1ff, transparent: true, opacity: 0.6 }));
+    g.add(this.axis);
+
+    // atmospheric loss layer (translucent slab)
+    this.atmMat = new THREE.MeshBasicMaterial({
+      color: 0x4a7fa5, transparent: true, opacity: 0.16, side: THREE.DoubleSide, depthWrite: false
+    });
+    this.atm = new THREE.Mesh(new THREE.BoxGeometry(7, 0.5, 7), this.atmMat);
+    this.atm.position.set(0, 3.2, 0);
+    g.add(this.atm);
+
+    // remote target / satellite
+    this.targetMat = new THREE.MeshStandardMaterial({ color: 0x66ff99, emissive: 0x1a5533, roughness: 0.4, metalness: 0.5 });
+    this.target = new THREE.Mesh(new THREE.SphereGeometry(0.42, 24, 16), this.targetMat);
+    this.target.position.set(0, 7.2, 0);
+    g.add(this.target);
+
+    // target halo
+    this.haloMat = new THREE.MeshBasicMaterial({ color: 0x66ff99, transparent: true, opacity: 0.25, side: THREE.DoubleSide, depthWrite: false });
+    this.halo = new THREE.Mesh(new THREE.SphereGeometry(0.62, 20, 14), this.haloMat);
+    this.halo.position.copy(this.target.position);
+    g.add(this.halo);
+
+    // link path line
+    const linkGeo = new THREE.BufferGeometry().setFromPoints([
+      new THREE.Vector3(0, 0.9, 0), new THREE.Vector3(0, 7.2, 0)
+    ]);
+    this.linkLine = new THREE.Line(linkGeo, new THREE.LineBasicMaterial({ color: 0x66ff99, transparent: true, opacity: 0.8 }));
+    g.add(this.linkLine);
+
+    // small markers
+    const mk = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.06, 0.06, 0.5, 12),
+      new THREE.MeshStandardMaterial({ color: 0x8fa8bb, metalness: 0.7, roughness: 0.4 })
+    );
+    mk.position.set(0, 0.25, 0);
+    g.add(mk);
+
+    // camera framing
+    camera.position.set(6.5, 5.5, 8.5);
+    camera.lookAt(0, 3.2, 0);
+  },
+
+  update() {
+    const st = this.state;
+    const f = st.freq_GHz * 1e9;
+    const lam = 3e8 / f;
+    const D = st.D_dish_m;
+    const R = st.R_km * 1e3;
+    const Pt = st.Pt_W;
+
+    const G = 0.65 * Math.pow(Math.PI * D / lam, 2);
+    const GdB = 10 * Math.log10(G);
+    const hpbw = 70 * lam / D;
+
+    const kB = 1.38e-23;
+    const Tsys = 150;
+    const B = 20e6;
+    const N = kB * Tsys * B;
+    const NdBm = 10 * Math.log10(N * 1000);
+
+    const isRadar = st.scenario === 'S-Band Weather Radar';
+    const sigma = 10;
+
+    let Pr, SNRdB, margin, fspl, Latm, modeLabel;
+
+    if (isRadar) {
+      // monostatic radar: same dish Tx/Rx
+      const fsplR = 20 * Math.log10(4 * Math.PI * R / lam);
+      Pr = (Pt * G * G * lam * lam * sigma) / (Math.pow(4 * Math.PI, 3) * Math.pow(R, 4));
+      Latm = 0.004 * st.R_km; // dB, mild weather attenuation
+      SNRdB = 10 * Math.log10(Pr / N);
+      margin = SNRdB - 10;
+      fspl = fsplR;
+      modeLabel = 'Radar';
+    } else {
+      // link: Tx dish gain G, Rx assumed same aperture gain G (symmetric)
+      const fspl = 20 * Math.log10(4 * Math.PI * R / lam);
+      Latm = (st.scenario === '5G mmWave Urban Microcell') ? 0.35 * st.R_km : 0.02 * st.R_km;
+      Pr = Pt * G * G * Math.pow(lam / (4 * Math.PI * R), 2) / Math.pow(10, Latm / 10);
+      SNRdB = 10 * Math.log10(Pr / N);
+      margin = SNRdB - 10;
+      modeLabel = 'Link';
+    }
+
+    const PrdBm = 10 * Math.log10(Pr * 1000);
+    const closed = margin >= 0;
+
+    // ---- 3D updates ----
+    // dish scale with D
+    const s = Math.max(0.35, Math.min(1.6, D / 1.2));
+    this.dish.scale.set(s, s, s);
+    this.dish.position.y = 0.35;
+
+    // beam width from HPBW
+    const beamHalfAngle = (hpbw / 2) * Math.PI / 180;
+    const beamLen = 6.0;
+    const beamRadius = Math.tan(beamHalfAngle) * beamLen;
+    this.beam.scale.set(Math.max(0.05, beamRadius), 1, Math.max(0.05, beamRadius));
+    this.beam.position.y = 0.9 + beamLen / 2;
+
+    // target distance mapped from R (log-ish scaling for visual)
+    const tDist = 2.2 + 4.8 * Math.min(1, Math.log10(1 + st.R_km / 50) / Math.log10(21));
+    this.target.position.set(0, 0.9 + tDist, 0);
+    this.halo.position.copy(this.target.position);
+
+    // link line
+    const linkPts = [new THREE.Vector3(0, 0.9, 0), new THREE.Vector3(0, 0.9 + tDist, 0)];
+    this.linkLine.geometry.dispose();
+    this.linkLine.geometry = new THREE.BufferGeometry().setFromPoints(linkPts);
+
+    // color coding
+    const col = closed ? 0x66ff99 : 0xff5566;
+    this.targetMat.color.setHex(col);
+    this.targetMat.emissive.setHex(closed ? 0x1a5533 : 0x551a1a);
+    this.haloMat.color.setHex(col);
+    this.linkLine.material.color.setHex(col);
+    this.beamMat.color.setHex(closed ? 0x7fd1ff : 0xff8899);
+    this.beamMat.opacity = closed ? 0.22 : 0.14;
+
+    // atmospheric layer opacity from Latm
+    this.atmMat.opacity = Math.min(0.45, 0.08 + Latm / 60);
+
+    // ---- chart ----
+    const ctx = chartEl.getContext('2d');
+    const W = chartEl.width, H = chartEl.height;
+    ctx.clearRect(0, 0, W, H);
+
+    // backdrop
+    ctx.fillStyle = 'rgba(8,16,26,0.82)';
+    ctx.fillRect(0, 0, W, H);
+    ctx.strokeStyle = 'rgba(120,180,220,0.35)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(0.5, 0.5, W - 1, H - 1);
+
+    const padL = 42, padR = 14, padT = 26, padB = 30;
+    const plotW = W - padL - padR;
+    const plotH = H - padT - padB;
+
+    // range axis: 0.1R .. 2.0R
+    const Rmin = 0.1 * st.R_km;
+    const Rmax = 2.0 * st.R_km;
+
+    // compute SNR curve
+    const Npts = 160;
+    const snrArr = [];
+    let minS = 1e9, maxS = -1e9;
+    for (let i = 0; i < Npts; i++) {
+      const rk = Rmin + (Rmax - Rmin) * i / (Npts - 1);
+      const r = rk * 1e3;
+      let snr;
+      if (isRadar) {
+        const pr = (Pt * G * G * lam * lam * sigma) / (Math.pow(4 * Math.PI, 3) * Math.pow(r, 4));
+        const latm = 0.004 * rk;
+        snr = 10 * Math.log10(pr / N) - latm;
+      } else {
+        const latm = (st.scenario === '5G mmWave Urban Microcell') ? 0.35 * rk : 0.02 * rk;
+        const pr = Pt * G * G * Math.pow(lam / (4 * Math.PI * r), 2) / Math.pow(10, latm / 10);
+        snr = 10 * Math.log10(pr / N);
+      }
+      snrArr.push(snr);
+      minS = Math.min(minS, snr);
+      maxS = Math.max(maxS, snr);
+    }
+    // pad y range
+    const yLo = Math.floor(minS / 10) * 10 - 10;
+    const yHi = Math.ceil(maxS / 10) * 10 + 10;
+
+    const xOf = rk => padL + (rk - Rmin) / (Rmax - Rmin) * plotW;
+    const yOf = v => padT + (yHi - v) / (yHi - yLo) * plotH;
+
+    // grid
+    ctx.strokeStyle = 'rgba(120,180,220,0.18)';
+    ctx.lineWidth = 1;
+    for (let v = yLo; v <= yHi; v += 10) {
+      const y = yOf(v);
+      ctx.beginPath();
+      ctx.moveTo(padL, y);
+      ctx.lineTo(padL + plotW, y);
+      ctx.stroke();
+      ctx.fillStyle = 'rgba(180,210,235,0.75)';
+      ctx.font = '10px monospace';
+      ctx.textAlign = 'right';
+      ctx.fillText(v.toFixed(0), padL - 5, y + 3);
+    }
+    // x ticks
+    const nTicks = 5;
+    for (let i = 0; i <= nTicks; i++) {
+      const rk = Rmin + (Rmax - Rmin) * i / nTicks;
+      const x = xOf(rk);
+      ctx.beginPath();
+      ctx.moveTo(x, padT);
+      ctx.lineTo(x, padT + plotH);
+      ctx.stroke();
+      ctx.fillStyle = 'rgba(180,210,235,0.75)';
+      ctx.font = '10px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText(rk.toFixed(0), x, padT + plotH + 14);
+    }
+
+    // 10 dB threshold
+    const yTh = yOf(10);
+    ctx.strokeStyle = 'rgba(255,200,80,0.9)';
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([5, 4]);
+    ctx.beginPath();
+    ctx.moveTo(padL, yTh);
+    ctx.lineTo(padL + plotW, yTh);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = 'rgba(255,200,80,0.95)';
+    ctx.font = '10px monospace';
+    ctx.textAlign = 'left';
+    ctx.fillText('10 dB threshold', padL + 4, yTh - 5);
+
+    // SNR curve
+    ctx.strokeStyle = closed ? 'rgba(102,255,153,0.95)' : 'rgba(255,120,140,0.95)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    for (let i = 0; i < Npts; i++) {
+      const rk = Rmin + (Rmax - Rmin) * i / (Npts - 1);
+      const x = xOf(rk), y = yOf(snrArr[i]);
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // fill under curve
+    ctx.fillStyle = closed ? 'rgba(102,255,153,0.10)' : 'rgba(255,120,140,0.10)';
+    ctx.beginPath();
+    ctx.moveTo(xOf(Rmin), yOf(snrArr[0]));
+    for (let i = 1; i < Npts; i++) {
+      const rk = Rmin + (Rmax - Rmin) * i / (Npts - 1);
+      ctx.lineTo(xOf(rk), yOf(snrArr[i]));
+    }
+    ctx.lineTo(xOf(Rmax), padT + plotH);
+    ctx.lineTo(xOf(Rmin), padT + plotH);
+    ctx.closePath();
+    ctx.fill();
+
+    // max operational range (where SNR = 10 dB)
+    let rMaxOp = null;
+    for (let i = 1; i < Npts; i++) {
+      if (snrArr[i - 1] >= 10 && snrArr[i] < 10) {
+        const rk0 = Rmin + (Rmax - Rmin) * (i - 1) / (Npts - 1);
+        const rk1 = Rmin + (Rmax - Rmin) * i / (Npts - 1);
+        const t = (snrArr[i - 1] - 10) / (snrArr[i - 1] - snrArr[i]);
+        rMaxOp = rk0 + t * (rk1 - rk0);
+        break;
+      }
+    }
+    if (rMaxOp !== null) {
+      const x = xOf(rMaxOp);
+      ctx.strokeStyle = 'rgba(255,200,80,0.85)';
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.moveTo(x, padT);
+      ctx.lineTo(x, padT + plotH);
+      ctx.stroke();
+      ctx.fillStyle = 'rgba(255,200,80,0.95)';
+      ctx.font = '10px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText('R_max ' + rMaxOp.toFixed(0) + ' km', x, padT - 6);
+    }
+
+    // current operating point
+    const curX = xOf(st.R_km);
+    const curY = yOf(SNRdB);
+    ctx.fillStyle = closed ? '#66ff99' : '#ff5566';
+    ctx.beginPath();
+    ctx.arc(curX, curY, 4.5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,0.8)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    // labels
+    ctx.fillStyle = 'rgba(200,225,245,0.9)';
+    ctx.font = '11px monospace';
+    ctx.textAlign = 'left';
+    ctx.fillText('SNR (dB) vs Range (km)', padL, 16);
+    ctx.textAlign = 'right';
+    ctx.fillStyle = closed ? 'rgba(102,255,153,0.9)' : 'rgba(255,120,140,0.9)';
+    ctx.fillText(closed ? 'LINK CLOSED' : 'LINK OUTAGE', W - padR, 16);
+
+    // ---- HUD ----
+    setHud(
+      'Ch. 5 Capstone — ' + modeLabel + ' Budget',
+      '\\mathrm{SNR}_{\\mathrm{dB}} = P_{t,\\mathrm{dBm}} + G_t + G_r - \\mathrm{FSPL} - L_{\\mathrm{atm}} - 10\\log_{10}(k_B T_{\\mathrm{sys}} B)',
+      [
+        { k: 'Antenna Gain G', v: GdB.toFixed(1) + ' dBi' },
+        { k: 'HPBW', v: hpbw.toFixed(2) + '°' },
+        { k: 'FSPL', v: fspl.toFixed(1) + ' dB' },
+        { k: 'Received P_r', v: PrdBm.toFixed(1) + ' dBm' },
+        { k: 'System SNR', v: SNRdB.toFixed(1) + ' dB' },
+        { k: 'Link Margin', v: margin.toFixed(1) + ' dB' },
+        { k: 'Status', v: closed ? 'CLOSED ✓' : 'OUTAGE ✗' }
+      ]
+    );
+  },
+
+  tick(dt) {
+    // gentle beam shimmer
+    if (this.beamMat) {
+      this.beamMat.opacity = 0.16 + 0.06 * Math.sin(performance.now() * 0.0015);
+    }
+    if (this.halo) {
+      const s = 1 + 0.06 * Math.sin(performance.now() * 0.002);
+      this.halo.scale.set(s, s, s);
+    }
+  },
+
+  lesson: `<p>This capstone synthesizes Chapter 5: aperture gain, Friis free-space loss, atmospheric attenuation, thermal noise, and radar range equation.</p>
+  <p><b>Aperture gain:</b> \(G = 0.65(\pi D/\lambda)^2\), with half-power beamwidth \(\\mathrm{HPBW} \approx 70\lambda/D\) degrees. Larger dishes concentrate power into a narrower beam.</p>
+  <p><b>Link budget:</b> \(P_r = P_t G_t G_r (\lambda/4\pi R)^2 / L_{\\mathrm{atm}}\). Thermal noise is \(N = k_B T_{\\mathrm{sys}} B\), with \(T_{\\mathrm{sys}}=150\\,\\mathrm{K}\) and \(B=20\\,\\mathrm{MHz}\). A practical link requires \(\\mathrm{SNR} \\ge 10\\,\\mathrm{dB}\).</p>
+  <p><b>Radar:</b> monostatic radar with target cross-section \(\sigma=10\\,\\mathrm{m}^2\) gives \(P_r = P_t G^2 \lambda^2 \sigma / ((4\pi)^3 R^4)\). The \(R^{-4}\) dependence makes radar range far more sensitive to distance than a one-way link (\(R^{-2}\)).</p>
+  <p><b>Limiting cases:</b> doubling \(D\) quadruples gain and halves HPBW; doubling range costs 6 dB in a link but 12 dB in radar; mmWave urban links suffer much larger atmospheric/foliage loss than Ku-band SATCOM.</p>`,
+
+  quiz: [
+    { q: 'For a one-way link, doubling the range R increases free-space path loss by approximately:', options: ['3 dB', '6 dB', '12 dB', '20 dB'], answer: 1 },
+    { q: 'For monostatic radar, doubling the range R increases the required SNR by approximately:', options: ['3 dB', '6 dB', '12 dB', '20 dB'], answer: 2 },
+    { q: 'Doubling the dish diameter D (at fixed frequency) changes the aperture gain G and HPBW respectively as:', options: ['G ×2, HPBW ×2', 'G ×4, HPBW ÷2', 'G ×4, HPBW ×2', 'G ÷2, HPBW ÷2'], answer: 1 }
   ]
 });
 /* === UI CONTROLLER === */
