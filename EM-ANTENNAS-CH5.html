@@ -413,6 +413,7 @@
     <script type="module">
       import * as THREE from "three";
       import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+      import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 
       const stageEl = document.getElementById("stage");
       const chartEl = document.getElementById("chart-canvas");
@@ -434,12 +435,16 @@
       renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
       renderer.setSize(initW, initH);
       renderer.setClearColor(0x0a0e13, 1);
+      renderer.toneMapping = THREE.ACESFilmicToneMapping;
+      renderer.toneMappingExposure = 1.35;
       renderer.domElement.classList.add("webgl");
       renderer.domElement.style.outline = "none";
       stageEl.appendChild(renderer.domElement);
 
       const scene = new THREE.Scene();
-      scene.fog = new THREE.FogExp2(0x0a0e13, 0.025);
+      const pmrem = new THREE.PMREMGenerator(renderer);
+      scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+      scene.environmentIntensity = 0.75;
       const camera = new THREE.PerspectiveCamera(50, initW / initH, 0.1, 200);
       camera.position.set(4.8, 3.6, 5.8);
 
@@ -452,10 +457,13 @@
       controls.minDistance = 1.5;
       controls.maxDistance = 40;
 
-      scene.add(new THREE.AmbientLight(0xffffff, 0.65));
-      const dirLight = new THREE.DirectionalLight(0xffffff, 0.9);
+      scene.add(new THREE.HemisphereLight(0xdbeafe, 0x1e293b, 1.1));
+      const dirLight = new THREE.DirectionalLight(0xffffff, 1.4);
       dirLight.position.set(5, 8, 6);
       scene.add(dirLight);
+      const rimLight = new THREE.DirectionalLight(0x7fd1ff, 0.7);
+      rimLight.position.set(-6, -3, -5);
+      scene.add(rimLight);
 
       const content = new THREE.Group();
       scene.add(content);
@@ -4841,15 +4849,7 @@ modules.push({
     grid.position.y = -3.2;
     content.add(grid);
 
-    // lights
-    const amb = new THREE.AmbientLight(0xffffff, 0.55);
-    scene.add(amb);
-    const key = new THREE.DirectionalLight(0xffffff, 1.1);
-    key.position.set(8, 12, 10);
-    scene.add(key);
-    const fill = new THREE.PointLight(0x7fd1ff, 0.6, 40);
-    fill.position.set(-8, 4, 6);
-    scene.add(fill);
+
 
     this.t = 0;
   },
@@ -5160,9 +5160,7 @@ modules.push({
     const light = new THREE.DirectionalLight(0xffffff, 1.4);
     light.position.set(4, 6, 5);
     g.add(light);
-    g.add(new THREE.AmbientLight(0x88aacc, 0.55));
-
-    // Constants
+// Constants
     this.C = 299792458;
     this.R_E = 6378e3;
     this.R_SAT = 26560e3;
@@ -5572,6 +5570,674 @@ modules.push({
     { q: 'The Fraunhofer far-field boundary for an aperture of width D is approximately:', options: ['D²/λ', '2D²/λ', '0.62√(D³/λ)', 'D/λ'], answer: 1 },
     { q: 'A uniform aperture illumination produces a far-field pattern whose first sidelobe is about:', options: ['−13.2 dB', '−23 dB', '−3 dB', '0 dB'], answer: 0 },
     { q: 'The far-field angular pattern is related to the aperture illumination by:', options: ['a Fourier transform', 'a Laplace transform', 'a convolution with a sinc', 'a derivative'], answer: 0 }
+  ]
+});
+modules.push({
+  id: 'cellular_systems_earth_air_space',
+  title: '5-15 Earth-Based, Airborne & Spaceborne Cellular Systems',
+  controls: [
+    { id: 'platform', label: 'Cellular tier', type: 'select', options: ['Earth-Based Tower (n = 3.8)', 'Airborne HAP at 20 km (n = 2.4)', 'Spaceborne LEO at 550 km (n = 2.05)'], value: 'Earth-Based Tower (n = 3.8)' },
+    { id: 'cluster_N', label: 'Frequency reuse factor N', type: 'select', options: ['N = 3 (i=1, j=1)', 'N = 4 (i=2, j=0)', 'N = 7 (i=2, j=1)', 'N = 12 (i=2, j=2)'], value: 'N = 7 (i=2, j=1)' },
+    { id: 'cell_R_km', label: 'Cell radius R (km)', type: 'range', min: 0.5, max: 50.0, step: 0.5, value: 2.0 }
+  ],
+
+  build() {
+    this.group = new THREE.Group();
+    content.add(this.group);
+
+    // ground plane
+    const groundGeo = new THREE.PlaneGeometry(120, 120);
+    const groundMat = new THREE.MeshStandardMaterial({ color: 0x0b1a2a, roughness: 0.9, metalness: 0.1, transparent: true, opacity: 0.55 });
+    this.ground = new THREE.Mesh(groundGeo, groundMat);
+    this.ground.rotation.x = -Math.PI / 2;
+    this.ground.position.y = -0.02;
+    this.group.add(this.ground);
+
+    // grid lines
+    const grid = new THREE.GridHelper(120, 24, 0x244a66, 0x163247);
+    grid.position.y = 0.0;
+    this.group.add(grid);
+
+    // cell meshes (hex prisms)
+    this.cells = [];
+    const cellGeo = new THREE.CylinderGeometry(1, 1, 0.12, 6);
+    for (let k = 0; k < 60; k++) {
+      const mat = new THREE.MeshStandardMaterial({ color: 0x334455, roughness: 0.7, metalness: 0.2, transparent: true, opacity: 0.85 });
+      const m = new THREE.Mesh(cellGeo, mat);
+      m.rotation.y = Math.PI / 6;
+      m.position.y = 0.06;
+      this.group.add(m);
+      this.cells.push(m);
+    }
+
+    // co-channel highlight ring
+    this.reuseRing = new THREE.Mesh(
+      new THREE.TorusGeometry(1, 0.035, 8, 64),
+      new THREE.MeshBasicMaterial({ color: 0xffd166, transparent: true, opacity: 0.9 })
+    );
+    this.reuseRing.rotation.x = Math.PI / 2;
+    this.reuseRing.position.y = 0.14;
+    this.group.add(this.reuseRing);
+
+    // platform marker
+    this.platformMesh = new THREE.Group();
+    this.group.add(this.platformMesh);
+
+    // tower
+    this.tower = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.12, 0.18, 3.2, 8),
+      new THREE.MeshStandardMaterial({ color: 0x9fb3c8, metalness: 0.6, roughness: 0.35 })
+    );
+    this.tower.position.y = 1.6;
+    this.platformMesh.add(this.tower);
+
+    // HAP / satellite body
+    this.airBody = new THREE.Mesh(
+      new THREE.SphereGeometry(0.55, 16, 12),
+      new THREE.MeshStandardMaterial({ color: 0x7fd1ff, metalness: 0.5, roughness: 0.3 })
+    );
+    this.platformMesh.add(this.airBody);
+
+    // beams
+    this.beams = [];
+    const beamMat = new THREE.MeshBasicMaterial({ color: 0x7fd1ff, transparent: true, opacity: 0.18, side: THREE.DoubleSide });
+    for (let k = 0; k < 12; k++) {
+      const g = new THREE.ConeGeometry(0.55, 1, 12, 1, true);
+      const b = new THREE.Mesh(g, beamMat.clone());
+      this.platformMesh.add(b);
+      this.beams.push(b);
+    }
+
+    // reuse distance line
+    this.dLine = new THREE.Line(
+      new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 0.2, 0), new THREE.Vector3(1, 0.2, 0)]),
+      new THREE.LineBasicMaterial({ color: 0xffd166 })
+    );
+    this.group.add(this.dLine);
+
+    // labels via sprites? keep simple: small markers
+    this.centerMarker = new THREE.Mesh(
+      new THREE.SphereGeometry(0.12, 10, 8),
+      new THREE.MeshBasicMaterial({ color: 0xff6b6b })
+    );
+    this.centerMarker.position.y = 0.2;
+    this.group.add(this.centerMarker);
+
+    this.cameraTarget = new THREE.Vector3(0, 0, 0);
+  },
+
+  update() {
+    const st = this.state;
+    const platform = st.platform;
+    const nExp = platform.includes('3.8') ? 3.8 : platform.includes('2.4') ? 2.4 : 2.05;
+    const h = platform.includes('20 km') ? 20 : platform.includes('550 km') ? 550 : 0.05;
+
+    const N = parseInt(st.cluster_N.match(/N = (\d+)/)[1]);
+    const R = st.cell_R_km;
+
+    const Q = Math.sqrt(3 * N);
+    const D = Q * R;
+    const cirLin = Math.pow(3 * N, nExp / 2) / 6;
+    const cirDb = 10 * Math.log10(cirLin);
+
+    // scale scene: 1 unit = 1 km, but cap visual size
+    const scale = Math.min(1, 12 / (R * 8));
+    const rVis = R * scale;
+    const dVis = D * scale;
+
+    // hex grid: axial coordinates
+    const hexPos = (q, r) => {
+      const x = rVis * Math.sqrt(3) * (q + r / 2);
+      const z = rVis * 1.5 * r;
+      return new THREE.Vector3(x, 0, z);
+    };
+
+    // color palette for channels
+    const palette = [0x4cc9f0, 0xf72585, 0xffd166, 0x06d6a0, 0x9b5de5, 0xf15bb5, 0x00bbf9, 0x00f5d4, 0xff9f1c, 0xef476f, 0x118ab2, 0x8338ec];
+
+    // generate cells within radius ~ 5 rings
+    const cellsData = [];
+    const maxRing = 4;
+    for (let q = -maxRing; q <= maxRing; q++) {
+      for (let r = -maxRing; r <= maxRing; r++) {
+        if (Math.abs(q + r) <= maxRing) {
+          const p = hexPos(q, r);
+          // channel assignment: (q - r) mod N
+          const ch = ((q - r) % N + N) % N;
+          cellsData.push({ q, r, p, ch });
+        }
+      }
+    }
+
+    // assign meshes
+    for (let i = 0; i < this.cells.length; i++) {
+      const m = this.cells[i];
+      if (i < cellsData.length) {
+        const c = cellsData[i];
+        m.visible = true;
+        m.position.set(c.p.x, 0.06, c.p.z);
+        m.scale.set(rVis, 1, rVis);
+        m.material.color.setHex(palette[c.ch % palette.length]);
+        m.material.opacity = 0.8;
+      } else {
+        m.visible = false;
+      }
+    }
+
+    // highlight co-channel cells at distance D from center
+    const center = new THREE.Vector3(0, 0, 0);
+    let nearestCo = null;
+    let minDist = Infinity;
+    for (const c of cellsData) {
+      if (c.ch === 0 && c.p.length() > 0.1) {
+        const dist = c.p.length();
+        if (dist < minDist) { minDist = dist; nearestCo = c; }
+      }
+    }
+
+    if (nearestCo) {
+      this.reuseRing.position.set(nearestCo.p.x, 0.14, nearestCo.p.z);
+      this.reuseRing.scale.set(rVis, rVis, 1);
+      this.reuseRing.visible = true;
+      this.dLine.geometry.setFromPoints([
+        new THREE.Vector3(0, 0.22, 0),
+        new THREE.Vector3(nearestCo.p.x, 0.22, nearestCo.p.z)
+      ]);
+      this.dLine.visible = true;
+    } else {
+      this.reuseRing.visible = false;
+      this.dLine.visible = false;
+    }
+
+    // platform position
+    const hVis = Math.min(h * scale, 18);
+    if (platform.includes('Earth')) {
+      this.tower.visible = true;
+      this.airBody.visible = false;
+      this.platformMesh.position.set(0, 0, 0);
+      this.tower.scale.set(1, 1, 1);
+      this.beams.forEach(b => b.visible = false);
+    } else {
+      this.tower.visible = false;
+      this.airBody.visible = true;
+      this.platformMesh.position.set(0, hVis, 0);
+      this.airBody.scale.setScalar(platform.includes('550') ? 1.4 : 1.0);
+      // beams project to nearby cells
+      const beamTargets = cellsData.slice(0, 12);
+      this.beams.forEach((b, i) => {
+        if (i < beamTargets.length) {
+          const t = beamTargets[i].p;
+          const start = new THREE.Vector3(0, hVis, 0);
+          const end = new THREE.Vector3(t.x, 0.1, t.z);
+          const mid = start.clone().add(end).multiplyScalar(0.5);
+          const dir = end.clone().sub(start);
+          const len = dir.length();
+          b.position.copy(mid);
+          b.scale.set(0.35, len, 0.35);
+          b.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.clone().normalize());
+          b.visible = true;
+          b.material.opacity = 0.12;
+        } else {
+          b.visible = false;
+        }
+      });
+    }
+
+    // chart
+    const ctx = chartEl.getContext('2d');
+    const W = chartEl.width, H = chartEl.height;
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = 'rgba(8,16,28,0.82)';
+    ctx.fillRect(16, 16, 290, 210);
+    ctx.strokeStyle = 'rgba(127,209,255,0.35)';
+    ctx.strokeRect(16, 16, 290, 210);
+
+    const x0 = 50, y0 = 200, w = 230, hh = 150;
+    ctx.strokeStyle = 'rgba(200,220,240,0.5)';
+    ctx.beginPath();
+    ctx.moveTo(x0, y0); ctx.lineTo(x0, y0 - hh);
+    ctx.moveTo(x0, y0); ctx.lineTo(x0 + w, y0);
+    ctx.stroke();
+
+    // axes labels
+    ctx.fillStyle = '#cfe8ff';
+    ctx.font = '11px sans-serif';
+    ctx.fillText('CIR (dB)', 22, 60);
+    ctx.fillText('Cluster N', 150, 218);
+
+    const Ns = [3, 4, 7, 12];
+    const series = [
+      { n: 3.8, color: '#ff6b6b', label: 'Earth n=3.8' },
+      { n: 2.4, color: '#7fd1ff', label: 'HAP n=2.4' },
+      { n: 2.05, color: '#06d6a0', label: 'LEO n=2.05' }
+    ];
+
+    const cirFor = (Nv, nv) => 10 * Math.log10(Math.pow(3 * Nv, nv / 2) / 6);
+    const yMin = -10, yMax = 30;
+    const mapY = v => y0 - ((v - yMin) / (yMax - yMin)) * hh;
+    const mapX = i => x0 + (i / (Ns.length - 1)) * w;
+
+    // grid lines
+    ctx.strokeStyle = 'rgba(200,220,240,0.12)';
+    for (let v = -10; v <= 30; v += 10) {
+      const yy = mapY(v);
+      ctx.beginPath(); ctx.moveTo(x0, yy); ctx.lineTo(x0 + w, yy); ctx.stroke();
+      ctx.fillStyle = 'rgba(200,220,240,0.6)';
+      ctx.fillText(v.toString(), 30, yy + 4);
+    }
+
+    // plot series
+    series.forEach(s => {
+      ctx.strokeStyle = s.color;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      Ns.forEach((Nv, i) => {
+        const xx = mapX(i), yy = mapY(cirFor(Nv, s.n));
+        if (i === 0) ctx.moveTo(xx, yy); else ctx.lineTo(xx, yy);
+      });
+      ctx.stroke();
+      ctx.fillStyle = s.color;
+      Ns.forEach((Nv, i) => {
+        const xx = mapX(i), yy = mapY(cirFor(Nv, s.n));
+        ctx.beginPath(); ctx.arc(xx, yy, 3, 0, Math.PI * 2); ctx.fill();
+      });
+    });
+
+    // N labels
+    ctx.fillStyle = '#cfe8ff';
+    Ns.forEach((Nv, i) => ctx.fillText(Nv.toString(), mapX(i) - 4, y0 + 14));
+
+    // legend
+    ctx.font = '10px sans-serif';
+    series.forEach((s, i) => {
+      ctx.fillStyle = s.color;
+      ctx.fillRect(200, 30 + i * 14, 8, 8);
+      ctx.fillStyle = '#cfe8ff';
+      ctx.fillText(s.label, 212, 38 + i * 14);
+    });
+
+    // HUD
+    setHud(
+      'Cellular Reuse & CIR',
+      'N = i^2 + ij + j^2,\\quad \\frac{D}{R} = \\sqrt{3N},\\quad \\mathrm{CIR} \\approx \\frac{(3N)^{n/2}}{6}',
+      [
+        { k: 'Cluster N', v: N.toString() },
+        { k: 'Reuse Ratio D/R', v: Q.toFixed(2) },
+        { k: 'Co-channel Dist D', v: D.toFixed(1) + ' km' },
+        { k: 'CIR', v: cirDb.toFixed(2) + ' dB' }
+      ]
+    );
+  },
+
+  tick(dt) {
+    // gentle rotation of platform marker for visual interest
+    if (this.platformMesh) this.platformMesh.rotation.y += dt * 0.15;
+  },
+
+  lesson: `<p>Hexagonal cellular layouts use frequency reuse factor <b>N = i² + ij + j²</b>. The co-channel reuse ratio is <b>D/R = √(3N)</b>, so the nearest co-channel distance grows as √N. With six first-tier interferers, the carrier-to-interference ratio is approximately <b>CIR = (3N)^(n/2)/6</b>, where <b>n</b> is the path-loss exponent. Terrestrial towers have n ≈ 3.8, airborne HAPs at 20 km have n ≈ 2.4, and LEO satellites at 550 km have n ≈ 2.05. Lower n means weaker distance attenuation, so spaceborne systems need larger reuse clusters or multi-beam spot isolation to maintain CIR. Increasing N raises D and CIR but reduces the number of channels per cell.</p>`,
+  quiz: [
+    { q: 'For N = 7, what is the co-channel reuse ratio D/R?', options: ['√21 ≈ 4.58', '√7 ≈ 2.65', '7', '√3 ≈ 1.73'], answer: 0 },
+    { q: 'Which platform has the smallest path-loss exponent n?', options: ['Earth-based tower', 'Airborne HAP', 'Spaceborne LEO', 'All are equal'], answer: 2 },
+    { q: 'Increasing N generally causes CIR to:', options: ['Decrease', 'Increase', 'Stay constant', 'Become negative'], answer: 1 }
+  ]
+});
+modules.push({
+  id: 'absorption_atmosphere_foliage',
+  title: '5-16 Absorption by Atmosphere & Foliage',
+  controls: [
+    { id: 'freq_GHz', label: 'Carrier frequency f (GHz)', type: 'range', min: 1, max: 100, step: 0.5, value: 22.0 },
+    { id: 'elev_deg', label: 'Elevation angle θ_el (deg)', type: 'range', min: 5, max: 90, step: 1, value: 30 },
+    { id: 'rain_mmh', label: 'Rain rate R (mm/hr)', type: 'range', min: 0, max: 50, step: 1, value: 5 },
+    { id: 'foliage_m', label: 'Foliage canopy depth d_f (m)', type: 'range', min: 0, max: 60, step: 1, value: 10 }
+  ],
+
+  build() {
+    // ---------- helpers ----------
+    const gO2 = f => {
+      // 60 GHz oxygen complex: broad pedestal + narrow line
+      const x = f - 60.0;
+      return 15.0 * Math.exp(-(x * x) / (2 * 5.5 * 5.5)) + 2.0 * Math.exp(-(x * x) / (2 * 1.2 * 1.2));
+    };
+    const gH2O = f => {
+      const x = f - 22.235;
+      return 0.20 * Math.exp(-(x * x) / (2 * 2.2 * 2.2)) + 0.035 * Math.exp(-(x * x) / (2 * 9.0 * 9.0));
+    };
+    const gammaAtm = f => gO2(f) + gH2O(f);
+    const gammaRain = R => 0.0009 * Math.pow(R, 1.15); // ITU-R-ish k R^alpha (dB/km)
+    const Lfol = (f, d) => d > 0 ? 0.2 * Math.pow(f, 0.3) * Math.pow(d, 0.6) : 0;
+
+    this._gO2 = gO2; this._gH2O = gH2O;
+    this._gammaAtm = gammaAtm; this._gammaRain = gammaRain; this._Lfol = Lfol;
+
+    // ---------- 3D scene ----------
+    const grp = new THREE.Group();
+    content.add(grp);
+    this.group = grp;
+
+    // ground plane
+    const ground = new THREE.Mesh(
+      new THREE.CircleGeometry(30, 48),
+      new THREE.MeshStandardMaterial({ color: 0x2b3a2b, roughness: 0.95, metalness: 0.0 })
+    );
+    ground.rotation.x = -Math.PI / 2;
+    ground.position.y = 0;
+    grp.add(ground);
+
+    // ground terminal (small box + mast)
+    const term = new THREE.Mesh(
+      new THREE.BoxGeometry(1.6, 0.8, 1.6),
+      new THREE.MeshStandardMaterial({ color: 0x9aa7b0, roughness: 0.5, metalness: 0.6 })
+    );
+    term.position.set(0, 0.4, 0);
+    grp.add(term);
+    const mast = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.08, 0.08, 2.2, 12),
+      new THREE.MeshStandardMaterial({ color: 0xc0c8d0, metalness: 0.8, roughness: 0.3 })
+    );
+    mast.position.set(0, 1.5, 0);
+    grp.add(mast);
+
+    // satellite / high-altitude receiver
+    const sat = new THREE.Mesh(
+      new THREE.BoxGeometry(1.4, 1.0, 1.4),
+      new THREE.MeshStandardMaterial({ color: 0xd8e2ea, metalness: 0.7, roughness: 0.35 })
+    );
+    grp.add(sat);
+    const satPanel = new THREE.Mesh(
+      new THREE.BoxGeometry(4.0, 0.08, 1.2),
+      new THREE.MeshStandardMaterial({ color: 0x2a4a7a, metalness: 0.5, roughness: 0.4 })
+    );
+    grp.add(satPanel);
+
+    // stratified blue atmospheric shell (translucent)
+    const atmShell = new THREE.Mesh(
+      new THREE.CylinderGeometry(14, 14, 22, 40, 1, true),
+      new THREE.MeshStandardMaterial({
+        color: 0x3f7fd0, transparent: true, opacity: 0.10,
+        side: THREE.DoubleSide, depthWrite: false
+      })
+    );
+    atmShell.position.y = 11;
+    grp.add(atmShell);
+
+    // rain cloud layer (translucent grey slab)
+    const rainLayer = new THREE.Mesh(
+      new THREE.BoxGeometry(26, 1.2, 26),
+      new THREE.MeshStandardMaterial({
+        color: 0x8fa3b8, transparent: true, opacity: 0.22,
+        roughness: 1.0, depthWrite: false
+      })
+    );
+    rainLayer.position.y = 8.0;
+    grp.add(rainLayer);
+
+    // foliage canopy layer (translucent green slab)
+    const foliage = new THREE.Mesh(
+      new THREE.BoxGeometry(26, 1.0, 26),
+      new THREE.MeshStandardMaterial({
+        color: 0x2f8f3a, transparent: true, opacity: 0.30,
+        roughness: 0.9, depthWrite: false
+      })
+    );
+    foliage.position.y = 3.0;
+    grp.add(foliage);
+
+    // beam (line from terminal to satellite)
+    const beamGeo = new THREE.BufferGeometry().setFromPoints([
+      new THREE.Vector3(0, 2.4, 0),
+      new THREE.Vector3(0, 20, 0)
+    ]);
+    const beam = new THREE.Line(
+      beamGeo,
+      new THREE.LineBasicMaterial({ color: 0x7fd1ff, transparent: true, opacity: 0.85 })
+    );
+    grp.add(beam);
+    this.beam = beam;
+
+    // beam glow tube
+    const tube = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.10, 0.10, 1, 10, 1, true),
+      new THREE.MeshBasicMaterial({ color: 0x7fd1ff, transparent: true, opacity: 0.25, side: THREE.DoubleSide })
+    );
+    grp.add(tube);
+    this.tube = tube;
+
+    // small markers along beam
+    this.markers = [];
+    for (let i = 0; i < 3; i++) {
+      const m = new THREE.Mesh(
+        new THREE.SphereGeometry(0.16, 10, 10),
+        new THREE.MeshBasicMaterial({ color: 0xffe08a })
+      );
+      grp.add(m);
+      this.markers.push(m);
+    }
+
+    // camera framing
+    camera.position.set(18, 14, 22);
+    camera.lookAt(0, 9, 0);
+
+    // chart canvas setup
+    this.chart = chartEl;
+    this.ctx = chartEl.getContext('2d');
+  },
+
+  update() {
+    const st = this.state;
+    const f = st.freq_GHz;
+    const el = st.elev_deg * Math.PI / 180;
+    const R = st.rain_mmh;
+    const d = st.foliage_m;
+
+    const sinEl = Math.max(Math.sin(el), 0.05);
+
+    const gAtm = this._gammaAtm(f);
+    const gRain = this._gammaRain(R);
+    const L_atm = gAtm * (6.0 / sinEl);
+    const L_rain = gRain * (4.0 / sinEl);
+    const L_fol = this._Lfol(f, d);
+    const L_total = L_atm + L_rain + L_fol;
+
+    // ---------- 3D geometry update ----------
+    const topY = 20.0;
+    const baseY = 2.4;
+    const horiz = (topY - baseY) / Math.tan(el);
+    const satPos = new THREE.Vector3(horiz, topY, 0);
+
+    // beam endpoints
+    const p0 = new THREE.Vector3(0, baseY, 0);
+    const p1 = satPos.clone();
+    const pts = [p0, p1];
+    this.beam.geometry.dispose();
+    this.beam.geometry = new THREE.BufferGeometry().setFromPoints(pts);
+
+    // tube along beam
+    const mid = p0.clone().add(p1).multiplyScalar(0.5);
+    const len = p0.distanceTo(p1);
+    this.tube.position.copy(mid);
+    this.tube.scale.set(1, len, 1);
+    const dir = p1.clone().sub(p0).normalize();
+    this.tube.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
+
+    // satellite position
+    this.group.children.forEach(c => {
+      if (c.geometry && c.geometry.type === 'BoxGeometry' && c.material && c.material.color.getHex() === 0xd8e2ea) {
+        c.position.copy(satPos);
+      }
+    });
+    // satellite panel
+    this.group.children.forEach(c => {
+      if (c.geometry && c.geometry.type === 'BoxGeometry' && c.material && c.material.color.getHex() === 0x2a4a7a) {
+        c.position.copy(satPos).add(new THREE.Vector3(0, 0.6, 0));
+      }
+    });
+
+    // markers at fractions along beam
+    const fracs = [0.25, 0.5, 0.75];
+    this.markers.forEach((m, i) => {
+      m.position.copy(p0.clone().lerp(p1, fracs[i]));
+    });
+
+    // foliage layer thickness visual cue
+    const fol = this.group.children.find(c => c.material && c.material.color.getHex() === 0x2f8f3a);
+    if (fol) fol.scale.y = 0.6 + 0.4 * Math.min(d / 60, 1);
+
+    // rain layer opacity cue
+    const rain = this.group.children.find(c => c.material && c.material.color.getHex() === 0x8fa3b8);
+    if (rain) rain.material.opacity = 0.10 + 0.30 * Math.min(R / 50, 1);
+
+    // ---------- 2D chart ----------
+    const ctx = this.ctx;
+    const W = this.chart.width, H = this.chart.height;
+    ctx.clearRect(0, 0, W, H);
+
+    // backdrop
+    ctx.fillStyle = 'rgba(8,14,22,0.82)';
+    ctx.fillRect(0, 0, W, H);
+
+    const padL = 44, padR = 14, padT = 26, padB = 34;
+    const plotW = W - padL - padR;
+    const plotH = H - padT - padB;
+
+    // compute spectrum
+    const fMin = 1, fMax = 100;
+    const N = 200;
+    const vals = [];
+    let maxV = 0;
+    for (let i = 0; i <= N; i++) {
+      const ff = fMin + (fMax - fMin) * i / N;
+      const v = this._gammaAtm(ff) * (6.0 / sinEl)
+              + this._gammaRain(R) * (4.0 / sinEl)
+              + this._Lfol(ff, d);
+      vals.push(v);
+      if (v > maxV) maxV = v;
+    }
+    maxV = Math.max(maxV, 1);
+
+    const xOf = ff => padL + (ff - fMin) / (fMax - fMin) * plotW;
+    const yOf = v => padT + plotH - (v / maxV) * plotH;
+
+    // grid
+    ctx.strokeStyle = 'rgba(120,160,200,0.18)';
+    ctx.lineWidth = 1;
+    for (let i = 0; i <= 4; i++) {
+      const y = padT + plotH * i / 4;
+      ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(padL + plotW, y); ctx.stroke();
+    }
+    for (let i = 0; i <= 5; i++) {
+      const x = padL + plotW * i / 5;
+      ctx.beginPath(); ctx.moveTo(x, padT); ctx.lineTo(x, padT + plotH); ctx.stroke();
+    }
+
+    // axes
+    ctx.strokeStyle = 'rgba(200,220,240,0.55)';
+    ctx.lineWidth = 1.2;
+    ctx.beginPath(); ctx.moveTo(padL, padT); ctx.lineTo(padL, padT + plotH); ctx.lineTo(padL + plotW, padT + plotH); ctx.stroke();
+
+    // curve
+    ctx.strokeStyle = '#7fd1ff';
+    ctx.lineWidth = 2.0;
+    ctx.beginPath();
+    for (let i = 0; i <= N; i++) {
+      const ff = fMin + (fMax - fMin) * i / N;
+      const x = xOf(ff), y = yOf(vals[i]);
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // fill under curve
+    ctx.fillStyle = 'rgba(127,209,255,0.12)';
+    ctx.beginPath();
+    ctx.moveTo(xOf(fMin), yOf(0));
+    for (let i = 0; i <= N; i++) {
+      const ff = fMin + (fMax - fMin) * i / N;
+      ctx.lineTo(xOf(ff), yOf(vals[i]));
+    }
+    ctx.lineTo(xOf(fMax), yOf(0));
+    ctx.closePath();
+    ctx.fill();
+
+    // cursor at current frequency
+    const cx = xOf(f);
+    ctx.strokeStyle = '#ffcf6b';
+    ctx.lineWidth = 1.6;
+    ctx.setLineDash([4, 3]);
+    ctx.beginPath(); ctx.moveTo(cx, padT); ctx.lineTo(cx, padT + plotH); ctx.stroke();
+    ctx.setLineDash([]);
+
+    // cursor dot
+    const curV = this._gammaAtm(f) * (6.0 / sinEl) + this._gammaRain(R) * (4.0 / sinEl) + this._Lfol(f, d);
+    ctx.fillStyle = '#ffcf6b';
+    ctx.beginPath(); ctx.arc(cx, yOf(curV), 3.5, 0, Math.PI * 2); ctx.fill();
+
+    // labels
+    ctx.fillStyle = 'rgba(220,235,250,0.85)';
+    ctx.font = '11px system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('f (GHz)', padL + plotW / 2, H - 8);
+    ctx.textAlign = 'left';
+    ctx.fillText('Attenuation (dB)', 6, padT - 8);
+
+    // tick labels
+    ctx.font = '10px system-ui, sans-serif';
+    ctx.fillStyle = 'rgba(180,205,230,0.75)';
+    ctx.textAlign = 'center';
+    for (let i = 0; i <= 5; i++) {
+      const ff = fMin + (fMax - fMin) * i / 5;
+      ctx.fillText(ff.toFixed(0), padL + plotW * i / 5, padT + plotH + 14);
+    }
+    ctx.textAlign = 'right';
+    for (let i = 0; i <= 4; i++) {
+      const v = maxV * (4 - i) / 4;
+      ctx.fillText(v.toFixed(1), padL - 6, padT + plotH * i / 4 + 4);
+    }
+
+    // resonance annotations
+    ctx.fillStyle = 'rgba(255,207,107,0.85)';
+    ctx.font = '10px system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('H₂O 22.2', xOf(22.235), padT + 12);
+    ctx.fillText('O₂ 60', xOf(60), padT + 12);
+
+    // ---------- HUD ----------
+    setHud(
+      '5-16 Absorption by Atmosphere & Foliage',
+      'L_{\\mathrm{total}} = \\frac{\\gamma_{\\mathrm{atm}} h_{\\mathrm{atm}} + \\gamma_{\\mathrm{rain}} h_{\\mathrm{rain}}}{\\sin\\theta_{\\mathrm{el}}} + L_{\\mathrm{foliage}}',
+      [
+        { k: 'Clear-Air L_atm', v: L_atm.toFixed(2) + ' dB' },
+        { k: 'Rain Loss L_rain', v: L_rain.toFixed(2) + ' dB' },
+        { k: 'Foliage Loss L_fol', v: L_fol.toFixed(2) + ' dB' },
+        { k: 'Total Excess Loss', v: L_total.toFixed(2) + ' dB' }
+      ]
+    );
+  },
+
+  tick(dt) {
+    // gentle pulse of the beam glow
+    if (this.tube) {
+      const t = performance.now() * 0.001;
+      this.tube.material.opacity = 0.18 + 0.10 * Math.sin(t * 2.0);
+    }
+  },
+
+  lesson: `<p>Microwave and mmWave links suffer excess loss from three distinct mechanisms. Clear-air absorption is dominated by the <strong>22.235 GHz water-vapor line</strong> (≈0.2 dB/km peak) and the <strong>60 GHz oxygen complex</strong> (≈15 dB/km peak); the effective scale height is about 6 km, so the slant path loss is γ_atm·h_eff/sin θ_el. Rain adds a power-law specific attenuation γ_rain = k R^α (ITU-R), integrated over a ~4 km rain column. Vegetation adds the Weissberger/ITU term L_fol = 0.2 f^0.3 d_f^0.6 dB, growing sub-linearly with canopy depth. At low elevation angles the 1/sin θ_el factor greatly amplifies all slant-path losses, and at 60 GHz the oxygen peak makes the link essentially unusable for long paths.</p>`,
+
+  quiz: [
+    {
+      q: 'Which atmospheric resonance dominates attenuation near 60 GHz?',
+      options: ['Water vapor at 22.2 GHz', 'Oxygen complex near 60 GHz', 'CO₂ at 15 GHz', 'Nitrogen at 80 GHz'],
+      answer: 1
+    },
+    {
+      q: 'How does the slant atmospheric loss scale with elevation angle θ_el?',
+      options: ['Proportional to sin θ_el', 'Proportional to 1/sin θ_el', 'Independent of θ_el', 'Proportional to cos θ_el'],
+      answer: 1
+    },
+    {
+      q: 'The foliage attenuation L_fol = 0.2 f^0.3 d_f^0.6 depends on canopy depth d_f as:',
+      options: ['Linear in d_f', 'd_f^0.6 (sub-linear)', 'd_f^2 (quadratic)', 'Independent of d_f'],
+      answer: 1
+    }
   ]
 });
 /* === UI CONTROLLER === */
