@@ -656,7 +656,7 @@
           },
           {
             id: "er",
-            label: "Relative permittivity εr",
+            label: "Medium 1 permittivity εr₁",
             type: "range",
             min: 1,
             max: 9,
@@ -665,64 +665,621 @@
           },
           {
             id: "ur",
-            label: "Relative permeability μr",
+            label: "Medium 1 permeability μr₁",
             type: "range",
             min: 1,
             max: 4,
             step: 0.1,
             value: 1,
           },
+          {
+            id: "show_rr",
+            label: "2nd 3D Object: Reflect & Refract",
+            type: "check",
+            value: true,
+          },
+          {
+            id: "er2",
+            label: "Medium 2 permittivity εr₂",
+            type: "range",
+            min: 1.2,
+            max: 9,
+            step: 0.1,
+            value: 2.5,
+          },
+          {
+            id: "theta_i",
+            label: "Incident angle θᵢ (°)",
+            type: "range",
+            min: 0,
+            max: 80,
+            step: 1,
+            value: 45,
+          },
+          {
+            id: "pol",
+            label: "Linear Polarization (nonrotating)",
+            type: "select",
+            options: [
+              "TE (E ⊥ plane of incidence)",
+              "TM (E ∥ plane of incidence)",
+            ],
+            value: "TE (E ⊥ plane of incidence)",
+          },
           { id: "animate", label: "Animate wave", type: "check", value: true },
         ],
-        state: { f: 300, E0: 5, er: 1, ur: 1, animate: true, t: 0 },
+        state: {
+          f: 300,
+          E0: 5,
+          er: 1,
+          ur: 1,
+          show_rr: true,
+          er2: 2.5,
+          theta_i: 45,
+          pol: "TE (E ⊥ plane of incidence)",
+          animate: true,
+          t: 0,
+        },
 
         build() {
-          addGrid(content, 10, -2.2);
+          camera.position.set(1.2, 4.4, 9.6);
+          controls.target.set(0.1, -0.1, 0);
+          controls.update();
+
+          addGrid(content, 12, -2.5);
+
+          // === 1st 3D Object: Nonrotating Linearly Polarized TEM Wave in Uniform Space ===
+          this.obj1X = -2.9;
           this.arrowsE = addArrowField([], 0xff5533);
           this.arrowsH = addArrowField([], 0x33aaff);
+          this.envE1 = new THREE.Line(
+            new THREE.BufferGeometry(),
+            new THREE.LineBasicMaterial({
+              color: 0xff7744,
+              transparent: true,
+              opacity: 0.65,
+            }),
+          );
+          this.envH1 = new THREE.Line(
+            new THREE.BufferGeometry(),
+            new THREE.LineBasicMaterial({
+              color: 0x38bdf8,
+              transparent: true,
+              opacity: 0.55,
+            }),
+          );
+          content.add(this.envE1, this.envH1);
+
           this.axis = new THREE.Mesh(
-            new THREE.CylinderGeometry(0.015, 0.015, 11, 8),
+            new THREE.CylinderGeometry(0.015, 0.015, 9.6, 8),
             new THREE.MeshBasicMaterial({ color: 0x888888 }),
           );
           this.axis.rotation.x = Math.PI / 2;
+          this.axis.position.set(this.obj1X, 0, 0);
           content.add(this.axis);
+
+          // === 2nd 3D Object: Nonrotating EM Wave Reflected & Refracted at Dielectric Boundary ===
+          this.rrGroup = new THREE.Group();
+          this.obj2Center = new THREE.Vector3(2.3, 0, 0);
+          this.rrGroup.position.copy(this.obj2Center);
+          content.add(this.rrGroup);
+
+          // Boundary plane y = 0 between Medium 1 (y > 0) and Medium 2 (y < 0)
+          const ifaceGeo = new THREE.PlaneGeometry(4.2, 8.8);
+          this.ifaceMat = new THREE.MeshStandardMaterial({
+            color: 0x38bdf8,
+            transparent: true,
+            opacity: 0.28,
+            roughness: 0.25,
+            metalness: 0.15,
+            side: THREE.DoubleSide,
+          });
+          this.ifaceMesh = new THREE.Mesh(ifaceGeo, this.ifaceMat);
+          this.ifaceMesh.rotation.x = -Math.PI / 2;
+          this.rrGroup.add(this.ifaceMesh);
+
+          // Medium 2 dielectric volume block (y < 0)
+          const slabGeo = new THREE.BoxGeometry(4.2, 2.45, 8.8);
+          this.slabMat = new THREE.MeshStandardMaterial({
+            color: 0x0ea5e9,
+            transparent: true,
+            opacity: 0.18,
+            roughness: 0.3,
+            metalness: 0.1,
+          });
+          this.slabMesh = new THREE.Mesh(slabGeo, this.slabMat);
+          this.slabMesh.position.set(0, -1.23, 0);
+          this.rrGroup.add(this.slabMesh);
+
+          this.slabMesh.add(
+            new THREE.LineSegments(
+              new THREE.EdgesGeometry(slabGeo),
+              new THREE.LineBasicMaterial({
+                color: 0x38bdf8,
+                transparent: true,
+                opacity: 0.45,
+              }),
+            ),
+          );
+
+          // Surface normal at hit point (0, 0, 0) in rrGroup
+          this.normalLine = new THREE.Line(
+            new THREE.BufferGeometry().setFromPoints([
+              new THREE.Vector3(0, -2.55, 0),
+              new THREE.Vector3(0, 3.1, 0),
+            ]),
+            new THREE.LineBasicMaterial({
+              color: 0x94a3b8,
+              transparent: true,
+              opacity: 0.7,
+            }),
+          );
+          this.rrGroup.add(this.normalLine);
+
+          const mkRayAxis = () => {
+            const m = new THREE.Mesh(
+              new THREE.CylinderGeometry(0.014, 0.014, 1, 8),
+              new THREE.MeshBasicMaterial({ color: 0x888888 }),
+            );
+            this.rrGroup.add(m);
+            return m;
+          };
+          this.incAxis2 = mkRayAxis();
+          this.refAxis2 = mkRayAxis();
+          this.trnAxis2 = mkRayAxis();
+
+          // ArrowFields for Incident, Reflected, and Refracted nonrotating waves
+          this.incE2 = addArrowField([], 0xff5533);
+          this.incH2 = addArrowField([], 0x33aaff);
+          this.refE2 = addArrowField([], 0xff5533);
+          this.refH2 = addArrowField([], 0x33aaff);
+          this.trnE2 = addArrowField([], 0xff5533);
+          this.trnH2 = addArrowField([], 0x33aaff);
+
+          // Sinusoidal tip-envelope lines for E (orange) & H (blue)
+          const mkEnvLine = (col, op) => {
+            const l = new THREE.Line(
+              new THREE.BufferGeometry(),
+              new THREE.LineBasicMaterial({
+                color: col,
+                transparent: true,
+                opacity: op,
+              }),
+            );
+            content.add(l);
+            return l;
+          };
+          this.incEnvE = mkEnvLine(0xff7744, 0.75);
+          this.refEnvE = mkEnvLine(0xff7744, 0.75);
+          this.trnEnvE = mkEnvLine(0xff7744, 0.75);
+          this.incEnvH = mkEnvLine(0x38bdf8, 0.5);
+          this.refEnvH = mkEnvLine(0x38bdf8, 0.5);
+          this.trnEnvH = mkEnvLine(0x38bdf8, 0.5);
+
+          // Angle arcs in y-z plane of 2nd object
+          this.arcInc2 = new THREE.Line(
+            new THREE.BufferGeometry(),
+            new THREE.LineBasicMaterial({ color: 0xfbbf24 }),
+          );
+          this.arcRef2 = new THREE.Line(
+            new THREE.BufferGeometry(),
+            new THREE.LineBasicMaterial({ color: 0x34d399 }),
+          );
+          this.arcTrn2 = new THREE.Line(
+            new THREE.BufferGeometry(),
+            new THREE.LineBasicMaterial({ color: 0x38bdf8 }),
+          );
+          this.rrGroup.add(this.arcInc2, this.arcRef2, this.arcTrn2);
+
+          // 3D Sprite Labels for both 3D objects
+          const makeSprite = (bg, border, fg, scaleX = 2.4) => {
+            const c = document.createElement("canvas");
+            c.width = 460;
+            c.height = 72;
+            const tex = new THREE.CanvasTexture(c);
+            const sp = new THREE.Sprite(
+              new THREE.SpriteMaterial({
+                map: tex,
+                transparent: true,
+                depthTest: false,
+              }),
+            );
+            sp.scale.set(scaleX, 0.38, 1);
+            sp.userData = { canvas: c, tex, bg, border, fg, lastText: "" };
+            content.add(sp);
+            return sp;
+          };
+          this.lblObj1 = makeSprite(
+            "rgba(15,23,42,0.85)",
+            "rgba(255,119,68,0.6)",
+            "#ff9977",
+            2.9,
+          );
+          this.lblObj2 = makeSprite(
+            "rgba(15,23,42,0.85)",
+            "rgba(56,189,248,0.6)",
+            "#7dd3fc",
+            3.1,
+          );
+          this.lblInc2 = makeSprite(
+            "rgba(30,15,10,0.84)",
+            "rgba(255,85,51,0.6)",
+            "#ff8866",
+            2.1,
+          );
+          this.lblRef2 = makeSprite(
+            "rgba(6,28,22,0.84)",
+            "rgba(52,211,153,0.6)",
+            "#6ee7b7",
+            2.2,
+          );
+          this.lblTrn2 = makeSprite(
+            "rgba(10,24,42,0.84)",
+            "rgba(56,189,248,0.6)",
+            "#7dd3fc",
+            2.2,
+          );
+
+          this._setSpriteText = (sp, text) => {
+            if (sp.userData.lastText === text) return;
+            sp.userData.lastText = text;
+            const { canvas, tex, bg, border, fg } = sp.userData;
+            const ctx = canvas.getContext("2d");
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = bg;
+            ctx.strokeStyle = border;
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.roundRect(6, 6, canvas.width - 12, canvas.height - 12, 16);
+            ctx.fill();
+            ctx.stroke();
+            ctx.fillStyle = fg;
+            ctx.font = "bold 24px system-ui, -apple-system, sans-serif";
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            ctx.fillText(text, canvas.width / 2, canvas.height / 2 + 1);
+            tex.needsUpdate = true;
+          };
+
+          this._orientCyl = (cyl, p0, p1) => {
+            const diff = new THREE.Vector3().subVectors(p1, p0);
+            const len = diff.length();
+            if (len < 1e-5) {
+              cyl.visible = false;
+              return;
+            }
+            cyl.visible = true;
+            cyl.position.copy(p0).addScaledVector(diff, 0.5);
+            cyl.scale.set(1, len, 1);
+            cyl.quaternion.setFromUnitVectors(
+              new THREE.Vector3(0, 1, 0),
+              diff.normalize(),
+            );
+          };
+
           this.update();
         },
 
         update() {
           const st = this.state;
           const Z0 = 376.73;
-          const Z = Z0 * Math.sqrt(st.ur / st.er);
+          const Z1 = Z0 * Math.sqrt(st.ur / st.er);
+          const n1 = Math.sqrt(st.er * st.ur);
+          const n2 = Math.sqrt(st.er2);
+          const Z2 = Z0 / n2;
+
           const c = 299792458;
-          const v = c / Math.sqrt(st.er * st.ur);
+          const v1 = c / n1;
           const fHz = st.f * 1e6;
-          const lambda = v / fHz;
-          const betaVis = ((2 * Math.PI) / lambda) * 0.35;
+          const lambda1 = v1 / fHz;
+          const betaVis1 = ((2 * Math.PI) / lambda1) * 0.35;
           const omegaVis = 3.2 * (st.f / 300);
 
-          const N = 40;
-          const Evecs = [],
-            Hvecs = [];
-          for (let i = 0; i < N; i++) {
-            const z = -5 + i * (10 / (N - 1));
-            const ph = omegaVis * st.t - betaVis * z;
-            const Ey = st.E0 * Math.cos(ph);
-            const Hx = -(st.E0 / Z) * Math.cos(ph);
-            const origin = new THREE.Vector3(0, 0, z);
-            Evecs.push({ origin, dir: new THREE.Vector3(0, Ey * 0.35, 0) });
-            Hvecs.push({ origin, dir: new THREE.Vector3(Hx * 120, 0, 0) });
-          }
+          // === Update 1st 3D Object (Nonrotating Linear TEM Wave) ===
+          const x1 = st.show_rr ? this.obj1X : 0;
+          this.axis.position.x = x1;
 
+          const N1 = 40;
+          const Evecs = [],
+            Hvecs = [],
+            ePts1 = [],
+            hPts1 = [];
+          for (let i = 0; i < N1; i++) {
+            const z = -4.6 + i * (9.2 / (N1 - 1));
+            const ph = omegaVis * st.t - betaVis1 * z;
+            const Ey = st.E0 * Math.cos(ph);
+            const Hx = -(st.E0 / Z1) * Math.cos(ph);
+            const origin = new THREE.Vector3(x1, 0, z);
+            const eDir = new THREE.Vector3(0, Ey * 0.32, 0);
+            const hDir = new THREE.Vector3(Hx * 110, 0, 0);
+            Evecs.push({ origin, dir: eDir });
+            Hvecs.push({ origin, dir: hDir });
+            ePts1.push(origin.clone().add(eDir));
+            hPts1.push(origin.clone().add(hDir));
+          }
           this.arrowsE.setVectors(Evecs);
           this.arrowsH.setVectors(Hvecs);
 
+          this.envE1.geometry.dispose();
+          this.envE1.geometry = new THREE.BufferGeometry().setFromPoints(ePts1);
+          this.envH1.geometry.dispose();
+          this.envH1.geometry = new THREE.BufferGeometry().setFromPoints(hPts1);
+
+          this._setSpriteText(
+            this.lblObj1,
+            "1. Nonrotating TEM Wave (Medium 1)",
+          );
+          this.lblObj1.position.set(x1, 2.35, -2.5);
+
+          // === Update 2nd 3D Object (Reflection & Refraction of Nonrotating Wave) ===
+          const showRR = !!st.show_rr;
+          this.rrGroup.visible = showRR;
+          this.lblObj2.visible = showRR;
+          this.lblInc2.visible = showRR;
+          this.lblRef2.visible = showRR;
+          this.lblTrn2.visible = showRR;
+          this.incEnvE.visible = showRR;
+          this.refEnvE.visible = showRR;
+          this.trnEnvE.visible = showRR;
+          this.incEnvH.visible = showRR;
+          this.refEnvH.visible = showRR;
+          this.trnEnvH.visible = showRR;
+
+          const ti = THREE.MathUtils.degToRad(st.theta_i);
+          const sinTi = Math.sin(ti);
+          const cosTi = Math.cos(ti);
+          const sinTt = (n1 / n2) * sinTi;
+          const tir = sinTt > 1.0;
+          const tt = tir ? Math.PI / 2 : Math.asin(sinTt);
+          const cosTt = tir ? 0 : Math.cos(tt);
+
+          const isTE = st.pol.startsWith("TE");
+          let gamma = 0;
+          let tau = 0;
+          if (tir) {
+            gamma = 1.0;
+            tau = 0.0;
+          } else if (isTE) {
+            gamma = (Z2 * cosTi - Z1 * cosTt) / (Z2 * cosTi + Z1 * cosTt);
+            tau = (2 * Z2 * cosTi) / (Z2 * cosTi + Z1 * cosTt);
+          } else {
+            gamma = (Z1 * cosTi - Z2 * cosTt) / (Z1 * cosTi + Z2 * cosTt);
+            tau = (2 * Z2 * cosTi) / (Z1 * cosTi + Z2 * cosTt);
+          }
+
+          if (!showRR) {
+            this.incE2.setVectors([]);
+            this.incH2.setVectors([]);
+            this.refE2.setVectors([]);
+            this.refH2.setVectors([]);
+            this.trnE2.setVectors([]);
+            this.trnH2.setVectors([]);
+          } else {
+            const C2 = this.obj2Center;
+
+            // Propagation unit vectors in y-z plane
+            const kInc = new THREE.Vector3(0, -cosTi, sinTi);
+            const kRef = new THREE.Vector3(0, cosTi, sinTi);
+            const kTrn = new THREE.Vector3(0, -cosTt, sinTt);
+
+            // Orthonormal linear (nonrotating) field basis vectors: e_E x e_H = k
+            let eEi, eHi, eEr, eHr, eEt, eHt;
+            if (isTE) {
+              // E perpendicular to plane of incidence (+x), H in plane of incidence
+              eEi = new THREE.Vector3(1, 0, 0);
+              eHi = new THREE.Vector3(0, sinTi, cosTi);
+              eEr = new THREE.Vector3(1, 0, 0);
+              eHr = new THREE.Vector3(0, sinTi, -cosTi);
+              eEt = new THREE.Vector3(1, 0, 0);
+              eHt = new THREE.Vector3(0, sinTt, cosTt);
+            } else {
+              // E parallel to plane of incidence, H perpendicular (-x)
+              eEi = new THREE.Vector3(0, sinTi, cosTi);
+              eHi = new THREE.Vector3(-1, 0, 0);
+              eEr = new THREE.Vector3(0, sinTi, -cosTi);
+              eHr = new THREE.Vector3(-1, 0, 0);
+              eEt = new THREE.Vector3(0, sinTt, cosTt);
+              eHt = new THREE.Vector3(-1, 0, 0);
+            }
+
+            const Li = 3.5;
+            const Lr = 3.5;
+            const Lt = 2.55;
+
+            const pInc0 = kInc.clone().multiplyScalar(-Li);
+            const pOrig = new THREE.Vector3(0, 0, 0);
+            const pRef1 = kRef.clone().multiplyScalar(Lr);
+            const pTrn1 = kTrn.clone().multiplyScalar(Lt);
+
+            this._orientCyl(this.incAxis2, pInc0, pOrig);
+            this._orientCyl(this.refAxis2, pOrig, pRef1);
+            if (tir) {
+              this.trnAxis2.visible = false;
+            } else {
+              this._orientCyl(this.trnAxis2, pOrig, pTrn1);
+            }
+
+            // Visual wave spatial frequency (Medium 2 compresses wavelength by n2/n1)
+            const kVis1 = ((2 * Math.PI) / 1.35) * (st.f / 300);
+            const kVis2 = kVis1 * (n2 / n1);
+            const Escale = st.E0 * 0.17;
+            const Hscale1 = Escale * (Z0 / Z1) * 0.72;
+            const Hscale2 = Escale * (Z0 / Z2) * 0.72;
+
+            const Ns = 34;
+            const incEArr = [],
+              incHArr = [],
+              incEPts = [],
+              incHPts = [];
+            const refEArr = [],
+              refHArr = [],
+              refEPts = [],
+              refHPts = [];
+            const trnEArr = [],
+              trnHArr = [],
+              trnEPts = [],
+              trnHPts = [];
+
+            // Incident nonrotating wave: s in [-Li, 0]
+            for (let i = 0; i < Ns; i++) {
+              const s = -Li + (Li * i) / (Ns - 1);
+              const origin = C2.clone().addScaledVector(kInc, s);
+              const osc = Math.cos(omegaVis * st.t - kVis1 * s);
+              const eVec = eEi.clone().multiplyScalar(Escale * osc);
+              const hVec = eHi.clone().multiplyScalar(Hscale1 * osc);
+              incEArr.push({ origin, dir: eVec, len: eVec.length() });
+              incHArr.push({ origin, dir: hVec, len: hVec.length() });
+              incEPts.push(origin.clone().add(eVec));
+              incHPts.push(origin.clone().add(hVec));
+            }
+
+            // Reflected nonrotating wave: s in [0, Lr]
+            for (let i = 0; i < Ns; i++) {
+              const s = (Lr * i) / (Ns - 1);
+              const origin = C2.clone().addScaledVector(kRef, s);
+              const osc = Math.cos(omegaVis * st.t - kVis1 * s);
+              const eVec = eEr.clone().multiplyScalar(gamma * Escale * osc);
+              const hVec = eHr.clone().multiplyScalar(gamma * Hscale1 * osc);
+              refEArr.push({ origin, dir: eVec, len: eVec.length() });
+              refHArr.push({ origin, dir: hVec, len: hVec.length() });
+              refEPts.push(origin.clone().add(eVec));
+              refHPts.push(origin.clone().add(hVec));
+            }
+
+            // Refracted (transmitted) nonrotating wave in Medium 2: s in [0, Lt]
+            if (!tir) {
+              const Nt = 30;
+              for (let i = 0; i < Nt; i++) {
+                const s = (Lt * i) / (Nt - 1);
+                const origin = C2.clone().addScaledVector(kTrn, s);
+                const osc = Math.cos(omegaVis * st.t - kVis2 * s);
+                const eVec = eEt.clone().multiplyScalar(tau * Escale * osc);
+                const hVec = eHt.clone().multiplyScalar(tau * Hscale2 * osc);
+                trnEArr.push({ origin, dir: eVec, len: eVec.length() });
+                trnHArr.push({ origin, dir: hVec, len: hVec.length() });
+                trnEPts.push(origin.clone().add(eVec));
+                trnHPts.push(origin.clone().add(hVec));
+              }
+            }
+
+            this.incE2.setVectors(incEArr);
+            this.incH2.setVectors(incHArr);
+            this.refE2.setVectors(refEArr);
+            this.refH2.setVectors(refHArr);
+            this.trnE2.setVectors(trnEArr);
+            this.trnH2.setVectors(trnHArr);
+
+            this.incEnvE.geometry.dispose();
+            this.incEnvE.geometry = new THREE.BufferGeometry().setFromPoints(
+              incEPts,
+            );
+            this.incEnvH.geometry.dispose();
+            this.incEnvH.geometry = new THREE.BufferGeometry().setFromPoints(
+              incHPts,
+            );
+            this.refEnvE.geometry.dispose();
+            this.refEnvE.geometry = new THREE.BufferGeometry().setFromPoints(
+              refEPts,
+            );
+            this.refEnvH.geometry.dispose();
+            this.refEnvH.geometry = new THREE.BufferGeometry().setFromPoints(
+              refHPts,
+            );
+
+            this.trnEnvE.visible = !tir;
+            this.trnEnvH.visible = !tir;
+            if (!tir) {
+              this.trnEnvE.geometry.dispose();
+              this.trnEnvE.geometry = new THREE.BufferGeometry().setFromPoints(
+                trnEPts,
+              );
+              this.trnEnvH.geometry.dispose();
+              this.trnEnvH.geometry = new THREE.BufferGeometry().setFromPoints(
+                trnHPts,
+              );
+            }
+
+            // Angle arcs
+            const buildArc = (a0, a1, r) => {
+              const pts = [];
+              for (let i = 0; i <= 20; i++) {
+                const a = a0 + ((a1 - a0) * i) / 20;
+                pts.push(new THREE.Vector3(0, r * Math.cos(a), r * Math.sin(a)));
+              }
+              return pts;
+            };
+            this.arcInc2.geometry.dispose();
+            this.arcInc2.geometry = new THREE.BufferGeometry().setFromPoints(
+              buildArc(0, -ti, 0.95),
+            );
+            this.arcRef2.geometry.dispose();
+            this.arcRef2.geometry = new THREE.BufferGeometry().setFromPoints(
+              buildArc(0, ti, 1.1),
+            );
+            this.arcTrn2.visible = !tir;
+            if (!tir) {
+              this.arcTrn2.geometry.dispose();
+              this.arcTrn2.geometry = new THREE.BufferGeometry().setFromPoints(
+                buildArc(Math.PI, Math.PI - tt, 0.95),
+              );
+            }
+
+            // Sprite labels for 2nd 3D Object
+            this._setSpriteText(
+              this.lblObj2,
+              `2. Reflection & Refraction (εr₂ = ${st.er2.toFixed(1)})`,
+            );
+            this.lblObj2.position.set(C2.x, 3.25, 0);
+
+            this._setSpriteText(
+              this.lblInc2,
+              `Incident (θᵢ = ${st.theta_i.toFixed(0)}°)`,
+            );
+            this.lblInc2.position
+              .copy(C2)
+              .add(pInc0)
+              .add(new THREE.Vector3(0, 0.75, 0));
+
+            const refNote =
+              Math.abs(gamma) < 0.02
+                ? "Reflected ≈ 0 (Brewster!)"
+                : `Reflected (Γ = ${gamma.toFixed(2)})`;
+            this._setSpriteText(this.lblRef2, refNote);
+            this.lblRef2.position
+              .copy(C2)
+              .add(pRef1)
+              .add(new THREE.Vector3(0, 0.75, 0));
+
+            this.lblTrn2.visible = !tir;
+            if (!tir) {
+              const ttDeg = ((tt * 180) / Math.PI).toFixed(1);
+              this._setSpriteText(
+                this.lblTrn2,
+                `Refracted (θₜ = ${ttDeg}°, τ = ${tau.toFixed(2)})`,
+              );
+              this.lblTrn2.position
+                .copy(C2)
+                .add(pTrn1)
+                .add(new THREE.Vector3(0, -0.45, 0.35));
+            }
+          }
+
+          const ttDisplay = tir
+            ? "TIR (Total Internal Reflection)"
+            : `${((tt * 180) / Math.PI).toFixed(1)}°`;
+          const lambda2 = c / (n2 * fHz);
+
           setHud(
-            "TEM wave propagating in +z",
-            "E_y=E_0\\cos(\\omega t-\\beta z),\\quad H_x=-\\frac{E_0}{Z}\\cos(\\omega t-\\beta z)",
+            "4-2 Nonrotating TEM Wave + Reflection & Refraction",
+            "E_y=E_0\\cos(\\omega t-\\beta z),\\quad n_1\\sin\\theta_i = n_2\\sin\\theta_t",
             [
-              { k: "Z (Ω)", v: Z.toFixed(1) },
-              { k: "v (m/s)", v: v.toExponential(2) },
-              { k: "λ (m)", v: lambda.toFixed(3) },
+              { k: "Med 1: Z₁ / v₁", v: `${Z1.toFixed(1)} Ω / ${v1.toExponential(2)} m/s` },
+              { k: "λ₁ / λ₂ (m)", v: `${lambda1.toFixed(3)} / ${lambda2.toFixed(3)}` },
+              { k: "Angles θᵢ → θₜ", v: `${st.theta_i.toFixed(0)}° → ${ttDisplay}` },
+              {
+                k: isTE ? "Fresnel Γ⊥ / τ⊥" : "Fresnel Γ∥ / τ∥",
+                v: `${fmt(gamma, 3)} / ${fmt(tau, 3)}`,
+              },
             ],
           );
         },
@@ -734,9 +1291,11 @@
           }
         },
 
-        lesson: `<p>A uniform plane wave travelling in <b>+z</b> has transverse fields. For a TEM wave, <b>E</b> (orange, along <i>y</i>) and <b>H</b> (blue, along <i>x</i>) are perpendicular to each other and to the propagation direction.</p>
-  <p>With <b>E</b> along y and <b>H</b> along x: <code>Ey = E0 cos(ωt − βz)</code>, <code>Hx = −(E0/Z) cos(ωt − βz)</code>.</p>
-  <p>The wave impedance is <code>Z = 376.73 √(μr/εr)</code> Ω, the phase velocity is <code>v = c/√(εr μr)</code>, and the wavelength is <code>λ = v/f</code>.</p>`,
+        lesson: `<h3>4-2 Nonrotating (Linearly Polarized) Waves in Space &amp; Boundary Reflection/Refraction</h3>
+  <p><b>1st 3D Object (Left):</b> A uniform linearly polarized TEM plane wave propagating in <b>+z</b> does not rotate—its <b>E</b> field (orange arrows) oscillates along a single fixed axis while <b>H</b> (blue arrows) oscillates strictly perpendicular to both <b>E</b> and the propagation direction: <code>Ey = E0 cos(ωt − βz)</code>, <code>Hx = −(E0/Z) cos(ωt − βz)</code>.</p>
+  <p><b>2nd 3D Object (Right):</b> When this nonrotating linearly polarized wave hits a planar boundary between Medium 1 ($n_1 = \\sqrt{\\varepsilon_{r1}\\mu_{r1}}$) and Medium 2 ($n_2 = \\sqrt{\\varepsilon_{r2}}$) at angle $\\theta_i$, it remains linearly polarized (nonrotating) and splits into:</p>
+  <p>• <b>Reflected wave</b> at $\\theta_r = \\theta_i$, scaled by the Fresnel reflection coefficient $\\Gamma_\\perp$ (TE) or $\\Gamma_\\parallel$ (TM). Notice the $180^\\circ$ phase reversal whenever $\\Gamma &lt; 0$, and zero reflection at the Brewster angle $\\theta_B = \\arctan(n_2/n_1)$ for TM polarization.<br/>
+  • <b>Refracted (transmitted) wave</b> bent toward the normal at Snell's angle $n_1\\sin\\theta_i = n_2\\sin\\theta_t$, scaled by $\\tau$ with shortened wavelength $\\lambda_2 = \\lambda_0 / n_2$.</p>`,
 
         quiz: [
           {
@@ -756,6 +1315,16 @@
               "Decreases",
               "Stays the same",
               "Becomes zero",
+            ],
+            answer: 1,
+          },
+          {
+            q: "When a nonrotating (linearly polarized) TE wave reflects from a denser dielectric (n₂ > n₁) at 45°, what happens?",
+            options: [
+              "It converts into circular polarization",
+              "It stays linearly polarized (nonrotating) with θᵣ = 45° and a 180° phase flip (Γ⊥ < 0)",
+              "It bends into the dielectric at θᵣ = θₜ",
+              "Its frequency doubles",
             ],
             answer: 1,
           },
@@ -947,6 +1516,698 @@
               "φ = 90° for any ρ",
             ],
             answer: 1,
+          },
+        ],
+      });
+
+      modules.push({
+        id: "rcp_oblique_reflection_4_3_1",
+        title: "4-3-1 RCP Oblique Reflection (Conductor & Polystyrene)",
+        controls: [
+          {
+            id: "medium",
+            label: "Reflecting Medium 2",
+            type: "select",
+            options: [
+              "(a) Perfect Conductor (PEC)",
+              "(b) Polystyrene (εr = 2.7)",
+            ],
+            value: "(a) Perfect Conductor (PEC)",
+          },
+          {
+            id: "theta_i",
+            label: "Incident angle θᵢ (°)",
+            type: "range",
+            min: 0,
+            max: 85,
+            step: 0.5,
+            value: 45,
+          },
+          {
+            id: "f",
+            label: "Frequency f (MHz)",
+            type: "range",
+            min: 100,
+            max: 600,
+            step: 10,
+            value: 300,
+          },
+          {
+            id: "show_H",
+            label: "Show H field (blue, 4-2 style)",
+            type: "check",
+            value: true,
+          },
+          { id: "animate", label: "Animate wave", type: "check", value: true },
+        ],
+        state: {
+          medium: "(a) Perfect Conductor (PEC)",
+          theta_i: 45,
+          f: 300,
+          show_H: true,
+          animate: true,
+          t: 0,
+        },
+
+        build() {
+          camera.position.set(6.4, 2.7, 4.6);
+          controls.target.set(0, 0.35, 0);
+          controls.update();
+
+          this.root = new THREE.Group();
+          content.add(this.root);
+
+          // Interface plane at y = 0 (x-z plane)
+          const ifaceGeo = new THREE.PlaneGeometry(6.8, 10.4);
+          this.ifaceMat = new THREE.MeshStandardMaterial({
+            color: 0x38bdf8,
+            transparent: true,
+            opacity: 0.22,
+            roughness: 0.3,
+            metalness: 0.2,
+            side: THREE.DoubleSide,
+          });
+          this.ifaceMesh = new THREE.Mesh(ifaceGeo, this.ifaceMat);
+          this.ifaceMesh.rotation.x = -Math.PI / 2;
+          this.root.add(this.ifaceMesh);
+
+          const gridHelper = new THREE.GridHelper(10, 20, 0x334155, 0x1e293b);
+          gridHelper.scale.set(0.68, 1, 1.04);
+          gridHelper.position.y = 0.004;
+          this.root.add(gridHelper);
+
+          // Medium 2 volume block (y < 0)
+          this.slabGeo = new THREE.BoxGeometry(6.8, 3.2, 10.4);
+          this.slabMat = new THREE.MeshStandardMaterial({
+            color: 0x64748b,
+            metalness: 0.82,
+            roughness: 0.24,
+            transparent: false,
+            opacity: 1.0,
+          });
+          this.slabMesh = new THREE.Mesh(this.slabGeo, this.slabMat);
+          this.slabMesh.position.set(0, -1.605, 0);
+          this.root.add(this.slabMesh);
+
+          this.slabEdges = new THREE.LineSegments(
+            new THREE.EdgesGeometry(this.slabGeo),
+            new THREE.LineBasicMaterial({
+              color: 0x64748b,
+              transparent: true,
+              opacity: 0.5,
+            }),
+          );
+          this.slabMesh.add(this.slabEdges);
+
+          // Surface normal line along y at origin
+          this.normalLine = new THREE.Line(
+            new THREE.BufferGeometry().setFromPoints([
+              new THREE.Vector3(0, -3.3, 0),
+              new THREE.Vector3(0, 3.8, 0),
+            ]),
+            new THREE.LineBasicMaterial({
+              color: 0x94a3b8,
+              transparent: true,
+              opacity: 0.7,
+            }),
+          );
+          this.root.add(this.normalLine);
+
+          // Propagation ray axes (4-2 style thin gray cylinders)
+          const mkAxisCyl = () => {
+            const m = new THREE.Mesh(
+              new THREE.CylinderGeometry(0.015, 0.015, 1, 8),
+              new THREE.MeshBasicMaterial({ color: 0x888888 }),
+            );
+            this.root.add(m);
+            return m;
+          };
+          this.incAxis = mkAxisCyl();
+          this.refAxis = mkAxisCyl();
+          this.trnAxis = mkAxisCyl();
+
+          // 4-2 style ArrowFields: Orange (0xff5533) for E, Blue (0x33aaff) for H
+          this.incE = addArrowField([], 0xff5533);
+          this.incH = addArrowField([], 0x33aaff);
+          this.refE = addArrowField([], 0xff5533);
+          this.refH = addArrowField([], 0x33aaff);
+          this.trnE = addArrowField([], 0xff5533);
+          this.trnH = addArrowField([], 0x33aaff);
+
+          // Helical E-tip envelope lines for visual clarity of circular/elliptical handedness
+          this.incHelix = new THREE.Line(
+            new THREE.BufferGeometry(),
+            new THREE.LineBasicMaterial({
+              color: 0xff8844,
+              transparent: true,
+              opacity: 0.85,
+            }),
+          );
+          this.refHelix = new THREE.Line(
+            new THREE.BufferGeometry(),
+            new THREE.LineBasicMaterial({
+              color: 0x34d399,
+              transparent: true,
+              opacity: 0.9,
+            }),
+          );
+          this.trnHelix = new THREE.Line(
+            new THREE.BufferGeometry(),
+            new THREE.LineBasicMaterial({
+              color: 0x38bdf8,
+              transparent: true,
+              opacity: 0.75,
+            }),
+          );
+          this.root.add(this.incHelix, this.refHelix, this.trnHelix);
+
+          // End-cap polarization trace rings + rotating tip spheres
+          this.incRing = new THREE.LineLoop(
+            new THREE.BufferGeometry(),
+            new THREE.LineBasicMaterial({
+              color: 0xff8844,
+              transparent: true,
+              opacity: 0.65,
+            }),
+          );
+          this.refRing = new THREE.LineLoop(
+            new THREE.BufferGeometry(),
+            new THREE.LineBasicMaterial({
+              color: 0x34d399,
+              transparent: true,
+              opacity: 0.75,
+            }),
+          );
+          this.incDot = new THREE.Mesh(
+            new THREE.SphereGeometry(0.065, 12, 12),
+            new THREE.MeshBasicMaterial({ color: 0xff5533 }),
+          );
+          this.refDot = new THREE.Mesh(
+            new THREE.SphereGeometry(0.065, 12, 12),
+            new THREE.MeshBasicMaterial({ color: 0x34d399 }),
+          );
+          this.root.add(this.incRing, this.refRing, this.incDot, this.refDot);
+
+          // Angle arcs in y-z plane
+          this.arcInc = new THREE.Line(
+            new THREE.BufferGeometry(),
+            new THREE.LineBasicMaterial({ color: 0xfbbf24 }),
+          );
+          this.arcRef = new THREE.Line(
+            new THREE.BufferGeometry(),
+            new THREE.LineBasicMaterial({ color: 0x34d399 }),
+          );
+          this.arcTrn = new THREE.Line(
+            new THREE.BufferGeometry(),
+            new THREE.LineBasicMaterial({ color: 0x38bdf8 }),
+          );
+          this.root.add(this.arcInc, this.arcRef, this.arcTrn);
+
+          // Crisp 3D Canvas Sprites for clear labels
+          const makeSprite = (bg, border, fg) => {
+            const c = document.createElement("canvas");
+            c.width = 420;
+            c.height = 72;
+            const tex = new THREE.CanvasTexture(c);
+            const sp = new THREE.Sprite(
+              new THREE.SpriteMaterial({
+                map: tex,
+                transparent: true,
+                depthTest: false,
+              }),
+            );
+            sp.scale.set(2.35, 0.4, 1);
+            sp.userData = { canvas: c, tex, bg, border, fg, lastText: "" };
+            this.root.add(sp);
+            return sp;
+          };
+          this.lblAir = makeSprite(
+            "rgba(15,23,42,0.78)",
+            "rgba(148,163,184,0.45)",
+            "#e2e8f0",
+          );
+          this.lblMed2 = makeSprite(
+            "rgba(15,23,42,0.85)",
+            "rgba(56,189,248,0.5)",
+            "#7dd3fc",
+          );
+          this.lblInc = makeSprite(
+            "rgba(30,15,10,0.85)",
+            "rgba(255,85,51,0.65)",
+            "#ff8866",
+          );
+          this.lblRef = makeSprite(
+            "rgba(6,28,22,0.85)",
+            "rgba(52,211,153,0.65)",
+            "#6ee7b7",
+          );
+          this.lblTrn = makeSprite(
+            "rgba(10,24,42,0.85)",
+            "rgba(56,189,248,0.65)",
+            "#7dd3fc",
+          );
+
+          this._setSpriteText = (sp, text) => {
+            if (sp.userData.lastText === text) return;
+            sp.userData.lastText = text;
+            const { canvas, tex, bg, border, fg } = sp.userData;
+            const ctx = canvas.getContext("2d");
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = bg;
+            ctx.strokeStyle = border;
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.roundRect(6, 6, canvas.width - 12, canvas.height - 12, 16);
+            ctx.fill();
+            ctx.stroke();
+            ctx.fillStyle = fg;
+            ctx.font = "bold 25px system-ui, -apple-system, sans-serif";
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            ctx.fillText(text, canvas.width / 2, canvas.height / 2 + 1);
+            tex.needsUpdate = true;
+          };
+
+          this._orientCyl = (cyl, p0, p1) => {
+            const diff = new THREE.Vector3().subVectors(p1, p0);
+            const len = diff.length();
+            if (len < 1e-5) {
+              cyl.visible = false;
+              return;
+            }
+            cyl.visible = true;
+            cyl.position.copy(p0).addScaledVector(diff, 0.5);
+            cyl.scale.set(1, len, 1);
+            cyl.quaternion.setFromUnitVectors(
+              new THREE.Vector3(0, 1, 0),
+              diff.normalize(),
+            );
+          };
+
+          this.update();
+        },
+
+        update() {
+          const st = this.state;
+          const isPEC = st.medium.startsWith("(a)");
+          const n1 = 1.0;
+          const er2 = 2.7;
+          const n2 = isPEC ? Infinity : Math.sqrt(er2);
+
+          const ti = THREE.MathUtils.degToRad(st.theta_i);
+          const sinTi = Math.sin(ti);
+          const cosTi = Math.cos(ti);
+
+          let tt = 0,
+            sinTt = 0,
+            cosTt = 1;
+          let gammaPerp = -1.0;
+          let gammaPar = 1.0;
+          let tauPerp = 0.0;
+          let tauPar = 0.0;
+
+          if (isPEC) {
+            gammaPerp = -1.0;
+            gammaPar = 1.0;
+            tauPerp = 0.0;
+            tauPar = 0.0;
+          } else {
+            sinTt = (n1 / n2) * sinTi;
+            tt = Math.asin(Math.min(1, sinTt));
+            cosTt = Math.cos(tt);
+            gammaPerp =
+              (n1 * cosTi - n2 * cosTt) / (n1 * cosTi + n2 * cosTt);
+            gammaPar =
+              (n2 * cosTi - n1 * cosTt) / (n2 * cosTi + n1 * cosTt);
+            tauPerp = (2 * n1 * cosTi) / (n1 * cosTi + n2 * cosTt);
+            tauPar = (2 * n1 * cosTi) / (n2 * cosTi + n1 * cosTt);
+          }
+
+          // Update Medium 2 visual appearance
+          if (isPEC) {
+            this.slabMat.color.setHex(0x64748b);
+            this.slabMat.metalness = 0.85;
+            this.slabMat.roughness = 0.22;
+            this.slabMat.transparent = false;
+            this.slabMat.opacity = 1.0;
+            this.ifaceMat.color.setHex(0x94a3b8);
+            this.ifaceMat.opacity = 0.35;
+          } else {
+            this.slabMat.color.setHex(0x0ea5e9);
+            this.slabMat.metalness = 0.1;
+            this.slabMat.roughness = 0.25;
+            this.slabMat.transparent = true;
+            this.slabMat.opacity = 0.2;
+            this.ifaceMat.color.setHex(0x38bdf8);
+            this.ifaceMat.opacity = 0.28;
+          }
+
+          // Right-handed orthonormal triads (e_perp, e_par, k_hat)
+          // Incident ray: arrives at (0,0,0) from upper-left (-z, +y)
+          const kInc = new THREE.Vector3(0, -cosTi, sinTi);
+          const ePerpInc = new THREE.Vector3(1, 0, 0);
+          const eParInc = new THREE.Vector3(0, sinTi, cosTi);
+
+          // Reflected ray: leaves (0,0,0) toward upper-right (+z, +y)
+          const kRef = new THREE.Vector3(0, cosTi, sinTi);
+          const ePerpRef = new THREE.Vector3(1, 0, 0);
+          const eParRef = new THREE.Vector3(0, sinTi, -cosTi);
+
+          // Transmitted ray: leaves (0,0,0) into lower-right (+z, -y)
+          const kTrn = new THREE.Vector3(0, -cosTt, sinTt);
+          const ePerpTrn = new THREE.Vector3(1, 0, 0);
+          const eParTrn = new THREE.Vector3(0, sinTt, cosTt);
+
+          const Li = 4.4;
+          const Lr = 4.4;
+          const Lt = 3.3;
+
+          const pIncStart = kInc.clone().multiplyScalar(-Li);
+          const pOrigin = new THREE.Vector3(0, 0, 0);
+          const pRefEnd = kRef.clone().multiplyScalar(Lr);
+          const pTrnEnd = kTrn.clone().multiplyScalar(Lt);
+
+          this._orientCyl(this.incAxis, pIncStart, pOrigin);
+          this._orientCyl(this.refAxis, pOrigin, pRefEnd);
+          if (isPEC) {
+            this.trnAxis.visible = false;
+          } else {
+            this._orientCyl(this.trnAxis, pOrigin, pTrnEnd);
+          }
+
+          // Visual wave parameters (matching 4-2 smooth animation style)
+          const beta1 = ((2 * Math.PI) / 1.55) * (st.f / 300);
+          const beta2 = isPEC ? beta1 : n2 * beta1;
+          const omegaVis = 3.2 * (st.f / 300);
+          const Evis = 0.85; // visual transverse radius in scene units
+
+          const N = 42;
+          const incEArr = [],
+            incHArr = [],
+            incPts = [];
+          const refEArr = [],
+            refHArr = [],
+            refPts = [];
+          const trnEArr = [],
+            trnHArr = [],
+            trnPts = [];
+
+          // 1. Incident RCP wave: s in [-Li, 0]
+          for (let i = 0; i < N; i++) {
+            const s = -Li + (Li * i) / (N - 1);
+            const origin = kInc.clone().multiplyScalar(s);
+            const ph = omegaVis * st.t - beta1 * s;
+            const c = Math.cos(ph);
+            const sn = Math.sin(ph); // cos(ph - 90 deg) => RCP
+
+            const eVec = new THREE.Vector3()
+              .addScaledVector(ePerpInc, Evis * c)
+              .addScaledVector(eParInc, Evis * sn);
+            const hVec = new THREE.Vector3()
+              .addScaledVector(ePerpInc, -Evis * sn * n1)
+              .addScaledVector(eParInc, Evis * c * n1);
+
+            incEArr.push({ origin, dir: eVec, len: eVec.length() });
+            if (st.show_H) {
+              incHArr.push({ origin, dir: hVec, len: hVec.length() });
+            }
+            incPts.push(origin.clone().add(eVec));
+          }
+
+          // 2. Reflected wave: s in [0, Lr]
+          for (let i = 0; i < N; i++) {
+            const s = (Lr * i) / (N - 1);
+            const origin = kRef.clone().multiplyScalar(s);
+            const ph = omegaVis * st.t - beta1 * s;
+            const c = Math.cos(ph);
+            const sn = Math.sin(ph);
+
+            const erPerp = gammaPerp * Evis * c;
+            const erPar = gammaPar * Evis * sn;
+            const eVec = new THREE.Vector3()
+              .addScaledVector(ePerpRef, erPerp)
+              .addScaledVector(eParRef, erPar);
+            const hVec = new THREE.Vector3()
+              .addScaledVector(ePerpRef, -erPar * n1)
+              .addScaledVector(eParRef, erPerp * n1);
+
+            refEArr.push({ origin, dir: eVec, len: eVec.length() });
+            if (st.show_H) {
+              refHArr.push({ origin, dir: hVec, len: hVec.length() });
+            }
+            refPts.push(origin.clone().add(eVec));
+          }
+
+          // 3. Transmitted wave in Polystyrene: s in [0, Lt]
+          if (!isPEC) {
+            const Nt = 36;
+            for (let i = 0; i < Nt; i++) {
+              const s = (Lt * i) / (Nt - 1);
+              const origin = kTrn.clone().multiplyScalar(s);
+              const ph = omegaVis * st.t - beta2 * s;
+              const c = Math.cos(ph);
+              const sn = Math.sin(ph);
+
+              const etPerp = tauPerp * Evis * c;
+              const etPar = tauPar * Evis * sn;
+              const eVec = new THREE.Vector3()
+                .addScaledVector(ePerpTrn, etPerp)
+                .addScaledVector(eParTrn, etPar);
+              const hVec = new THREE.Vector3()
+                .addScaledVector(ePerpTrn, -etPar * n2)
+                .addScaledVector(eParTrn, etPerp * n2);
+
+              trnEArr.push({ origin, dir: eVec, len: eVec.length() });
+              if (st.show_H) {
+                trnHArr.push({ origin, dir: hVec, len: hVec.length() });
+              }
+              trnPts.push(origin.clone().add(eVec));
+            }
+          }
+
+          this.incE.setVectors(incEArr);
+          this.incH.setVectors(incHArr);
+          this.refE.setVectors(refEArr);
+          this.refH.setVectors(refHArr);
+          this.trnE.setVectors(trnEArr);
+          this.trnH.setVectors(trnHArr);
+
+          this.incHelix.geometry.dispose();
+          this.incHelix.geometry = new THREE.BufferGeometry().setFromPoints(
+            incPts,
+          );
+          this.refHelix.geometry.dispose();
+          this.refHelix.geometry = new THREE.BufferGeometry().setFromPoints(
+            refPts,
+          );
+          this.trnHelix.visible = !isPEC;
+          if (!isPEC) {
+            this.trnHelix.geometry.dispose();
+            this.trnHelix.geometry = new THREE.BufferGeometry().setFromPoints(
+              trnPts,
+            );
+          }
+
+          // End-cap polarization rings & rotating tip dots
+          const ringSegs = 64;
+          const incRingPts = [];
+          const refRingPts = [];
+          for (let i = 0; i < ringSegs; i++) {
+            const a = (i / ringSegs) * Math.PI * 2;
+            const ca = Math.cos(a),
+              sa = Math.sin(a);
+            incRingPts.push(
+              pIncStart
+                .clone()
+                .addScaledVector(ePerpInc, Evis * ca)
+                .addScaledVector(eParInc, Evis * sa),
+            );
+            refRingPts.push(
+              pRefEnd
+                .clone()
+                .addScaledVector(ePerpRef, gammaPerp * Evis * ca)
+                .addScaledVector(eParRef, gammaPar * Evis * sa),
+            );
+          }
+          this.incRing.geometry.dispose();
+          this.incRing.geometry = new THREE.BufferGeometry().setFromPoints(
+            incRingPts,
+          );
+          this.refRing.geometry.dispose();
+          this.refRing.geometry = new THREE.BufferGeometry().setFromPoints(
+            refRingPts,
+          );
+
+          this.incDot.position.copy(incPts[0]);
+          this.refDot.position.copy(refPts[refPts.length - 1]);
+
+          // Angle arcs in y-z plane
+          const buildArc = (fromAngle, toAngle, radius) => {
+            const pts = [];
+            const steps = 24;
+            for (let i = 0; i <= steps; i++) {
+              const a = fromAngle + ((toAngle - fromAngle) * i) / steps;
+              pts.push(
+                new THREE.Vector3(0, radius * Math.cos(a), radius * Math.sin(a)),
+              );
+            }
+            return pts;
+          };
+          this.arcInc.geometry.dispose();
+          this.arcInc.geometry = new THREE.BufferGeometry().setFromPoints(
+            buildArc(0, -ti, 1.15),
+          );
+          this.arcRef.geometry.dispose();
+          this.arcRef.geometry = new THREE.BufferGeometry().setFromPoints(
+            buildArc(0, ti, 1.3),
+          );
+          this.arcTrn.visible = !isPEC;
+          if (!isPEC) {
+            this.arcTrn.geometry.dispose();
+            this.arcTrn.geometry = new THREE.BufferGeometry().setFromPoints(
+              buildArc(Math.PI, Math.PI - tt, 1.15),
+            );
+          }
+
+          // Classify reflected polarization state & axial ratio
+          const magPerp = Math.abs(gammaPerp);
+          const magPar = Math.abs(gammaPar);
+          const ar =
+            Math.max(magPerp, magPar) > 1e-6
+              ? Math.min(magPerp, magPar) / Math.max(magPerp, magPar)
+              : 0;
+          const Ravg = 0.5 * (gammaPerp * gammaPerp + gammaPar * gammaPar);
+
+          // Relative phase delta_r = arg(E_r,par) - arg(E_r,perp)
+          // E_i,par = -j E_i,perp => delta_i = -90 deg
+          const argPerp = gammaPerp >= 0 ? 0 : Math.PI;
+          const argPar = -Math.PI / 2 + (gammaPar >= 0 ? 0 : Math.PI);
+          let deltaR = ((argPar - argPerp) * 180) / Math.PI;
+          while (deltaR > 180) deltaR -= 360;
+          while (deltaR <= -180) deltaR += 360;
+
+          let refState = "";
+          let refShort = "";
+          if (magPar < 0.015) {
+            refState = "Linear ⊥ (Brewster, AR = 0.00)";
+            refShort = "Reflected Linear ⊥";
+          } else if (deltaR > 0) {
+            if (ar > 0.98) {
+              refState = `LCP circular (δᵣ = +90°, AR = ${ar.toFixed(2)})`;
+              refShort = `Reflected LCP (θᵣ = ${st.theta_i.toFixed(0)}°)`;
+            } else {
+              refState = `LCP sense / elliptical (δᵣ = +90°, AR = ${ar.toFixed(2)})`;
+              refShort = `Reflected LCP (AR ${ar.toFixed(2)})`;
+            }
+          } else {
+            if (ar > 0.98) {
+              refState = `RCP circular (δᵣ = −90°, AR = ${ar.toFixed(2)})`;
+              refShort = `Reflected RCP (θᵣ = ${st.theta_i.toFixed(0)}°)`;
+            } else {
+              refState = `RCP sense / elliptical (δᵣ = −90°, AR = ${ar.toFixed(2)})`;
+              refShort = `Reflected RCP (AR ${ar.toFixed(2)})`;
+            }
+          }
+
+          // Position and update 3D sprite labels
+          this._setSpriteText(this.lblAir, "Air (n₁ = 1.0)");
+          this.lblAir.position.set(-2.3, 3.3, -3.5);
+
+          if (isPEC) {
+            this._setSpriteText(
+              this.lblMed2,
+              "(a) Perfect Conductor (σ → ∞)",
+            );
+            this.lblMed2.position.set(0, -1.6, 3.2);
+          } else {
+            this._setSpriteText(
+              this.lblMed2,
+              "(b) Polystyrene (εr = 2.7, n₂ = 1.64)",
+            );
+            this.lblMed2.position.set(-1.6, -2.5, -2.6);
+          }
+
+          this._setSpriteText(
+            this.lblInc,
+            `Incident RCP (θᵢ = ${st.theta_i.toFixed(1)}°)`,
+          );
+          this.lblInc.position
+            .copy(pIncStart)
+            .add(new THREE.Vector3(0, 1.15, 0));
+
+          this._setSpriteText(this.lblRef, refShort);
+          this.lblRef.position
+            .copy(pRefEnd)
+            .add(new THREE.Vector3(0, 1.15, 0));
+
+          this.lblTrn.visible = !isPEC;
+          if (!isPEC) {
+            const ttDeg = ((tt * 180) / Math.PI).toFixed(1);
+            this._setSpriteText(
+              this.lblTrn,
+              `Transmitted RCP (θₜ = ${ttDeg}°)`,
+            );
+            this.lblTrn.position
+              .copy(pTrnEnd)
+              .add(new THREE.Vector3(0, -0.45, 0.35));
+          }
+
+          const eqTex = isPEC
+            ? "\\Gamma_\\perp = -1,\\; \\Gamma_\\parallel = +1 \\;\\Longrightarrow\\; \\delta_r = +90^\\circ\\;(\\mathrm{LCP})"
+            : "\\Gamma_\\perp = \\frac{n_1\\cos\\theta_i - n_2\\cos\\theta_t}{n_1\\cos\\theta_i + n_2\\cos\\theta_t},\\; \\Gamma_\\parallel = \\frac{n_2\\cos\\theta_i - n_1\\cos\\theta_t}{n_2\\cos\\theta_i + n_1\\cos\\theta_t}";
+
+          const angleStr = isPEC
+            ? `${st.theta_i.toFixed(1)}° / No transmission`
+            : `${st.theta_i.toFixed(1)}° / ${((tt * 180) / Math.PI).toFixed(1)}° (θ_B = 58.7°)`;
+
+          setHud("4-3-1 RCP Oblique Reflection", eqTex, [
+            { k: "Incident Wave", v: "RCP (δᵢ = −90°, AR = 1.00)" },
+            { k: "Reflected Wave", v: refState },
+            {
+              k: "Γ⊥ / Γ∥",
+              v: `${fmt(gammaPerp, 3)} / ${fmt(gammaPar, 3)}`,
+            },
+            { k: "θᵢ / θₜ", v: angleStr },
+            { k: "Reflectance R", v: Ravg.toFixed(3) },
+          ]);
+        },
+
+        tick(dt) {
+          if (this.state.animate) {
+            this.state.t += dt;
+            this.update();
+          }
+        },
+
+        lesson: `<h3>4-3-1 Oblique Reflection of an RCP Wave (Perfect Conductor &amp; Polystyrene)</h3>
+  <p>An incident <b>Right Circularly Polarized (RCP)</b> wave in air ($n_1 = 1$) has equal orthogonal components with a $-90^\\circ$ phase shift: $\\tilde{E}_{i\\parallel} = -j\\tilde{E}_{i\\perp}$ ($\\delta_i = -90^\\circ$). Upon reflection at angle $\\theta_r = \\theta_i$, the perpendicular ($\\perp$, TE) and parallel ($\\parallel$, TM) components scale by $\\Gamma_\\perp$ and $\\Gamma_\\parallel$:</p>
+  <p><b>(a) Perfect Conductor (PEC):</b> Tangential $\\mathbf{E} = 0$ at the boundary requires $\\Gamma_\\perp = -1$ ($180^\\circ$ phase reversal) and $\\Gamma_\\parallel = +1$ ($0^\\circ$ shift) at <i>every</i> angle $\\theta_i$ (including $\\theta_i = 45^\\circ$). Thus $|\\tilde{E}_{r\\perp}| = |\\tilde{E}_{r\\parallel}|$ ($\\text{AR} = 1$) while the relative phase becomes $\\delta_r = -90^\\circ - 180^\\circ = +90^\\circ \\pmod{360^\\circ}$, converting the reflected wave into pure <b>Left Circular Polarization (LCP)</b>.</p>
+  <p><b>(b) Polystyrene ($\\varepsilon_r = 2.7,\\; n_2 = \\sqrt{2.7} \\approx 1.643$):</b> At $\\theta_i = 45^\\circ$ (below the Brewster angle $\\theta_B = \\arctan(1.643) = 58.7^\\circ$), Snell's law gives $\\theta_t = 25.5^\\circ$, $\\Gamma_\\perp = -0.354$, and $\\Gamma_\\parallel = +0.126$. Because $\\Gamma_\\perp &lt; 0$ and $\\Gamma_\\parallel &gt; 0$ carry opposite signs, $\\delta_r = +90^\\circ$, so the reflected wave rotates with <b>Left-Handed (LCP) sense</b> (elliptical with axial ratio $\\text{AR} = |\\Gamma_\\parallel|/|\\Gamma_\\perp| = 0.354$, becoming pure circular LCP at $\\theta_i = 0^\\circ$, linear $\\perp$ at $\\theta_B = 58.7^\\circ$, and RCP-sense above $\\theta_B$).</p>`,
+
+        quiz: [
+          {
+            q: "When an RCP wave reflects at 45° from a perfect conductor, why does it become LCP?",
+            options: [
+              "Γ⊥ = −1 and Γ∥ = +1 preserve equal amplitudes while adding a 180° phase shift (δr = +90°)",
+              "The conductor absorbs the perpendicular component completely",
+              "The angle of reflection equals 90° − θᵢ",
+              "Γ⊥ and Γ∥ are both equal to +1",
+            ],
+            answer: 0,
+            explain:
+              "Opposite signs of Γ⊥ = −1 and Γ∥ = +1 flip the handedness from δᵢ = −90° (RCP) to δᵣ = +90° (LCP) while keeping AR = 1.",
+          },
+          {
+            q: "For an RCP wave incident from air onto polystyrene (εr = 2.7) at θᵢ = 45°, what is the handedness of the reflected wave?",
+            options: [
+              "Right-handed (RCP)",
+              "Left-handed (LCP sense, elliptical because 45° < θ_B = 58.7°)",
+              "Purely unpolarized",
+              "Zero reflection (total transmission)",
+            ],
+            answer: 1,
+            explain:
+              "At 45° < θ_B (58.7°), Γ⊥ = −0.354 and Γ∥ = +0.126 have opposite signs, giving δᵣ = +90° (LCP rotation sense) with AR = 0.354.",
           },
         ],
       });
