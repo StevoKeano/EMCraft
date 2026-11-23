@@ -888,6 +888,312 @@
     { q: 'The magnetic force q(v × B) does zero work because:', options: ['B is always zero', 'It is perpendicular to the velocity', 'It is parallel to the velocity', 'It cancels the electric force'], answer: 1 }
   ]
 });
+modules.push({
+  id: 'charged_particles_efield',
+  title: '6-2 Charged Particles Moving in Electric Fields',
+  controls: [
+    { id: 'particle', label: 'Particle', type: 'select', options: ['Electron (-e)', 'Proton (+e)', 'Alpha (+2e)'], value: 'Electron (-e)' },
+    { id: 'Va_kV', label: 'Accelerating voltage V_a (kV)', type: 'range', min: 0.5, max: 50, step: 0.5, value: 5.0 },
+    { id: 'angle_deg', label: 'Launch angle theta_0 (deg)', type: 'range', min: -45, max: 45, step: 5, value: 20 },
+    { id: 'Ey_kVm', label: 'Transverse field E_y (kV/m)', type: 'range', min: -40, max: 40, step: 2, value: -15 }
+  ],
+
+  build() {
+    const g = new THREE.Group();
+    content.add(g);
+
+    const metal = new THREE.MeshStandardMaterial({ color: 0x9fb4c8, metalness: 0.85, roughness: 0.3, emissive: 0x223344 });
+    const dark = new THREE.MeshStandardMaterial({ color: 0x334455, metalness: 0.7, roughness: 0.5 });
+    const glow = new THREE.MeshStandardMaterial({ color: 0x66ddff, emissive: 0x66ddff, emissiveIntensity: 2.2, metalness: 0.2, roughness: 0.2 });
+    const plateMat = new THREE.MeshStandardMaterial({ color: 0x88aacc, metalness: 0.9, roughness: 0.25, emissive: 0x112233 });
+
+    // Emitter gun (left)
+    const gunBody = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.45, 1.6, 20), metal);
+    gunBody.rotation.z = Math.PI / 2;
+    gunBody.position.set(-4.2, 0, 0);
+    g.add(gunBody);
+    const gunTip = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.28, 0.5, 16), dark);
+    gunTip.rotation.z = Math.PI / 2;
+    gunTip.position.set(-3.35, 0, 0);
+    g.add(gunTip);
+
+    // Perforated anode grid
+    const anode = new THREE.Group();
+    anode.position.set(-2.6, 0, 0);
+    const frame = new THREE.Mesh(new THREE.TorusGeometry(0.55, 0.06, 10, 24), metal);
+    frame.rotation.y = Math.PI / 2;
+    anode.add(frame);
+    for (let i = -2; i <= 2; i++) {
+      const bar = new THREE.Mesh(new THREE.BoxGeometry(0.04, 1.0, 0.04), metal);
+      bar.position.set(0, 0, i * 0.22);
+      anode.add(bar);
+    }
+    g.add(anode);
+
+    // Parallel deflecting plates (horizontal, separated in y)
+    const plateGeo = new THREE.BoxGeometry(4.2, 0.08, 1.6);
+    const topPlate = new THREE.Mesh(plateGeo, plateMat);
+    topPlate.position.set(0.6, 1.15, 0);
+    g.add(topPlate);
+    const botPlate = new THREE.Mesh(plateGeo, plateMat);
+    botPlate.position.set(0.6, -1.15, 0);
+    g.add(botPlate);
+
+    // Plate supports
+    for (const s of [-1, 1]) {
+      const post = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 2.3, 8), dark);
+      post.position.set(-1.4, 0, s * 0.65);
+      g.add(post);
+    }
+
+    // Field arrows between plates (vertical E_y)
+    this.fieldArrows = addArrowField([], 0x7fd1ff);
+    const fv = [];
+    for (let i = 0; i < 5; i++) {
+      for (let j = 0; j < 3; j++) {
+        fv.push({
+          origin: new THREE.Vector3(-1.2 + i * 0.9, -0.95, -0.5 + j * 0.5),
+          dir: new THREE.Vector3(0, 1, 0),
+          len: 0.55
+        });
+      }
+    }
+    this.fieldArrows.setVectors(fv);
+
+    // Beam curve (parabolic arc) — updated in update()
+    this.beamCurve = new THREE.Line(
+      new THREE.BufferGeometry(),
+      new THREE.LineBasicMaterial({ color: 0x66ddff, linewidth: 2 })
+    );
+    g.add(this.beamCurve);
+
+    // Glowing particle head
+    this.head = new THREE.Mesh(new THREE.SphereGeometry(0.11, 16, 16), glow);
+    g.add(this.head);
+
+    // Velocity & acceleration arrows
+    this.velArrow = addArrowField([], 0xffcc44);
+    this.accArrow = addArrowField([], 0xff5577);
+
+    // Axis helper lines
+    const axisMat = new THREE.LineBasicMaterial({ color: 0x445566 });
+    const axisGeo = new THREE.BufferGeometry().setFromPoints([
+      new THREE.Vector3(-5, 0, 0), new THREE.Vector3(4, 0, 0)
+    ]);
+    g.add(new THREE.Line(axisGeo, axisMat));
+
+    this.meshRefs = { g, topPlate, botPlate, beamCurve: this.beamCurve, head: this.head };
+  },
+
+  update() {
+    const st = this.state;
+    const c = 2.998e8;
+    const qe = 1.602e-19;
+    const me = 9.109e-31;
+    const mp = 1.673e-27;
+
+    let q, m, label;
+    if (st.particle === 'Electron (-e)') { q = -qe; m = me; label = 'e^-'; }
+    else if (st.particle === 'Proton (+e)') { q = qe; m = mp; label = 'p^+'; }
+    else { q = 2 * qe; m = 2 * mp; label = 'alpha'; }
+
+    const Va = st.Va_kV * 1e3;          // volts
+    const Ey = st.Ey_kVm * 1e3;         // V/m
+    const theta = st.angle_deg * Math.PI / 180;
+
+    // Classical speed from rest across Va
+    const vClass = Math.sqrt(2 * Math.abs(q) * Va / m);
+    // Relativistic
+    const gamma = 1 + Math.abs(q) * Va / (m * c * c);
+    const vRel = c * Math.sqrt(1 - 1 / (gamma * gamma));
+
+    // Use relativistic speed for trajectory (more accurate)
+    const v0 = vRel;
+    const a = q * Ey / m;               // acceleration in y
+
+    // Trajectory: x(t) = v0 cos(theta) t ; y(t) = v0 sin(theta) t + 0.5 a t^2
+    const vx = v0 * Math.cos(theta);
+    const vy0 = v0 * Math.sin(theta);
+
+    // Build beam points across plate region (x from -2.2 to 2.8)
+    const xStart = -2.2, xEnd = 2.8;
+    const pts = [];
+    const N = 80;
+    for (let i = 0; i <= N; i++) {
+      const x = xStart + (xEnd - xStart) * i / N;
+      const t = (x - xStart) / vx;
+      const y = vy0 * t + 0.5 * a * t * t;
+      pts.push(new THREE.Vector3(x, y, 0));
+    }
+    this.beamCurve.geometry.dispose();
+    this.beamCurve.geometry = new THREE.BufferGeometry().setFromPoints(pts);
+
+    // Head at end of beam
+    const last = pts[pts.length - 1];
+    this.head.position.copy(last);
+
+    // Velocity vector at end
+    const tEnd = (xEnd - xStart) / vx;
+    const vxEnd = vx;
+    const vyEnd = vy0 + a * tEnd;
+    const vEnd = new THREE.Vector3(vxEnd, vyEnd, 0);
+    const vLen = vEnd.length();
+    this.velArrow.setVectors([{
+      origin: last.clone(),
+      dir: vEnd.clone().normalize(),
+      len: 0.9
+    }]);
+
+    // Acceleration vector (vertical)
+    this.accArrow.setVectors([{
+      origin: last.clone(),
+      dir: new THREE.Vector3(0, Math.sign(a) || 1, 0),
+      len: 0.7
+    }]);
+
+    // Field arrow direction reflects sign of Ey
+    const fv = [];
+    for (let i = 0; i < 5; i++) {
+      for (let j = 0; j < 3; j++) {
+        fv.push({
+          origin: new THREE.Vector3(-1.2 + i * 0.9, -0.95, -0.5 + j * 0.5),
+          dir: new THREE.Vector3(0, Math.sign(Ey) || 1, 0),
+          len: 0.55
+        });
+      }
+    }
+    this.fieldArrows.setVectors(fv);
+
+    // ---- 2D chart: v/c vs Va ----
+    const W = chartEl.width, H = chartEl.height;
+    const ctx = chartEl.getContext('2d');
+    ctx.clearRect(0, 0, W, H);
+
+    const padL = 60, padR = 30, padT = 30, padB = 50;
+    const plotW = W - padL - padR;
+    const plotH = H - padT - padB;
+
+    // Background
+    ctx.fillStyle = '#0b1220';
+    ctx.fillRect(0, 0, W, H);
+
+    // Grid
+    ctx.strokeStyle = '#1e2a3a';
+    ctx.lineWidth = 1;
+    for (let i = 0; i <= 10; i++) {
+      const x = padL + plotW * i / 10;
+      ctx.beginPath(); ctx.moveTo(x, padT); ctx.lineTo(x, padT + plotH); ctx.stroke();
+    }
+    for (let i = 0; i <= 10; i++) {
+      const y = padT + plotH * i / 10;
+      ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(padL + plotW, y); ctx.stroke();
+    }
+
+    // Axes
+    ctx.strokeStyle = '#7fd1ff';
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(padL, padT + plotH); ctx.lineTo(padL + plotW, padT + plotH); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(padL, padT); ctx.lineTo(padL, padT + plotH); ctx.stroke();
+
+    // Labels
+    ctx.fillStyle = '#9fb4c8';
+    ctx.font = '13px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('V_a (kV)', padL + plotW / 2, H - 12);
+    ctx.save();
+    ctx.translate(16, padT + plotH / 2);
+    ctx.rotate(-Math.PI / 2);
+    ctx.fillText('v / c', 0, 0);
+    ctx.restore();
+
+    // Tick labels
+    ctx.font = '11px sans-serif';
+    ctx.fillStyle = '#6b8299';
+    for (let i = 0; i <= 10; i++) {
+      const x = padL + plotW * i / 10;
+      ctx.fillText((i * 10).toString(), x, padT + plotH + 18);
+    }
+    for (let i = 0; i <= 10; i++) {
+      const y = padT + plotH * (1 - i / 10);
+      ctx.textAlign = 'right';
+      ctx.fillText((i / 10).toFixed(1), padL - 8, y + 4);
+    }
+    ctx.textAlign = 'left';
+
+    // Curves
+    const Vmax = 100; // kV
+    const drawCurve = (fn, color) => {
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      for (let i = 0; i <= 200; i++) {
+        const VkV = Vmax * i / 200;
+        const V = VkV * 1e3;
+        const val = fn(V);
+        const x = padL + plotW * (VkV / Vmax);
+        const y = padT + plotH * (1 - Math.min(val, 1));
+        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+    };
+
+    // Classical: v/c = sqrt(2|q|V/m)/c
+    drawCurve(V => Math.sqrt(2 * Math.abs(q) * V / m) / c, '#ffcc44');
+    // Relativistic: v/c = sqrt(1 - 1/gamma^2)
+    drawCurve(V => {
+      const gam = 1 + Math.abs(q) * V / (m * c * c);
+      return Math.sqrt(1 - 1 / (gam * gam));
+    }, '#66ddff');
+
+    // Cursor at current Va
+    const curX = padL + plotW * (st.Va_kV / Vmax);
+    ctx.strokeStyle = '#ff5577';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([5, 4]);
+    ctx.beginPath(); ctx.moveTo(curX, padT); ctx.lineTo(curX, padT + plotH); ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Legend
+    ctx.font = '12px sans-serif';
+    ctx.fillStyle = '#ffcc44';
+    ctx.fillText('classical', padL + plotW - 150, padT + 18);
+    ctx.fillStyle = '#66ddff';
+    ctx.fillText('relativistic', padL + plotW - 150, padT + 36);
+
+    // HUD
+    const KEkeV = Math.abs(q) * Va / 1e3;
+    setHud(
+      'Particle Acceleration & Parabolic Motion in E',
+      '\\frac{1}{2}mv^2 = |q|V_a,\\quad y(x) = x\\tan\\theta_0 + \\frac{q E_y x^2}{2 m v_0^2 \\cos^2\\theta_0}',
+      [
+        { k: 'Particle', v: label },
+        { k: 'Classical v', v: (vClass / 1e3).toFixed(1) + ' km/s' },
+        { k: 'Relativistic v', v: (vRel / 1e3).toFixed(1) + ' km/s' },
+        { k: 'Kinetic Energy', v: KEkeV.toFixed(2) + ' keV' },
+        { k: 'Lorentz gamma', v: gamma.toFixed(4) },
+        { k: 'Acceleration |a|', v: Math.abs(a).toExponential(2) + ' m/s^2' }
+      ]
+    );
+  },
+
+  tick(dt) {
+    // subtle pulse of particle head
+    if (this.head) {
+      const s = 1 + 0.15 * Math.sin(performance.now() * 0.004);
+      this.head.scale.setScalar(s);
+    }
+  },
+
+  lesson: `<p>In a uniform electric field the force on a charge is <b>F = qE</b>, so the acceleration is <b>a = qE/m</b>. Between parallel plates separated by distance d with accelerating voltage V_a, the field magnitude is E = V_a/d. A charge released from rest gains kinetic energy equal to the work done by the field: <b>(1/2)mv² = |q|V_a</b>. The unit of energy convenient here is the electron-volt (eV): one electron accelerated through 1 V gains 1 eV = 1.602×10⁻¹⁹ J.</p>
+<p>For oblique launch at angle θ₀ into a transverse uniform field E_y, the motion separates into constant-velocity x and uniformly accelerated y components: x = v₀cosθ₀ t, y = v₀sinθ₀ t + (qE_y/2m)t². Eliminating t gives the parabola y(x) = x tanθ₀ + qE_y x²/(2mv₀²cos²θ₀).</p>
+<p>Relativistic corrections matter when |q|V_a approaches mc². For electrons mc² ≈ 511 keV, so above ~10 kV the classical speed formula overestimates v. The exact result uses γ = 1 + |q|V_a/(mc²) and v = c√(1 − 1/γ²). For protons (mc² ≈ 938 MeV) and alphas, relativistic effects are negligible at laboratory voltages.</p>`,
+
+  quiz: [
+    { q: 'An electron is accelerated from rest through 5 kV. What is its kinetic energy?', options: ['5 eV', '5 keV', '5 MeV', '50 keV'], answer: 1 },
+    { q: 'In a uniform transverse electric field, the trajectory of a charged particle launched obliquely is:', options: ['A straight line', 'A circle', 'A parabola', 'A hyperbola'], answer: 2 },
+    { q: 'Relativistic corrections to the speed of an electron become significant above roughly:', options: ['1 V', '100 V', '10 kV', '10 MV'], answer: 2 }
+  ]
+});
 /* === UI CONTROLLER === */
 
       let activeIdx = 0;
