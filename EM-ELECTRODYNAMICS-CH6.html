@@ -1,0 +1,1100 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>EM-ELECTRODYNAMICS-CH6 — Kraus &amp; Fleisch Ch. 6</title>
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css"
+      crossorigin="anonymous"
+    />
+    <script
+      defer
+      src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"
+      crossorigin="anonymous"
+    ></script>
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+          "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+        }
+      }
+    </script>
+    <style>
+      :root {
+        --bg: #0b0f19;
+        --panel: rgba(15, 23, 42, 0.86);
+        --border: rgba(56, 189, 248, 0.22);
+        --text: #e2e8f0;
+        --muted: #94a3b8;
+        --accent: #38bdf8;
+        --ok: #68d391;
+        --bad: #fc8181;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        overflow: hidden;
+        background: var(--bg);
+        color: var(--text);
+        font-family:
+          ui-sans-serif,
+          system-ui,
+          -apple-system,
+          "Segoe UI",
+          Roboto,
+          sans-serif;
+        font-size: 13px;
+      }
+      #shell {
+        display: grid;
+        grid-template-rows: auto 1fr;
+        height: 100%;
+      }
+      #topbar {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        padding: 10px 16px;
+        border-bottom: 1px solid rgba(56, 189, 248, 0.15);
+        background: rgba(2, 6, 23, 0.6);
+      }
+      #topbar h1 {
+        margin: 0;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        font-size: 15px;
+        color: #f1f5f9;
+      }
+      #topbar .sub {
+        color: var(--muted);
+        font-size: 12px;
+      }
+      #topbar .badge {
+        margin-left: auto;
+        font-size: 11px;
+        color: var(--accent);
+        background: rgba(56, 189, 248, 0.12);
+        border: 1px solid rgba(56, 189, 248, 0.3);
+        padding: 3px 9px;
+        border-radius: 999px;
+        font-variant-numeric: tabular-nums;
+      }
+      #body {
+        display: grid;
+        grid-template-columns: 268px 1fr;
+        min-height: 0;
+      }
+      #sidebar {
+        border-right: 1px solid rgba(56, 189, 248, 0.12);
+        background: rgba(2, 6, 23, 0.45);
+        overflow-y: auto;
+        padding: 10px 8px;
+      }
+      #sidebar h2 {
+        margin: 0;
+        font-size: 10px;
+        text-transform: uppercase;
+        letter-spacing: 0.14em;
+        color: var(--muted);
+        padding: 6px 8px 10px;
+        font-weight: 600;
+      }
+      #module-list {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+      .mod-btn {
+        display: flex;
+        align-items: flex-start;
+        gap: 8px;
+        width: 100%;
+        text-align: left;
+        padding: 8px 10px;
+        border-radius: 8px;
+        border: 1px solid transparent;
+        background: transparent;
+        color: var(--text);
+        font-size: 12px;
+        line-height: 1.35;
+        cursor: pointer;
+      }
+      .mod-btn:hover {
+        background: rgba(56, 189, 248, 0.08);
+      }
+      .mod-btn.active {
+        background: rgba(56, 189, 248, 0.16);
+        border-color: rgba(56, 189, 248, 0.4);
+      }
+      .mod-btn .num {
+        font-size: 10px;
+        color: var(--muted);
+        font-variant-numeric: tabular-nums;
+        min-width: 18px;
+        margin-top: 1px;
+      }
+      #main {
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+      }
+      #stage {
+        flex: 1;
+        position: relative;
+        min-height: 0;
+        overflow: hidden;
+        background: #0a0e13;
+      }
+      #stage canvas.webgl {
+        position: absolute;
+        inset: 0;
+        width: 100% !important;
+        height: 100% !important;
+        display: block;
+      }
+      #chart-canvas {
+        position: absolute;
+        top: 12px;
+        left: 12px;
+        width: 310px;
+        height: 225px;
+        border-radius: 12px;
+        z-index: 5;
+        pointer-events: none;
+      }
+      #controls {
+        position: absolute;
+        top: 12px;
+        right: 12px;
+        width: 295px;
+        max-height: calc(100% - 24px);
+        overflow-y: auto;
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        box-shadow: 0 12px 40px rgba(0, 0, 0, 0.55);
+        backdrop-filter: blur(14px);
+        padding: 12px 14px;
+        font-size: 12px;
+        z-index: 10;
+      }
+      .ctl {
+        margin-bottom: 10px;
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 4px;
+      }
+      .ctl:last-child {
+        margin-bottom: 0;
+      }
+      .ctl label {
+        color: var(--muted);
+        font-size: 11px;
+        flex: 1 1 auto;
+      }
+      .ctl .val {
+        color: var(--accent);
+        font-size: 11px;
+        font-variant-numeric: tabular-nums;
+        min-width: 44px;
+        text-align: right;
+      }
+      .ctl input[type="range"] {
+        width: 100%;
+        height: 4px;
+        border-radius: 2px;
+        order: 3;
+        background: rgba(56, 189, 248, 0.2);
+        outline: none;
+        -webkit-appearance: none;
+      }
+      .ctl input[type="range"]::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        width: 14px;
+        height: 14px;
+        border-radius: 50%;
+        background: var(--accent);
+        cursor: pointer;
+        box-shadow: 0 0 8px rgba(56, 189, 248, 0.6);
+      }
+      .ctl input[type="checkbox"] {
+        accent-color: var(--accent);
+      }
+      .ctl select {
+        width: 100%;
+        padding: 6px 8px;
+        border-radius: 7px;
+        background: rgba(2, 6, 23, 0.75);
+        color: var(--text);
+        border: 1px solid rgba(56, 189, 248, 0.25);
+        font-size: 12px;
+        outline: none;
+      }
+      #hud {
+        position: absolute;
+        left: 12px;
+        bottom: 12px;
+        width: 390px;
+        max-width: calc(100% - 330px);
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        box-shadow: 0 12px 40px rgba(0, 0, 0, 0.55);
+        backdrop-filter: blur(14px);
+        padding: 12px 14px;
+        font-size: 12px;
+        z-index: 10;
+      }
+      #hud-title {
+        font-weight: 600;
+        color: #f1f5f9;
+        font-size: 12px;
+        margin-bottom: 6px;
+      }
+      #hud-eq {
+        color: #cbd5e1;
+        min-height: 20px;
+        margin-bottom: 8px;
+      }
+      #hud-eq .katex {
+        font-size: 0.95em;
+      }
+      #hud-values {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 3px 12px;
+      }
+      #hud-values .k {
+        color: var(--muted);
+        font-size: 11px;
+      }
+      #hud-values .v {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        color: var(--accent);
+        font-variant-numeric: tabular-nums;
+        font-size: 12px;
+        text-align: right;
+      }
+      #bottom {
+        height: 31vh;
+        min-height: 185px;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        border-top: 1px solid rgba(56, 189, 248, 0.12);
+        background: rgba(2, 6, 23, 0.5);
+      }
+      #lesson,
+      #quiz {
+        overflow-y: auto;
+        padding: 14px 16px;
+      }
+      #lesson {
+        border-right: 1px solid rgba(56, 189, 248, 0.12);
+      }
+      #lesson h3,
+      #quiz h3 {
+        margin: 0 0 8px;
+        font-size: 13px;
+        color: #f1f5f9;
+      }
+      #lesson p {
+        margin: 0 0 8px;
+        font-size: 12px;
+        line-height: 1.55;
+        color: #cbd5e1;
+      }
+      #lesson .eq,
+      #lesson .eqblock {
+        margin: 8px 0;
+        color: #e2e8f0;
+      }
+      .qcard {
+        margin-bottom: 12px;
+      }
+      .qcard .qtext {
+        font-size: 12px;
+        color: #e2e8f0;
+        margin-bottom: 6px;
+      }
+      .qcard .opts {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+      .qcard .opts button {
+        text-align: left;
+        padding: 5px 9px;
+        border-radius: 6px;
+        cursor: pointer;
+        background: rgba(15, 23, 42, 0.7);
+        color: #cbd5e1;
+        border: 1px solid rgba(56, 189, 248, 0.18);
+        font-size: 11.5px;
+      }
+      .qcard .opts button:hover {
+        background: rgba(56, 189, 248, 0.12);
+      }
+      .qcard .opts button.correct {
+        border-color: var(--ok);
+        background: rgba(104, 211, 145, 0.18);
+        color: #f0fff4;
+      }
+      .qcard .opts button.wrong {
+        border-color: var(--bad);
+        background: rgba(252, 129, 129, 0.18);
+        color: #fff5f5;
+      }
+      .qcard .fb {
+        font-size: 11px;
+        color: var(--muted);
+        margin-top: 4px;
+      }
+      @media (max-width: 900px) {
+        #body {
+          grid-template-columns: 1fr;
+        }
+        #sidebar {
+          display: none;
+        }
+        #controls {
+          width: 240px;
+        }
+        #hud {
+          width: calc(100% - 24px);
+          max-width: none;
+        }
+        #bottom {
+          grid-template-columns: 1fr;
+          height: 40vh;
+        }
+        #lesson {
+          border-right: none;
+          border-bottom: 1px solid rgba(56, 189, 248, 0.12);
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="shell">
+      <header id="topbar">
+        <h1>EM-ELECTRODYNAMICS-CH6</h1>
+        <span class="sub"
+          >John D. Kraus &amp; Daniel A. Fleisch · Electromagnetics with
+          Applications · Ch. 6 Electrodynamics</span
+        >
+        <span class="badge" id="status-badge">0 / 0</span>
+      </header>
+      <div id="body">
+        <aside id="sidebar">
+          <h2>Chapter 6 Modules</h2>
+          <div id="module-list"></div>
+        </aside>
+        <section id="main">
+          <div id="stage">
+            <canvas id="chart-canvas"></canvas>
+            <div id="controls"></div>
+            <div id="hud">
+              <div id="hud-title">—</div>
+              <div id="hud-eq"></div>
+              <div id="hud-values"></div>
+            </div>
+          </div>
+          <div id="bottom">
+            <div id="lesson"></div>
+            <div id="quiz"></div>
+          </div>
+        </section>
+      </div>
+    </div>
+    <script type="module">
+      import * as THREE from "three";
+      import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+      import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
+
+      const stageEl = document.getElementById("stage");
+      const chartEl = document.getElementById("chart-canvas");
+      const controlsEl = document.getElementById("controls");
+      const hudTitle = document.getElementById("hud-title");
+      const hudEq = document.getElementById("hud-eq");
+      const hudValues = document.getElementById("hud-values");
+      const lessonEl = document.getElementById("lesson");
+      const quizEl = document.getElementById("quiz");
+      const moduleList = document.getElementById("module-list");
+      const badgeEl = document.getElementById("status-badge");
+
+      const renderer = new THREE.WebGLRenderer({ antialias: true });
+      const initW = Math.max(1, stageEl.clientWidth || window.innerWidth - 268);
+      const initH = Math.max(
+        1,
+        stageEl.clientHeight || Math.round(window.innerHeight * 0.6),
+      );
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+      renderer.setSize(initW, initH);
+      renderer.setClearColor(0x0a0e13, 1);
+      renderer.toneMapping = THREE.ACESFilmicToneMapping;
+      renderer.toneMappingExposure = 1.35;
+      renderer.domElement.classList.add("webgl");
+      renderer.domElement.style.outline = "none";
+      stageEl.appendChild(renderer.domElement);
+
+      const scene = new THREE.Scene();
+      const pmrem = new THREE.PMREMGenerator(renderer);
+      scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+      scene.environmentIntensity = 0.75;
+      const camera = new THREE.PerspectiveCamera(50, initW / initH, 0.1, 200);
+      camera.position.set(4.8, 3.6, 5.8);
+
+      const controls = new OrbitControls(camera, renderer.domElement);
+      controls.enableDamping = true;
+      controls.dampingFactor = 0.08;
+      controls.enableZoom = true;
+      controls.enableRotate = true;
+      controls.enablePan = true;
+      controls.minDistance = 1.5;
+      controls.maxDistance = 40;
+
+      scene.add(new THREE.HemisphereLight(0xdbeafe, 0x1e293b, 1.1));
+      const dirLight = new THREE.DirectionalLight(0xffffff, 1.4);
+      dirLight.position.set(5, 8, 6);
+      scene.add(dirLight);
+      const rimLight = new THREE.DirectionalLight(0x7fd1ff, 0.7);
+      rimLight.position.set(-6, -3, -5);
+      scene.add(rimLight);
+
+      const content = new THREE.Group();
+      scene.add(content);
+      const sharedArrowGeoms = new Set();
+
+      function disposeObj(o) {
+        o.traverse((n) => {
+          const isShared =
+            sharedArrowGeoms.has(n.geometry) ||
+            n.isArrowHelper ||
+            (n.parent && n.parent.isArrowHelper);
+          if (!isShared && n.geometry) n.geometry.dispose();
+          if (n.material) {
+            if (Array.isArray(n.material))
+              n.material.forEach((m) => m.dispose());
+            else n.material.dispose();
+          }
+        });
+      }
+
+      function clearContent() {
+        while (content.children.length) disposeObj(content.children.pop());
+        sharedArrowGeoms.clear();
+      }
+
+      function addAxes(group, len = 3.2) {
+        const mk = (color, a, b) =>
+          new THREE.Line(
+            new THREE.BufferGeometry().setFromPoints([a, b]),
+            new THREE.LineBasicMaterial({
+              color,
+              transparent: true,
+              opacity: 0.75,
+            }),
+          );
+        group.add(
+          mk(
+            0xef4444,
+            new THREE.Vector3(-len, 0, 0),
+            new THREE.Vector3(len, 0, 0),
+          ),
+        );
+        group.add(
+          mk(
+            0x22c55e,
+            new THREE.Vector3(0, -len, 0),
+            new THREE.Vector3(0, len, 0),
+          ),
+        );
+        group.add(
+          mk(
+            0x3b82f6,
+            new THREE.Vector3(0, 0, -len),
+            new THREE.Vector3(0, 0, len),
+          ),
+        );
+      }
+
+      function addGrid(group, size = 8, y = -2.2) {
+        const g = new THREE.GridHelper(size, 16, 0x1e2a36, 0x1e2a36);
+        g.position.y = y;
+        group.add(g);
+      }
+
+      function addArrowField(vectors, color = 0x7fd1ff) {
+        const g = new THREE.Group();
+        const pool = [];
+
+        const normalizeEntry = (v) => {
+          if (!v) return null;
+          if (v.isVector3) {
+            return {
+              origin: new THREE.Vector3(0, 0, 0),
+              dir: v,
+              len: v.length(),
+              color,
+            };
+          }
+          if (v.dir && v.origin) {
+            const mag = v.dir.length();
+            return {
+              origin: v.origin,
+              dir: v.dir,
+              len: v.len !== undefined ? v.len : Math.min(mag, 2.0),
+              color: v.color ?? color,
+            };
+          }
+          return null;
+        };
+
+        g.setVectors = (newVectors) => {
+          const list = newVectors || [];
+          for (let i = 0; i < list.length; i++) {
+            const item = normalizeEntry(list[i]);
+            let arrow = pool[i];
+            if (!arrow) {
+              arrow = new THREE.ArrowHelper(
+                new THREE.Vector3(0, 1, 0),
+                new THREE.Vector3(0, 0, 0),
+                0.5,
+                color,
+                0.12,
+                0.07,
+              );
+              if (arrow.line && arrow.line.geometry)
+                sharedArrowGeoms.add(arrow.line.geometry);
+              if (arrow.cone && arrow.cone.geometry)
+                sharedArrowGeoms.add(arrow.cone.geometry);
+              pool.push(arrow);
+              g.add(arrow);
+            }
+            if (!item || item.len < 1e-4 || item.dir.lengthSq() < 1e-12) {
+              arrow.visible = false;
+              continue;
+            }
+            arrow.visible = true;
+            arrow.position.copy(item.origin);
+            arrow.setDirection(item.dir.clone().normalize());
+            arrow.setLength(
+              item.len,
+              Math.min(0.25, item.len * 0.35),
+              Math.min(0.15, item.len * 0.22),
+            );
+            arrow.setColor(item.color);
+          }
+          for (let i = list.length; i < pool.length; i++) {
+            pool[i].visible = false;
+          }
+        };
+
+        g.setVectors(vectors);
+        content.add(g);
+        return g;
+      }
+
+      function renderMath(el, tex, display = true) {
+        if (window.katex) {
+          try {
+            katex.render(tex, el, {
+              throwOnError: false,
+              displayMode: display,
+            });
+            return;
+          } catch (e) {}
+        }
+        el.textContent = tex;
+      }
+
+      function renderAllMath(root) {
+        root.querySelectorAll("[data-tex]").forEach((el) => {
+          renderMath(
+            el,
+            el.getAttribute("data-tex"),
+            el.classList.contains("eq") || el.classList.contains("eqblock"),
+          );
+        });
+      }
+
+      function setHud(title, eqTex, rows) {
+        hudTitle.textContent = title;
+        renderMath(hudEq, eqTex, true);
+        hudValues.innerHTML = (rows || [])
+          .map(
+            (r) => `<span class="k">${r.k}</span><span class="v">${r.v}</span>`,
+          )
+          .join("");
+      }
+
+      function fmt(v, d = 3) {
+        return isFinite(v) ? (v >= 0 ? "+" : "") + v.toFixed(d) : "—";
+      }
+
+      const modules = [];
+
+      modules.push({
+  id: 'intro_electrodynamics',
+  title: '6-1 Introduction to Electrodynamics & Lorentz Force',
+
+  controls: [
+    { id: 'particle', label: 'Particle', type: 'select', options: ['Electron (-e)', 'Proton (+e)'], value: 'Electron (-e)' },
+    { id: 'E_kVm', label: 'E_y (kV/m)', type: 'range', min: 0, max: 50, step: 1, value: 20 },
+    { id: 'B_mT', label: 'B_z (mT)', type: 'range', min: 0, max: 50, step: 1, value: 10 },
+    { id: 'v_kms', label: 'Initial v_x (km/s)', type: 'range', min: 200, max: 5000, step: 100, value: 2000 },
+    { id: 'animate', label: 'Animate trajectory', type: 'check', value: true }
+  ],
+
+  build() {
+    const g = new THREE.Group();
+    content.add(g);
+
+    // ---- capacitor plates (E field along +y) ----
+    const plateMat = new THREE.MeshStandardMaterial({ color: 0x2b3a55, metalness: 0.8, roughness: 0.3, emissive: 0x0a1420 });
+    const plateGeo = new THREE.BoxGeometry(0.30, 0.012, 0.20);
+    const topPlate = new THREE.Mesh(plateGeo, plateMat);
+    topPlate.position.set(0.10, 0.10, 0);
+    const botPlate = new THREE.Mesh(plateGeo, plateMat);
+    botPlate.position.set(0.10, -0.10, 0);
+    g.add(topPlate, botPlate);
+
+    // ---- Helmholtz-style pole rings (B field along +z) ----
+    const ringMat = new THREE.MeshStandardMaterial({ color: 0x3d4f6b, metalness: 0.9, roughness: 0.25, emissive: 0x101a2a });
+    const ringGeo = new THREE.TorusGeometry(0.13, 0.014, 12, 40);
+    for (const z of [-0.16, 0.16]) {
+      const r = new THREE.Mesh(ringGeo, ringMat);
+      r.position.set(0.10, 0, z);
+      g.add(r);
+    }
+
+    // ---- particle ----
+    const pMat = new THREE.MeshStandardMaterial({ color: 0xfff2b0, emissive: 0xffcc44, emissiveIntensity: 1.6, roughness: 0.3 });
+    const particle = new THREE.Mesh(new THREE.SphereGeometry(0.016, 20, 16), pMat);
+    g.add(particle);
+
+    // ---- trajectory tube ----
+    const trailMat = new THREE.MeshStandardMaterial({ color: 0x66ffcc, emissive: 0x33ffaa, emissiveIntensity: 1.2, transparent: true, opacity: 0.85 });
+    const trail = new THREE.Mesh(new THREE.BufferGeometry(), trailMat);
+    g.add(trail);
+
+    // ---- force arrows ----
+    const feArrow = addArrowField([{ origin: new THREE.Vector3(), dir: new THREE.Vector3(0, 1, 0), len: 0.05 }], 0xffb347);
+    const fmArrow = addArrowField([{ origin: new THREE.Vector3(), dir: new THREE.Vector3(0, 0, 1), len: 0.05 }], 0x7fd1ff);
+    const ftArrow = addArrowField([{ origin: new THREE.Vector3(), dir: new THREE.Vector3(0, 1, 0), len: 0.05 }], 0x4dff9e);
+
+    // ---- E field arrows (vertical) ----
+    const eArrows = addArrowField([], 0xffb347);
+    const eVecs = [];
+    for (let i = 0; i < 5; i++) for (let j = 0; j < 3; j++) {
+      eVecs.push({ origin: new THREE.Vector3(-0.02 + i * 0.06, -0.085, -0.06 + j * 0.06), dir: new THREE.Vector3(0, 1, 0), len: 0.05 });
+    }
+    eArrows.setVectors(eVecs);
+
+    // ---- B field arrows (z-directed) ----
+    const bArrows = addArrowField([], 0x7fd1ff);
+    const bVecs = [];
+    for (let i = 0; i < 5; i++) for (let j = 0; j < 3; j++) {
+      bVecs.push({ origin: new THREE.Vector3(-0.02 + i * 0.06, -0.06 + j * 0.06, -0.10), dir: new THREE.Vector3(0, 0, 1), len: 0.05 });
+    }
+    bArrows.setVectors(bVecs);
+
+    this.meshRefs = { g, particle, trail, feArrow, fmArrow, ftArrow, eArrows, bArrows };
+  },
+
+  update() {
+    const st = this.state;
+    const e = 1.60217663e-19;
+    const m = st.particle === 'Electron (-e)' ? 9.1093837e-31 : 1.67262192e-27;
+    const q = st.particle === 'Electron (-e)' ? -e : e;
+
+    const E = st.E_kVm * 1e3;          // V/m
+    const B = st.B_mT * 1e-3;          // T
+    const v0 = st.v_kms * 1e3;         // m/s
+    const L = 0.20;                    // interaction length (m)
+
+    const Fe = q * E;                  // N (y)
+    const Fm = q * v0 * B;             // N (y, since v x B = v_x B_z * (-y) for +x,+z)
+    const Fnet = Fe + Fm;
+
+    const vSel = B > 0 ? E / B : Infinity;
+
+    // ---- numerical integration of trajectory ----
+    const N = 160;
+    const dt = (L / v0) / N;
+    let x = 0, y = 0, vx = v0, vy = 0;
+    const pts = [new THREE.Vector3(0, 0, 0)];
+    for (let i = 0; i < N; i++) {
+      const ax = (q / m) * (vy * B);       // v x B x-component = vy*B
+      const ay = (q / m) * (E - vx * B);   // E_y - vx*B_z
+      vx += ax * dt; vy += ay * dt;
+      x += vx * dt; y += vy * dt;
+      pts.push(new THREE.Vector3(x, y, 0));
+    }
+
+    // ---- update particle & trail ----
+    const last = pts[pts.length - 1];
+    const refs = this.meshRefs;
+    refs.particle.position.copy(last);
+
+    const curve = new THREE.CatmullRomCurve3(pts);
+    refs.trail.geometry.dispose();
+    refs.trail.geometry = new THREE.TubeGeometry(curve, 120, 0.006, 8, false);
+
+    // ---- force arrows ----
+    const scale = 0.05 / (Math.abs(Fe) + Math.abs(Fm) + 1e-30);
+    const feLen = Math.abs(Fe) * scale * 2 + 0.01;
+    const fmLen = Math.abs(Fm) * scale * 2 + 0.01;
+    const ftLen = Math.abs(Fnet) * scale * 2 + 0.01;
+
+    refs.feArrow.setVectors([{ origin: last.clone(), dir: new THREE.Vector3(0, Math.sign(Fe) || 1, 0), len: feLen }]);
+    refs.fmArrow.setVectors([{ origin: last.clone(), dir: new THREE.Vector3(0, Math.sign(Fm) || 1, 0), len: fmLen }]);
+    refs.ftArrow.setVectors([{ origin: last.clone(), dir: new THREE.Vector3(0, Math.sign(Fnet) || 1, 0), len: ftLen }]);
+
+    // ---- 2D chart ----
+    const W = chartEl.width, H = chartEl.height;
+    const ctx = chartEl.getContext('2d');
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = '#0b1220'; ctx.fillRect(0, 0, W, H);
+
+    const pad = 46;
+    const x0 = pad, x1 = W - pad, y0 = H - pad, y1 = pad;
+    const yMax = 0.06; // 60 mm
+
+    // grid
+    ctx.strokeStyle = '#1e2a3d'; ctx.lineWidth = 1;
+    for (let i = 0; i <= 6; i++) {
+      const yy = y0 + (y1 - y0) * i / 6;
+      ctx.beginPath(); ctx.moveTo(x0, yy); ctx.lineTo(x1, yy); ctx.stroke();
+    }
+    for (let i = 0; i <= 5; i++) {
+      const xx = x0 + (x1 - x0) * i / 5;
+      ctx.beginPath(); ctx.moveTo(xx, y0); ctx.lineTo(xx, y1); ctx.stroke();
+    }
+
+    // axes
+    ctx.strokeStyle = '#4a6a8a'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y0); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x0, y1); ctx.stroke();
+
+    // labels
+    ctx.fillStyle = '#9fb6cc'; ctx.font = '13px sans-serif';
+    ctx.fillText('x (m)', x1 - 40, y0 + 22);
+    ctx.fillText('y (mm)', x0 - 38, y1 + 12);
+
+    const toPx = (x, y) => [x0 + (x / L) * (x1 - x0), y0 - (y / yMax) * (y0 - y1)];
+
+    // pure E deflection: y = (qE/m) x^2 / (2 v0^2)
+    const aE = (q * E) / m;
+    // pure B deflection: y = (qB/m) * ... circular; approximate via integration
+    const aB = (q * B) / m;
+
+    const drawCurve = (color, fn) => {
+      ctx.strokeStyle = color; ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      for (let i = 0; i <= 100; i++) {
+        const x = (i / 100) * L;
+        const y = fn(x);
+        const [px, py] = toPx(x, y);
+        i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+      }
+      ctx.stroke();
+    };
+
+    // pure E
+    drawCurve('#ffb347', (x) => aE * x * x / (2 * v0 * v0));
+
+    // pure B (numerical)
+    const bPath = (x) => {
+      let xx = 0, yy = 0, vxx = v0, vyy = 0;
+      const steps = 200, dx = x / steps;
+      for (let i = 0; i < steps; i++) {
+        const ax = (q / m) * vyy * B;
+        const ay = (q / m) * (-vxx * B);
+        vxx += ax * (dx / v0); vyy += ay * (dx / v0);
+        xx += vxx * (dx / v0); yy += vyy * (dx / v0);
+      }
+      return yy;
+    };
+    drawCurve('#7fd1ff', bPath);
+
+    // combined
+    drawCurve('#4dff9e', (x) => {
+      let xx = 0, yy = 0, vxx = v0, vyy = 0;
+      const steps = 200, dx = x / steps;
+      for (let i = 0; i < steps; i++) {
+        const ax = (q / m) * vyy * B;
+        const ay = (q / m) * (E - vxx * B);
+        vxx += ax * (dx / v0); vyy += ay * (dx / v0);
+        xx += vxx * (dx / v0); yy += vyy * (dx / v0);
+      }
+      return yy;
+    });
+
+    // legend
+    ctx.font = '12px sans-serif';
+    ctx.fillStyle = '#ffb347'; ctx.fillText('pure E', x1 - 90, y1 + 18);
+    ctx.fillStyle = '#7fd1ff'; ctx.fillText('pure B', x1 - 90, y1 + 34);
+    ctx.fillStyle = '#4dff9e'; ctx.fillText('E × B', x1 - 90, y1 + 50);
+
+    // ---- HUD ----
+    const fN = (val) => (val * 1e15).toFixed(2);
+    const yExit = last.y * 1e3;
+    setHud(
+      'Lorentz Force & Crossed-Field Balance',
+      '\\mathbf{F} = q(\\mathbf{E} + \\mathbf{v}\\times\\mathbf{B}),\\quad v_{\\mathrm{sel}} = \\frac{E}{B}',
+      [
+        { k: 'F_e', v: fN(Fe) + ' fN' },
+        { k: 'F_m', v: fN(Fm) + ' fN' },
+        { k: 'Net F_y', v: fN(Fnet) + ' fN' },
+        { k: 'Selector v_sel', v: (vSel / 1e3).toFixed(1) + ' km/s' },
+        { k: 'Exit Deflection y', v: yExit.toFixed(2) + ' mm' }
+      ]
+    );
+  },
+
+  tick(dt) {
+    if (!this.state.animate) return;
+    // gentle pulse on particle glow
+    const refs = this.meshRefs;
+    if (refs && refs.particle) {
+      refs.particle.material.emissiveIntensity = 1.4 + 0.4 * Math.sin(performance.now() * 0.004);
+    }
+  },
+
+  lesson: `<p>The Lorentz force on a charge <em>q</em> moving with velocity <strong>v</strong> is
+  <strong>F</strong> = q<strong>E</strong> + q(<strong>v</strong> × <strong>B</strong>).
+  The electric part <strong>F</strong><sub>e</sub> = q<strong>E</strong> is parallel (or antiparallel) to <strong>E</strong>
+  and does work, changing the particle's kinetic energy. The magnetic part
+  <strong>F</strong><sub>m</sub> = q(<strong>v</strong> × <strong>B</strong>) is always perpendicular to both
+  <strong>v</strong> and <strong>B</strong>, so it does zero work and only bends the trajectory.</p>
+  <p>When <strong>E</strong> = E ŷ and <strong>B</strong> = B ẑ with <strong>v</strong> = v x̂, the transverse force is
+  F<sub>y</sub> = q(E − vB). Setting this to zero gives the Wien velocity-selector condition
+  <strong>v<sub>sel</sub> = E/B</strong>. Particles with exactly this speed pass straight through;
+  others are deflected up or down according to their charge and speed.</p>`,
+
+  quiz: [
+    { q: 'Which force component can change a charged particle\'s kinetic energy?', options: ['The magnetic force q(v × B)', 'The electric force qE', 'Both equally', 'Neither'], answer: 1 },
+    { q: 'For a Wien velocity selector with E = 20 kV/m and B = 10 mT, the selected speed is:', options: ['2 km/s', '200 km/s', '2000 km/s', '20 km/s'], answer: 2 },
+    { q: 'The magnetic force q(v × B) does zero work because:', options: ['B is always zero', 'It is perpendicular to the velocity', 'It is parallel to the velocity', 'It cancels the electric force'], answer: 1 }
+  ]
+});
+/* === UI CONTROLLER === */
+
+      let activeIdx = 0;
+      const progress = {};
+
+      function buildModuleList() {
+        moduleList.innerHTML = "";
+        modules.forEach((m, i) => {
+          const b = document.createElement("button");
+          b.type = "button";
+          b.className = "mod-btn";
+          b.dataset.idx = String(i);
+          b.innerHTML = `<span class="num">${i + 1}.</span>${m.title}`;
+          b.addEventListener("click", () => selectModule(i));
+          moduleList.appendChild(b);
+        });
+      }
+
+      function buildControls(mod) {
+        controlsEl.innerHTML = "";
+        if (!mod.state) mod.state = {};
+        (mod.controls || []).forEach((c) => {
+          if (!(c.id in mod.state)) mod.state[c.id] = c.value;
+          const row = document.createElement("div");
+          row.className = "ctl";
+          const lab = document.createElement("label");
+          lab.textContent = c.label || c.id;
+          row.appendChild(lab);
+          if (c.type === "select") {
+            const sel = document.createElement("select");
+            (c.options || []).forEach((opt) => {
+              const o = document.createElement("option");
+              const val = opt && typeof opt === "object" ? opt.value : opt;
+              const lbl = opt && typeof opt === "object" ? opt.label : opt;
+              o.value = val;
+              o.textContent = lbl;
+              if (val === mod.state[c.id]) o.selected = true;
+              sel.appendChild(o);
+            });
+            sel.addEventListener("change", () => {
+              mod.state[c.id] = sel.value;
+              mod.update();
+            });
+            row.appendChild(sel);
+          } else if (c.type === "check") {
+            const inp = document.createElement("input");
+            inp.type = "checkbox";
+            inp.checked = !!mod.state[c.id];
+            inp.addEventListener("change", () => {
+              mod.state[c.id] = inp.checked;
+              mod.update();
+            });
+            row.appendChild(inp);
+          } else {
+            const inp = document.createElement("input");
+            inp.type = "range";
+            inp.min = c.min ?? 0;
+            inp.max = c.max ?? 1;
+            inp.step = c.step ?? 0.01;
+            inp.value = mod.state[c.id];
+            const val = document.createElement("span");
+            val.className = "val";
+            val.textContent = Number(mod.state[c.id]).toFixed(2);
+            inp.addEventListener("input", () => {
+              mod.state[c.id] = parseFloat(inp.value);
+              val.textContent = Number(mod.state[c.id]).toFixed(2);
+              mod.update();
+            });
+            row.appendChild(inp);
+            row.appendChild(val);
+          }
+          controlsEl.appendChild(row);
+        });
+      }
+
+      function buildLesson(mod) {
+        const raw = mod.lesson || mod.blurb || "";
+        lessonEl.innerHTML = raw.trim().startsWith("<")
+          ? raw
+          : `<h3>${mod.title}</h3><p>${raw}</p>`;
+        renderAllMath(lessonEl);
+      }
+
+      function buildQuiz(mod) {
+        quizEl.innerHTML = "<h3>Concept Check</h3>";
+        const key = mod.id || String(activeIdx);
+        progress[key] = progress[key] || {};
+        (mod.quiz || []).forEach((q, qi) => {
+          const card = document.createElement("div");
+          card.className = "qcard";
+          const qt = document.createElement("div");
+          qt.className = "qtext";
+          qt.textContent = `${qi + 1}. ${q.q}`;
+          card.appendChild(qt);
+          const opts = document.createElement("div");
+          opts.className = "opts";
+          const fb = document.createElement("div");
+          fb.className = "fb";
+          q.options.forEach((opt, oi) => {
+            const btn = document.createElement("button");
+            btn.type = "button";
+            btn.textContent = opt;
+            btn.addEventListener("click", () => {
+              progress[key][qi] = oi;
+              opts.querySelectorAll("button").forEach((b, idx) => {
+                b.classList.toggle("correct", idx === q.answer);
+                b.classList.toggle("wrong", idx === oi && oi !== q.answer);
+              });
+              fb.textContent =
+                oi === q.answer
+                  ? "✓ " + (q.explain || "Correct")
+                  : "✗ " + (q.explain || "Try again");
+              updateBadge();
+            });
+            opts.appendChild(btn);
+          });
+          card.appendChild(opts);
+          card.appendChild(fb);
+          quizEl.appendChild(card);
+        });
+        updateBadge();
+      }
+
+      function updateBadge() {
+        let correct = 0,
+          total = 0;
+        modules.forEach((m, i) => {
+          const saved = progress[m.id || String(i)] || {};
+          (m.quiz || []).forEach((q, qi) => {
+            total++;
+            if (saved[qi] === q.answer) correct++;
+          });
+        });
+        badgeEl.textContent = `${correct} / ${total} CORRECT`;
+      }
+
+      function selectModule(idx) {
+        if (!modules.length || idx < 0 || idx >= modules.length) return;
+        activeIdx = idx;
+        const mod = modules[idx];
+        moduleList
+          .querySelectorAll(".mod-btn")
+          .forEach((b) =>
+            b.classList.toggle("active", Number(b.dataset.idx) === idx),
+          );
+        buildControls(mod);
+        buildLesson(mod);
+        buildQuiz(mod);
+        clearContent();
+        camera.position.set(4.8, 3.6, 5.8);
+        controls.target.set(0, 0, 0);
+        controls.update();
+        chartEl.style.display = "block";
+        const _ctx2d = chartEl.getContext("2d");
+        if (_ctx2d) _ctx2d.clearRect(0, 0, chartEl.width, chartEl.height);
+        renderer.domElement.style.display = "block";
+        if (typeof mod.build === "function") mod.build();
+        mod._built = true;
+        if (typeof mod.update === "function") mod.update();
+        renderer.render(scene, camera);
+      }
+
+      function onResize() {
+        const rect = stageEl.getBoundingClientRect();
+        const w = Math.max(1, Math.round(rect.width || stageEl.clientWidth));
+        const h = Math.max(1, Math.round(rect.height || stageEl.clientHeight));
+        camera.aspect = w / h;
+        camera.updateProjectionMatrix();
+        renderer.setSize(w, h);
+        const dpr = Math.min(window.devicePixelRatio || 1, 2);
+        const cw = Math.max(1, Math.round(chartEl.clientWidth || 310));
+        const ch = Math.max(1, Math.round(chartEl.clientHeight || 225));
+        chartEl.width = Math.round(cw * dpr);
+        chartEl.height = Math.round(ch * dpr);
+        const mod = modules[activeIdx];
+        if (mod && mod._built && typeof mod.update === "function") {
+          mod.update();
+          renderer.render(scene, camera);
+        }
+      }
+
+      buildModuleList();
+      onResize();
+      selectModule(0);
+      window.addEventListener("resize", onResize);
+      if (window.ResizeObserver) new ResizeObserver(onResize).observe(stageEl);
+
+      let last = performance.now();
+      function animate(now) {
+        const dt = Math.min(0.05, (now - last) / 1000);
+        last = now;
+        const mod = modules[activeIdx];
+        if (mod && mod._built && typeof mod.tick === "function") mod.tick(dt);
+        controls.update();
+        if (
+          !Number.isFinite(camera.position.x) ||
+          !Number.isFinite(camera.position.y) ||
+          !Number.isFinite(camera.position.z)
+        ) {
+          camera.position.set(4.8, 3.6, 5.8);
+          controls.target.set(0, 0, 0);
+          controls.update();
+        }
+        renderer.render(scene, camera);
+        requestAnimationFrame(animate);
+      }
+      requestAnimationFrame(animate);
+    </script>
+  </body>
+</html>
