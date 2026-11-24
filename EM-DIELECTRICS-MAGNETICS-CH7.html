@@ -429,6 +429,937 @@
     { q: 'If E = 40 kV/m in mica (ε_r = 5.4), the magnitude of D is approximately:', options: ['1.9 µC/m²', '0.35 µC/m²', '19 µC/m²', '3.5 µC/m²'], answer: 0 }
   ]
 });
+modules.push({
+  id: 'efield_dipole_polarization',
+  title: '7-4 to 7-6 E-Field in a Dielectric, Electric Dipole & Polarization',
+  controls: [
+    { id: 'eps_r', label: 'Relative permittivity ε_r', type: 'range', min: 1, max: 20, step: 0.5, value: 4 },
+    { id: 'E_ext', label: 'Applied field E (kV/m)', type: 'range', min: 0, max: 100, step: 2, value: 50 },
+    { id: 'dipole_sep', label: 'Dipole moment scale d', type: 'range', min: 0.2, max: 2, step: 0.1, value: 1 }
+  ],
+
+  build() {
+    this.meshRefs = { dipoles: [], boundPos: [], boundNeg: [], slab: null, fieldArrows: null };
+
+    // Dielectric slab
+    const slabGeo = new THREE.BoxGeometry(6, 4, 3);
+    const slabMat = new THREE.MeshStandardMaterial({
+      color: 0x1b3a5c, transparent: true, opacity: 0.28,
+      roughness: 0.4, metalness: 0.1, emissive: 0x0a1a2a, emissiveIntensity: 0.6
+    });
+    const slab = new THREE.Mesh(slabGeo, slabMat);
+    slab.position.set(0, 0, 0);
+    content.add(slab);
+    this.meshRefs.slab = slab;
+
+    // Wireframe edges of slab
+    const edges = new THREE.LineSegments(
+      new THREE.EdgesGeometry(slabGeo),
+      new THREE.LineBasicMaterial({ color: 0x7fd1ff, transparent: true, opacity: 0.7 })
+    );
+    content.add(edges);
+
+    // Dipole pairs grid (3 x 3 x 2)
+    const posMat = new THREE.MeshStandardMaterial({ color: 0xff5a5a, emissive: 0xff2a2a, emissiveIntensity: 0.9, roughness: 0.3 });
+    const negMat = new THREE.MeshStandardMaterial({ color: 0x5aaaff, emissive: 0x2a6aff, emissiveIntensity: 0.9, roughness: 0.3 });
+    const sphereGeo = new THREE.SphereGeometry(0.16, 16, 12);
+    const rodGeo = new THREE.CylinderGeometry(0.035, 0.035, 1, 8);
+
+    for (let ix = -1; ix <= 1; ix++) {
+      for (let iy = -1; iy <= 1; iy++) {
+        for (let iz = -1; iz <= 1; iz += 2) {
+          const g = new THREE.Group();
+          const p = new THREE.Mesh(sphereGeo, posMat);
+          const n = new THREE.Mesh(sphereGeo, negMat);
+          const rod = new THREE.Mesh(rodGeo, new THREE.MeshStandardMaterial({ color: 0x9fb8d0, emissive: 0x334455, emissiveIntensity: 0.4 }));
+          rod.rotation.z = Math.PI / 2;
+          g.add(p, n, rod);
+          g.position.set(ix * 1.7, iy * 1.2, iz * 0.9);
+          content.add(g);
+          this.meshRefs.dipoles.push({ group: g, pos: p, neg: n, rod });
+        }
+      }
+    }
+
+    // Bound surface charge markers on the two faces perpendicular to E (x faces)
+    const bPosMat = new THREE.MeshStandardMaterial({ color: 0xffd166, emissive: 0xffaa00, emissiveIntensity: 1.0 });
+    const bNegMat = new THREE.MeshStandardMaterial({ color: 0x8ecae6, emissive: 0x2a8fb0, emissiveIntensity: 1.0 });
+    const bGeo = new THREE.SphereGeometry(0.11, 12, 10);
+    for (let iy = -1; iy <= 1; iy++) {
+      for (let iz = -1; iz <= 1; iz++) {
+        const bp = new THREE.Mesh(bGeo, bPosMat);
+        bp.position.set(3.02, iy * 1.2, iz * 1.0);
+        content.add(bp);
+        this.meshRefs.boundPos.push(bp);
+
+        const bn = new THREE.Mesh(bGeo, bNegMat);
+        bn.position.set(-3.02, iy * 1.2, iz * 1.0);
+        content.add(bn);
+        this.meshRefs.boundNeg.push(bn);
+      }
+    }
+
+    // External field arrows
+    this.meshRefs.fieldArrows = addArrowField([], 0x7fd1ff);
+  },
+
+  update() {
+    const st = this.state;
+    const eps_r = st.eps_r;
+    const E = st.E_ext;              // kV/m
+    const dScale = st.dipole_sep;
+
+    const eps0 = 8.854e-12;
+    const chi_e = eps_r - 1;
+    const P = eps0 * chi_e * E * 1e3;   // C/m^2  (E in kV/m -> V/m)
+    const D = eps0 * E * 1e3 + P;       // C/m^2
+    const P_uC = P * 1e6;
+    const D_uC = D * 1e6;
+    const boundRatio = (eps_r - 1) / eps_r;
+
+    // Align dipoles with E (x direction), scale separation
+    const sep = 0.55 * dScale;
+    this.meshRefs.dipoles.forEach(({ group, pos, neg, rod }) => {
+      pos.position.set(sep, 0, 0);
+      neg.position.set(-sep, 0, 0);
+      rod.scale.set(1, 2 * sep, 1);
+      rod.position.set(0, 0, 0);
+      // slight tilt proportional to polarization magnitude
+      const tilt = Math.min(0.35, P_uC / 40);
+      group.rotation.z = tilt * 0.4;
+    });
+
+    // Bound charge visibility scales with chi_e
+    const bScale = Math.min(1.6, 0.25 + chi_e * 0.12);
+    this.meshRefs.boundPos.forEach(m => m.scale.setScalar(bScale));
+    this.meshRefs.boundNeg.forEach(m => m.scale.setScalar(bScale));
+
+    // External field arrows across slab
+    const arrows = [];
+    const nArrows = 5;
+    for (let i = 0; i < nArrows; i++) {
+      const y = -1.6 + i * 0.8;
+      const z = 0.6;
+      arrows.push({
+        origin: new THREE.Vector3(-3.6, y, z),
+        dir: new THREE.Vector3(1, 0, 0),
+        len: 0.6 + E / 100 * 1.4
+      });
+    }
+    this.meshRefs.fieldArrows.setVectors(arrows);
+
+    // ---- 2D chart ----
+    const W = chartEl.width, H = chartEl.height;
+    const ctx = chartEl.getContext('2d');
+    ctx.clearRect(0, 0, W, H);
+
+    const padL = 60, padR = 30, padT = 40, padB = 55;
+    const plotW = W - padL - padR;
+    const plotH = H - padT - padB;
+
+    // background
+    ctx.fillStyle = '#0b1220';
+    ctx.fillRect(0, 0, W, H);
+
+    // axes
+    ctx.strokeStyle = '#3a4a63';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(padL, padT);
+    ctx.lineTo(padL, padT + plotH);
+    ctx.lineTo(padL + plotW, padT + plotH);
+    ctx.stroke();
+
+    // grid
+    ctx.strokeStyle = '#1e2a3d';
+    ctx.lineWidth = 1;
+    for (let i = 0; i <= 5; i++) {
+      const x = padL + (i / 5) * plotW;
+      ctx.beginPath(); ctx.moveTo(x, padT); ctx.lineTo(x, padT + plotH); ctx.stroke();
+      const y = padT + (i / 5) * plotH;
+      ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(padL + plotW, y); ctx.stroke();
+    }
+
+    // max value for scaling: D at eps_r=20 with E=100 kV/m
+    const Emax = 100e3;
+    const Dmax = eps0 * Emax + eps0 * 19 * Emax; // ~ 1.77e-4 C/m^2
+    const scaleY = plotH / (Dmax * 1e6 * 1.1); // in uC/m^2 units
+
+    const xOf = er => padL + ((er - 1) / 19) * plotW;
+    const yOf = val_uC => padT + plotH - val_uC * scaleY;
+
+    // curves
+    const drawCurve = (fn, color, width) => {
+      ctx.strokeStyle = color;
+      ctx.lineWidth = width;
+      ctx.beginPath();
+      for (let i = 0; i <= 200; i++) {
+        const er = 1 + (i / 200) * 19;
+        const v = fn(er);
+        const x = xOf(er), y = yOf(v);
+        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+    };
+
+    const E_Vm = E * 1e3;
+    drawCurve(er => eps0 * E_Vm * 1e6, '#7fd1ff', 2.2);                       // ε0 E
+    drawCurve(er => eps0 * (er - 1) * E_Vm * 1e6, '#ffd166', 2.2);            // P
+    drawCurve(er => eps0 * er * E_Vm * 1e6, '#ff5a5a', 2.6);                  // D
+
+    // marker at current eps_r
+    const mx = xOf(eps_r);
+    const myD = yOf(D_uC);
+    ctx.fillStyle = '#ff5a5a';
+    ctx.beginPath(); ctx.arc(mx, myD, 5, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = '#ff5a5a'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(mx, padT); ctx.lineTo(mx, padT + plotH); ctx.stroke();
+
+    // labels
+    ctx.fillStyle = '#9fb8d0';
+    ctx.font = '13px sans-serif';
+    ctx.fillText('ε_r', padL + plotW - 20, padT + plotH + 30);
+    ctx.fillText('|P|, ε₀E, |D|  (µC/m²)', padL, padT - 12);
+
+    // legend
+    const legend = [
+      ['ε₀E', '#7fd1ff'],
+      ['P', '#ffd166'],
+      ['D', '#ff5a5a']
+    ];
+    legend.forEach(([lab, col], i) => {
+      const lx = padL + plotW - 110;
+      const ly = padT + 18 + i * 18;
+      ctx.fillStyle = col;
+      ctx.fillRect(lx, ly - 8, 14, 4);
+      ctx.fillStyle = '#cfe3f5';
+      ctx.font = '12px sans-serif';
+      ctx.fillText(lab, lx + 20, ly);
+    });
+
+    // tick labels
+    ctx.fillStyle = '#7a8fa8';
+    ctx.font = '11px sans-serif';
+    for (let i = 0; i <= 5; i++) {
+      const er = 1 + (i / 5) * 19;
+      ctx.fillText(er.toFixed(0), xOf(er) - 8, padT + plotH + 18);
+    }
+
+    setHud(
+      'Electric Dipoles & Polarization P',
+      '\\mathbf{D} = \\varepsilon_0\\mathbf{E} + \\mathbf{P},\\quad \\mathbf{P} = \\varepsilon_0(\\varepsilon_r - 1)\\mathbf{E}',
+      [
+        { k: 'χ_e', v: chi_e.toFixed(2) },
+        { k: '|P| (µC/m²)', v: P_uC.toFixed(2) },
+        { k: '|D| (µC/m²)', v: D_uC.toFixed(2) },
+        { k: 'Bound charge ratio', v: boundRatio.toFixed(3) }
+      ]
+    );
+  },
+
+  tick(dt) {
+    // gentle rotation of the slab group for depth perception
+    if (this.meshRefs.slab) {
+      this.meshRefs.slab.rotation.y = Math.sin(performance.now() * 0.0004) * 0.08;
+    }
+  },
+
+  lesson: `<p><b>Electric field in a dielectric.</b> A macroscopic field <b>E</b> polarizes the medium: each molecule becomes an induced dipole. The polarization density is <b>P</b> = ε₀ χ_e <b>E</b> = ε₀(ε_r − 1)<b>E</b>, so the flux density is <b>D</b> = ε₀<b>E</b> + <b>P</b> = ε₀ ε_r <b>E</b>. Bound charges appear where <b>P</b> terminates: surface density σ_b = <b>P</b>·n̂ and volume density ρ_b = −∇·<b>P</b>. For a uniform <b>P</b>, only surface charge survives, with total bound charge zero. As ε_r → 1, χ_e → 0 and <b>P</b> → 0 (vacuum limit); as ε_r grows, <b>D</b> is dominated by <b>P</b>.</p>`,
+  quiz: [
+    { q: 'For a linear dielectric, the polarization is:', options: ['P = ε₀ E', 'P = ε₀(ε_r − 1)E', 'P = ε_r E', 'P = (ε_r − 1)/ε₀ E'], answer: 1 },
+    { q: 'The bound surface charge density on a dielectric face is given by:', options: ['σ_b = −∇·P', 'σ_b = P·n̂', 'σ_b = ε₀ E·n̂', 'σ_b = D·n̂'], answer: 1 },
+    { q: 'As ε_r → 1, the polarization P and bound charge ratio approach:', options: ['P → ∞', 'P → 0 and ratio → 0', 'P → ε₀E and ratio → 1', 'P stays constant'], answer: 1 }
+  ]
+});
+modules.push({
+  id: 'boundary_relations_dielectric',
+  title: '7-7 to 7-8 Dielectric Boundary Relations & Table',
+
+  controls: [
+    { id: 'eps_r1', label: 'Permittivity of medium 1 (ε_r1)', type: 'range', min: 1.0, max: 20.0, step: 0.5, value: 2.0 },
+    { id: 'eps_r2', label: 'Permittivity of medium 2 (ε_r2)', type: 'range', min: 1.0, max: 20.0, step: 0.5, value: 8.0 },
+    { id: 'theta1_deg', label: 'Incident angle θ₁ from normal (deg)', type: 'range', min: 5, max: 85, step: 5, value: 35 },
+    { id: 'rho_s_nCm2', label: 'Free surface charge ρ_s (nC/m²)', type: 'range', min: -50, max: 50, step: 5, value: 0 }
+  ],
+
+  build() {
+    const g = new THREE.Group();
+    content.add(g);
+
+    // Medium 1 (top) and medium 2 (bottom) slabs
+    const mat1 = new THREE.MeshStandardMaterial({ color: 0x2a6fb0, emissive: 0x0d2a44, roughness: 0.55, metalness: 0.15, transparent: true, opacity: 0.55 });
+    const mat2 = new THREE.MeshStandardMaterial({ color: 0x8a4fb0, emissive: 0x2a1240, roughness: 0.55, metalness: 0.15, transparent: true, opacity: 0.55 });
+
+    const slab1 = new THREE.Mesh(new THREE.BoxGeometry(8, 3.2, 8), mat1);
+    slab1.position.y = 1.6;
+    const slab2 = new THREE.Mesh(new THREE.BoxGeometry(8, 3.2, 8), mat2);
+    slab2.position.y = -1.6;
+    g.add(slab1, slab2);
+
+    // Interface plane (bright line grid)
+    const planeGeo = new THREE.PlaneGeometry(8, 8);
+    const planeMat = new THREE.MeshStandardMaterial({ color: 0x9fe8ff, emissive: 0x3fa8d8, transparent: true, opacity: 0.22, side: THREE.DoubleSide });
+    const plane = new THREE.Mesh(planeGeo, planeMat);
+    plane.rotation.x = -Math.PI / 2;
+    plane.position.y = 0.001;
+    g.add(plane);
+
+    // Interface outline
+    const outlinePts = [
+      new THREE.Vector3(-4, 0, -4), new THREE.Vector3(4, 0, -4),
+      new THREE.Vector3(4, 0, 4), new THREE.Vector3(-4, 0, 4),
+      new THREE.Vector3(-4, 0, -4)
+    ];
+    const outline = new THREE.Line(new THREE.BufferGeometry().setFromPoints(outlinePts),
+      new THREE.LineBasicMaterial({ color: 0xbfefff }));
+    g.add(outline);
+
+    // Normal axis line
+    const normalLine = new THREE.Line(
+      new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, -3.2, 0), new THREE.Vector3(0, 3.2, 0)]),
+      new THREE.LineBasicMaterial({ color: 0xffe08a })
+    );
+    g.add(normalLine);
+
+    // Field line segments (incident in medium 1, refracted in medium 2)
+    const seg1 = new THREE.Line(
+      new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 1, 0)]),
+      new THREE.LineBasicMaterial({ color: 0x7fd1ff, linewidth: 2 })
+    );
+    const seg2 = new THREE.Line(
+      new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, -1, 0)]),
+      new THREE.LineBasicMaterial({ color: 0xff9fd1, linewidth: 2 })
+    );
+    g.add(seg1, seg2);
+
+    // Arrow field for E direction
+    this.arrows = addArrowField([], 0x7fd1ff);
+
+    // Small markers at origin
+    const dot = new THREE.Mesh(new THREE.SphereGeometry(0.07, 12, 12),
+      new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xffffff }));
+    g.add(dot);
+
+    this.meshRefs = { g, slab1, slab2, plane, seg1, seg2, normalLine, dot };
+  },
+
+  update() {
+    const st = this.state;
+    const e1 = st.eps_r1, e2 = st.eps_r2;
+    const th1 = st.theta1_deg * Math.PI / 180;
+    const rho = st.rho_s_nCm2 * 1e-9; // C/m^2
+
+    // Refraction law: tan(theta2) = (e2/e1) tan(theta1)
+    const tan2 = (e2 / e1) * Math.tan(th1);
+    const th2 = Math.atan(tan2);
+    const th2deg = th2 * 180 / Math.PI;
+
+    // Choose E_t1 = E_t2 = 1 (arbitrary scale) -> tangential components
+    const Et = 1.0;
+    // Normal components from continuity of D_t and jump of D_n
+    // D_t1 = eps1 Et, D_t2 = eps2 Et (equal since Et same)
+    // D_n2 - D_n1 = rho_s
+    // Also geometry: tan(theta) = Et / En  => En = Et / tan(theta)
+    const En1 = Et / Math.tan(th1);
+    const En2 = Et / Math.tan(th2);
+    const Dn1 = e1 * En1;
+    const Dn2 = e2 * En2;
+
+    // Build field line segments in 3D (x-z plane orientation: use x as tangential, y as normal)
+    const L1 = 2.6, L2 = 2.6;
+    const p1 = new THREE.Vector3(Math.sin(th1) * L1, Math.cos(th1) * L1, 0);
+    const p2 = new THREE.Vector3(Math.sin(th2) * L2, -Math.cos(th2) * L2, 0);
+
+    const refs = this.meshRefs;
+    refs.seg1.geometry.setFromPoints([new THREE.Vector3(0, 0, 0), p1]);
+    refs.seg2.geometry.setFromPoints([new THREE.Vector3(0, 0, 0), p2]);
+    refs.seg1.geometry.attributes.position.needsUpdate = true;
+    refs.seg2.geometry.attributes.position.needsUpdate = true;
+
+    // Arrow field: incident direction (upward in medium 1) and refracted (downward in medium 2)
+    const dir1 = new THREE.Vector3(Math.sin(th1), Math.cos(th1), 0).normalize();
+    const dir2 = new THREE.Vector3(Math.sin(th2), -Math.cos(th2), 0).normalize();
+    this.arrows.setVectors([
+      { origin: new THREE.Vector3(0, 0, 0), dir: dir1, len: 1.6 },
+      { origin: new THREE.Vector3(0, 0, 0), dir: dir2, len: 1.6 }
+    ]);
+
+    // ---- 2D chart: theta2 vs eps_r2 ----
+    const W = chartEl.width, H = chartEl.height;
+    const ctx = chartEl.getContext('2d');
+    ctx.clearRect(0, 0, W, H);
+
+    const padL = 52, padR = 18, padT = 26, padB = 40;
+    const x0 = padL, x1 = W - padR, y0 = padT, y1 = H - padB;
+
+    // background
+    ctx.fillStyle = '#0b1220';
+    ctx.fillRect(0, 0, W, H);
+
+    // grid
+    ctx.strokeStyle = 'rgba(120,180,220,0.18)';
+    ctx.lineWidth = 1;
+    for (let i = 0; i <= 10; i++) {
+      const x = x0 + (x1 - x0) * i / 10;
+      ctx.beginPath(); ctx.moveTo(x, y0); ctx.lineTo(x, y1); ctx.stroke();
+    }
+    for (let i = 0; i <= 8; i++) {
+      const y = y0 + (y1 - y0) * i / 8;
+      ctx.beginPath(); ctx.moveTo(x0, y); ctx.lineTo(x1, y); ctx.stroke();
+    }
+
+    // axes
+    ctx.strokeStyle = '#9fe8ff';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(x0, y1); ctx.lineTo(x1, y1); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x0, y1); ctx.stroke();
+
+    // labels
+    ctx.fillStyle = '#cfe9ff';
+    ctx.font = '13px system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('ε_r2', (x0 + x1) / 2, H - 10);
+    ctx.save();
+    ctx.translate(14, (y0 + y1) / 2);
+    ctx.rotate(-Math.PI / 2);
+    ctx.fillText('θ₂ (deg)', 0, 0);
+    ctx.restore();
+
+    // tick labels
+    ctx.font = '11px system-ui, sans-serif';
+    ctx.fillStyle = '#8fb8d8';
+    for (let i = 0; i <= 10; i++) {
+      const v = 1 + 19 * i / 10;
+      const x = x0 + (x1 - x0) * i / 10;
+      ctx.fillText(v.toFixed(1), x, y1 + 16);
+    }
+    for (let i = 0; i <= 8; i++) {
+      const v = 90 * (1 - i / 8);
+      const y = y0 + (y1 - y0) * i / 8;
+      ctx.textAlign = 'right';
+      ctx.fillText(v.toFixed(0), x0 - 6, y + 4);
+    }
+    ctx.textAlign = 'left';
+
+    // curve: theta2 vs eps_r2 for fixed eps_r1, theta1
+    ctx.strokeStyle = '#7fd1ff';
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    for (let i = 0; i <= 200; i++) {
+      const er2 = 1 + 19 * i / 200;
+      const t2 = Math.atan((er2 / e1) * Math.tan(th1));
+      const deg = t2 * 180 / Math.PI;
+      const px = x0 + (x1 - x0) * (er2 - 1) / 19;
+      const py = y1 - (y1 - y0) * Math.min(deg, 90) / 90;
+      if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+    }
+    ctx.stroke();
+
+    // current point marker
+    const cx = x0 + (x1 - x0) * (e2 - 1) / 19;
+    const cy = y1 - (y1 - y0) * Math.min(th2deg, 90) / 90;
+    ctx.fillStyle = '#ff9fd1';
+    ctx.beginPath(); ctx.arc(cx, cy, 5, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 1.5; ctx.stroke();
+
+    // annotation
+    ctx.fillStyle = '#cfe9ff';
+    ctx.font = '12px system-ui, sans-serif';
+    ctx.fillText(`ε_r1 = ${e1.toFixed(1)}, θ₁ = ${st.theta1_deg}°`, x0 + 8, y0 + 16);
+
+    // ---- HUD ----
+    setHud(
+      'Dielectric Boundary Conditions',
+      '\\tan\\theta_2 = \\frac{\\varepsilon_{r2}}{\\varepsilon_{r1}}\\tan\\theta_1,\\quad D_{n2}-D_{n1}=\\rho_s',
+      [
+        { k: 'θ₂ (deg)', v: th2deg.toFixed(2) },
+        { k: 'E_t1 = E_t2', v: Et.toFixed(3) },
+        { k: 'D_n1', v: Dn1.toFixed(3) },
+        { k: 'D_n2', v: Dn2.toFixed(3) }
+      ]
+    );
+  },
+
+  tick(dt) {
+    // gentle rotation of the whole group for depth perception
+    if (this.meshRefs && this.meshRefs.g) {
+      this.meshRefs.g.rotation.y += dt * 0.15;
+    }
+  },
+
+  lesson: `<p>At a dielectric–dielectric interface the <b>tangential</b> electric field is continuous: <b>E<sub>t1</sub> = E<sub>t2</sub></b>, equivalently <b>D<sub>t1</sub>/ε<sub>1</sub> = D<sub>t2</sub>/ε<sub>2</sub></b>. The <b>normal</b> flux density jumps by the free surface charge: <b>D<sub>n2</sub> − D<sub>n1</sub> = ρ<sub>s</sub></b>, i.e. <b>ε<sub>2</sub>E<sub>n2</sub> − ε<sub>1</sub>E<sub>n1</sub> = ρ<sub>s</sub></b>. For an uncharged boundary (ρ<sub>s</sub> = 0) this gives <b>E<sub>n1</sub>/E<sub>n2</sub> = ε<sub>r2</sub>/ε<sub>r1</sub></b>, and combining with tangential continuity yields the refraction law <b>tan θ<sub>1</sub>/tan θ<sub>2</sub> = ε<sub>r1</sub>/ε<sub>r2</sub></b>, with angles measured from the surface normal. Limiting cases: if ε<sub>r2</sub> ≫ ε<sub>r1</sub> the field lines bend strongly toward the normal in medium 2 (θ<sub>2</sub> → 0); if ε<sub>r2</sub> = ε<sub>r1</sub> there is no refraction (θ<sub>2</sub> = θ<sub>1</sub>); a nonzero ρ<sub>s</sub> breaks the normal-D continuity and shifts the normal field components.</p>`,
+
+  quiz: [
+    { q: 'Which quantity is continuous across a dielectric interface with no free surface charge?', options: ['Normal D', 'Tangential E', 'Normal E', 'Tangential D'], answer: 1 },
+    { q: 'For ρ_s = 0, the ratio E_n1/E_n2 equals:', options: ['ε_r1/ε_r2', 'ε_r2/ε_r1', '1', '(ε_r2/ε_r1)²'], answer: 1 },
+    { q: 'The refraction law for E lines across an uncharged dielectric boundary is:', options: ['sin θ1/sin θ2 = ε_r1/ε_r2', 'tan θ1/tan θ2 = ε_r1/ε_r2', 'cos θ1/cos θ2 = ε_r2/ε_r1', 'tan θ1/tan θ2 = ε_r2/ε_r1'], answer: 1 }
+  ]
+});
+modules.push({
+  id: 'dielectric_strength_energy',
+  title: '7-9 to 7-10 Dielectric Strength & Electrostatic Energy Density',
+  controls: [
+    { id: 'eps_r', label: 'Relative permittivity ε_r', type: 'range', min: 1.0, max: 15.0, step: 0.5, value: 4.5 },
+    { id: 'E_MVm', label: 'Applied field E (MV/m)', type: 'range', min: 0.5, max: 40, step: 0.5, value: 10.0 },
+    { id: 'E_bd_MVm', label: 'Dielectric strength E_bd (MV/m)', type: 'range', min: 3, max: 50, step: 1, value: 20 }
+  ],
+
+  build() {
+    const g = new THREE.Group();
+    const eps0 = 8.854e-12;
+
+    // --- parallel plates (horizontal, separated along y) ---
+    const plateMat = new THREE.MeshStandardMaterial({
+      color: 0x9fb6cc, metalness: 0.85, roughness: 0.25,
+      emissive: 0x223344, emissiveIntensity: 0.6
+    });
+    const plateGeo = new THREE.BoxGeometry(3.2, 0.12, 3.2);
+    const topPlate = new THREE.Mesh(plateGeo, plateMat);
+    topPlate.position.y = 1.15;
+    const botPlate = new THREE.Mesh(plateGeo, plateMat.clone());
+    botPlate.position.y = -1.15;
+    g.add(topPlate, botPlate);
+
+    // --- dielectric slab ---
+    const slabMat = new THREE.MeshStandardMaterial({
+      color: 0x2fd6a8, emissive: 0x2fd6a8, emissiveIntensity: 0.5,
+      transparent: true, opacity: 0.75, roughness: 0.35, metalness: 0.05
+    });
+    const slab = new THREE.Mesh(new THREE.BoxGeometry(2.9, 2.1, 2.9), slabMat);
+    slab.position.y = 0;
+    g.add(slab);
+
+    // --- edge glow frame around slab ---
+    const frameMat = new THREE.MeshStandardMaterial({
+      color: 0x7ffbe0, emissive: 0x7ffbe0, emissiveIntensity: 0.8
+    });
+    const frame = new THREE.Mesh(new THREE.BoxGeometry(3.0, 2.22, 3.0), frameMat);
+    frame.material.transparent = true;
+    frame.material.opacity = 0.18;
+    frame.position.y = 0;
+    g.add(frame);
+
+    // --- field arrows (downward, from + to - plate) ---
+    const arrows = addArrowField([], 0x7fd1ff);
+    g.add(arrows);
+
+    // --- breakdown spark ring (hidden until breakdown) ---
+    const sparkMat = new THREE.MeshStandardMaterial({
+      color: 0xff5a3c, emissive: 0xff5a3c, emissiveIntensity: 1.4,
+      transparent: true, opacity: 0.0
+    });
+    const spark = new THREE.Mesh(new THREE.TorusGeometry(1.55, 0.06, 10, 48), sparkMat);
+    spark.rotation.x = Math.PI / 2;
+    spark.position.y = 0;
+    g.add(spark);
+
+    // --- ground grid ---
+    const gridMat = new THREE.LineBasicMaterial({ color: 0x2a3d52 });
+    const gridGeo = new THREE.BufferGeometry();
+    const pts = [];
+    for (let i = -4; i <= 4; i++) {
+      pts.push(-4, -1.6, i, 4, -1.6, i);
+      pts.push(i, -1.6, -4, i, -1.6, 4);
+    }
+    gridGeo.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
+    g.add(new THREE.LineSegments(gridGeo, gridMat));
+
+    content.add(g);
+    this.meshRefs = { g, topPlate, botPlate, slab, slabMat, frame, frameMat, arrows, spark, sparkMat, eps0 };
+  },
+
+  update() {
+    const st = this.state;
+    const r = this.meshRefs;
+    const eps0 = r.eps0;
+    const epsr = st.eps_r;
+    const E = st.E_MVm * 1e6;          // V/m
+    const Ebd = st.E_bd_MVm * 1e6;     // V/m
+    const eps = eps0 * epsr;
+
+    // energy density (J/m^3)
+    const w = 0.5 * eps * E * E;
+    const ratio = E / Ebd;             // 1 => breakdown
+    const margin = (1 - ratio) * 100;  // %
+    const broken = ratio >= 1;
+
+    // --- dielectric color: green -> amber -> red as E approaches E_bd ---
+    const t = Math.min(ratio, 1);
+    const col = new THREE.Color();
+    if (t < 0.5) col.setHSL(0.45 - 0.15 * t, 0.85, 0.55);
+    else col.setHSL(0.10 - 0.10 * (t - 0.5) * 2, 0.95, 0.55);
+    r.slabMat.color.copy(col);
+    r.slabMat.emissive.copy(col);
+    r.slabMat.emissiveIntensity = 0.35 + 0.9 * t;
+    r.frameMat.color.copy(col);
+    r.frameMat.emissive.copy(col);
+    r.frameMat.emissiveIntensity = 0.5 + 1.2 * t;
+
+    // --- field arrows: density/length scale with E ---
+    const vecs = [];
+    const n = 5;
+    const len = 0.35 + 0.55 * Math.min(ratio, 1.2);
+    for (let i = 0; i < n; i++) {
+      for (let j = 0; j < n; j++) {
+        const x = (i - (n - 1) / 2) * 0.55;
+        const z = (j - (n - 1) / 2) * 0.55;
+        vecs.push({
+          origin: new THREE.Vector3(x, 1.05, z),
+          dir: new THREE.Vector3(0, -1, 0),
+          len: len
+        });
+      }
+    }
+    r.arrows.setVectors(vecs);
+
+    // --- breakdown spark ---
+    r.sparkMat.opacity = broken ? 0.85 : 0.0;
+    r.spark.scale.setScalar(broken ? 1.0 : 0.6);
+
+    // --- 2D chart ---
+    const W = chartEl.width, H = chartEl.height;
+    const ctx = chartEl.getContext('2d');
+    ctx.clearRect(0, 0, W, H);
+
+    const padL = 62, padR = 22, padT = 34, padB = 46;
+    const x0 = padL, x1 = W - padR, y0 = padT, y1 = H - padB;
+    const Emax = 40; // MV/m
+    const wMax = 0.5 * eps0 * 15 * (40e6) * (40e6); // upper bound for scaling
+
+    // background
+    ctx.fillStyle = '#0b1220';
+    ctx.fillRect(0, 0, W, H);
+
+    // grid
+    ctx.strokeStyle = '#1e2c3f';
+    ctx.lineWidth = 1;
+    for (let i = 0; i <= 8; i++) {
+      const x = x0 + (x1 - x0) * i / 8;
+      ctx.beginPath(); ctx.moveTo(x, y0); ctx.lineTo(x, y1); ctx.stroke();
+    }
+    for (let i = 0; i <= 6; i++) {
+      const y = y0 + (y1 - y0) * i / 6;
+      ctx.beginPath(); ctx.moveTo(x0, y); ctx.lineTo(x1, y); ctx.stroke();
+    }
+
+    // axes
+    ctx.strokeStyle = '#5b7a99';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(x0, y1); ctx.lineTo(x1, y1); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x0, y1); ctx.stroke();
+
+    // labels
+    ctx.fillStyle = '#9fb6cc';
+    ctx.font = '13px system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('E (MV/m)', (x0 + x1) / 2, H - 12);
+    ctx.save();
+    ctx.translate(16, (y0 + y1) / 2);
+    ctx.rotate(-Math.PI / 2);
+    ctx.fillText('w_e (J/m³)', 0, 0);
+    ctx.restore();
+
+    // tick labels
+    ctx.font = '11px system-ui, sans-serif';
+    ctx.fillStyle = '#7f97b0';
+    for (let i = 0; i <= 8; i++) {
+      const v = Emax * i / 8;
+      const x = x0 + (x1 - x0) * i / 8;
+      ctx.fillText(v.toFixed(0), x, y1 + 16);
+    }
+    for (let i = 0; i <= 6; i++) {
+      const v = wMax * i / 6;
+      const y = y1 - (y1 - y0) * i / 6;
+      ctx.textAlign = 'right';
+      ctx.fillText((v / 1e6).toFixed(1) + 'M', x0 - 8, y + 4);
+    }
+    ctx.textAlign = 'left';
+
+    // energy density curve w = 0.5 eps0 epsr E^2
+    ctx.strokeStyle = '#2fd6a8';
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    for (let i = 0; i <= 200; i++) {
+      const Emv = Emax * i / 200;
+      const wv = 0.5 * eps0 * epsr * (Emv * 1e6) * (Emv * 1e6);
+      const x = x0 + (x1 - x0) * (Emv / Emax);
+      const y = y1 - (y1 - y0) * Math.min(wv / wMax, 1);
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // breakdown threshold marker
+    const xbd = x0 + (x1 - x0) * Math.min(Ebd / 1e6 / Emax, 1);
+    ctx.strokeStyle = '#ff5a3c';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([6, 5]);
+    ctx.beginPath(); ctx.moveTo(xbd, y0); ctx.lineTo(xbd, y1); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#ff5a3c';
+    ctx.font = '12px system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('E_bd = ' + st.E_bd_MVm.toFixed(0) + ' MV/m', xbd, y0 - 8);
+
+    // operating point
+    const xp = x0 + (x1 - x0) * Math.min(st.E_MVm / Emax, 1);
+    const yp = y1 - (y1 - y0) * Math.min(w / wMax, 1);
+    ctx.fillStyle = broken ? '#ff5a3c' : '#7fd1ff';
+    ctx.beginPath(); ctx.arc(xp, yp, 6, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 1.5; ctx.stroke();
+
+    // --- HUD ---
+    setHud(
+      'Dielectric Breakdown & Energy Density',
+      'w_e = \\frac{1}{2}\\mathbf{E}\\cdot\\mathbf{D} = \\frac{1}{2}\\varepsilon_0\\varepsilon_r E^2',
+      [
+        { k: 'Energy density w_e', v: w.toExponential(3) + ' J/m³' },
+        { k: 'Breakdown margin', v: margin.toFixed(1) + ' %' },
+        { k: 'Status', v: broken ? 'BREAKDOWN' : 'Safe' }
+      ]
+    );
+  },
+
+  tick(dt) {
+    const r = this.meshRefs;
+    if (!r) return;
+    const st = this.state;
+    const ratio = st.E_MVm / st.E_bd_MVm;
+    const pulse = 0.5 + 0.5 * Math.sin(performance.now() * 0.004);
+    if (ratio >= 1) {
+      r.sparkMat.emissiveIntensity = 1.0 + 1.6 * pulse;
+      r.spark.rotation.z += dt * 1.5;
+    } else {
+      r.slabMat.emissiveIntensity = 0.35 + 0.9 * Math.min(ratio, 1) + 0.12 * pulse * Math.min(ratio, 1);
+    }
+  },
+
+  lesson: `<p><b>Energy density.</b> In a linear dielectric the electrostatic energy density is
+  <em>w<sub>e</sub> = ½ E·D = ½ ε₀ε<sub>r</sub>E² = D²/(2ε)</em> (J/m³). Integrating over the volume gives the total stored energy
+  <em>W<sub>e</sub> = ∫ w<sub>e</sub> dV = ½ C V²</em>. Because w<sub>e</sub> grows as E², doubling the field quadruples the stored energy.</p>
+  <p><b>Dielectric strength.</b> Real dielectrics break down when |E| exceeds a threshold E<sub>bd</sub> (typically 3–50 MV/m for polymers, ceramics, air ≈ 3 MV/m). The maximum voltage a slab of thickness d can hold is <em>V<sub>bd</sub> = E<sub>bd</sub> d</em>. Operating near E<sub>bd</sub> gives maximum energy density but zero safety margin; the margin is (1 − E/E<sub>bd</sub>)·100%.</p>
+  <p><b>Limiting cases.</b> ε<sub>r</sub> → 1 recovers vacuum energy density ½ε₀E². As E → E<sub>bd</sub> the margin → 0 and avalanche ionization produces a conducting channel (spark).</p>`,
+
+  quiz: [
+    { q: 'For a linear dielectric, the electrostatic energy density is:', options: ['½ ε₀ ε_r E²', 'ε₀ ε_r E²', '½ ε₀ E² / ε_r', 'ε₀ E²'], answer: 0 },
+    { q: 'If the applied field doubles (still below breakdown), the stored energy density:', options: ['doubles', 'quadruples', 'stays the same', 'halves'], answer: 1 },
+    { q: 'The maximum voltage a dielectric slab of thickness d can sustain is:', options: ['E_bd / d', 'E_bd · d', 'd² / E_bd', 'E_bd · d²'], answer: 1 }
+  ]
+});
+modules.push({
+  id: 'atomic_loop_magnetic_dipoles',
+  title: '7-11 to 7-13 Atomic Loop, Magnetic Dipoles & Magnetic Materials',
+  controls: [
+    { id: 'cls_type', label: 'Material class', type: 'select', options: ['Diamagnetic (mu_r = 0.9999)', 'Paramagnetic (mu_r = 1.001)', 'Ferromagnetic (mu_r = 500)'], value: 'Paramagnetic (mu_r = 1.001)' },
+    { id: 'B_mT', label: 'Applied B (mT)', type: 'range', min: 0, max: 100, step: 2, value: 50 },
+    { id: 'loop_angle_deg', label: 'Angle m-B (deg)', type: 'range', min: 0, max: 180, step: 5, value: 45 }
+  ],
+
+  build() {
+    const g = new THREE.Group();
+    content.add(g);
+
+    // current loop (torus) in the x-z plane
+    const loopMat = new THREE.MeshStandardMaterial({ color: 0x2f6fd0, emissive: 0x1a3f7a, metalness: 0.6, roughness: 0.35 });
+    const loop = new THREE.Mesh(new THREE.TorusGeometry(1.0, 0.06, 16, 64), loopMat);
+    loop.rotation.x = Math.PI / 2;
+    g.add(loop);
+
+    // electron marker orbiting the loop
+    const eMat = new THREE.MeshStandardMaterial({ color: 0xffd166, emissive: 0xffb703, emissiveIntensity: 1.2 });
+    const electron = new THREE.Mesh(new THREE.SphereGeometry(0.09, 16, 12), eMat);
+    g.add(electron);
+
+    // dipole moment arrow (m) — persistent arrow field
+    this.mArrow = addArrowField([{ origin: new THREE.Vector3(0, 0, 0), dir: new THREE.Vector3(0, 1, 0), len: 1.6 }], 0xff6b6b);
+
+    // external B-field arrows (a row of parallel arrows)
+    const bVecs = [];
+    for (let i = -2; i <= 2; i++) {
+      for (let j = -1; j <= 1; j++) {
+        bVecs.push({ origin: new THREE.Vector3(i * 0.9, -1.6, j * 0.9), dir: new THREE.Vector3(0, 1, 0), len: 1.0 });
+      }
+    }
+    this.bArrow = addArrowField(bVecs, 0x7fd1ff);
+
+    // torque arrow
+    this.tArrow = addArrowField([{ origin: new THREE.Vector3(0, 0, 0), dir: new THREE.Vector3(1, 0, 0), len: 1.2 }], 0x9b5de5);
+
+    // faint reference axes
+    const axisMat = new THREE.LineBasicMaterial({ color: 0x334455 });
+    const axGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(-2.5, 0, 0), new THREE.Vector3(2.5, 0, 0)]);
+    g.add(new THREE.Line(axGeo, axisMat));
+
+    this.meshRefs = { g, loop, electron, mArrow: this.mArrow, bArrow: this.bArrow, tArrow: this.tArrow };
+    this._t = 0;
+  },
+
+  update() {
+    const st = this.state;
+    const B = st.B_mT * 1e-3;                 // tesla
+    const theta = st.loop_angle_deg * Math.PI / 180;
+
+    // material class -> mu_r and chi_m
+    let mu_r = 1.001, chi = 0.001, clsName = 'Paramagnetic';
+    if (st.cls_type.startsWith('Diamagnetic')) { mu_r = 0.9999; chi = -1e-4; clsName = 'Diamagnetic'; }
+    else if (st.cls_type.startsWith('Ferromagnetic')) { mu_r = 500; chi = 499; clsName = 'Ferromagnetic'; }
+
+    // effective field inside material (illustrative)
+    const B_eff = B * mu_r;
+
+    // dipole moment magnitude: use a fixed atomic-scale loop, A = pi r^2, I = e/(2 pi r / v)
+    const r = 1.0;                            // loop radius (visual units)
+    const A = Math.PI * r * r;
+    const I = 1.0;                            // illustrative current (A)
+    const m = I * A;                          // A*m^2
+
+    // torque magnitude |m x B| = m B sin(theta)
+    const torque = m * B_eff * Math.sin(theta);
+    // potential energy U = -m B cos(theta)
+    const U = -m * B_eff * Math.cos(theta);
+
+    // ---- 3D orientation ----
+    const mDir = new THREE.Vector3(Math.sin(theta), Math.cos(theta), 0);
+    const bDir = new THREE.Vector3(0, 1, 0);
+    const tDir = new THREE.Vector3().crossVectors(mDir, bDir).normalize();
+
+    this.meshRefs.mArrow.setVectors([{ origin: new THREE.Vector3(0, 0, 0), dir: mDir, len: 1.6 }]);
+    this.meshRefs.tArrow.setVectors([{ origin: new THREE.Vector3(0, 0, 0), dir: tDir, len: 1.2 }]);
+
+    // B arrows scale with field strength
+    const bLen = 0.6 + 0.8 * (st.B_mT / 100);
+    const bVecs = [];
+    for (let i = -2; i <= 2; i++) {
+      for (let j = -1; j <= 1; j++) {
+        bVecs.push({ origin: new THREE.Vector3(i * 0.9, -1.6, j * 0.9), dir: bDir, len: bLen });
+      }
+    }
+    this.meshRefs.bArrow.setVectors(bVecs);
+
+    // tilt the loop so its normal follows m
+    this.meshRefs.loop.rotation.set(0, 0, 0);
+    this.meshRefs.loop.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), mDir);
+
+    // ---- 2D chart ----
+    const W = chartEl.width, H = chartEl.height;
+    const ctx = chartEl.getContext('2d');
+    ctx.clearRect(0, 0, W, H);
+
+    const padL = 60, padR = 20, padT = 30, padB = 45;
+    const plotW = W - padL - padR, plotH = H - padT - padB;
+
+    // background
+    ctx.fillStyle = '#0b1220';
+    ctx.fillRect(0, 0, W, H);
+
+    // grid
+    ctx.strokeStyle = '#1e2a3a';
+    ctx.lineWidth = 1;
+    for (let i = 0; i <= 6; i++) {
+      const x = padL + (plotW * i) / 6;
+      ctx.beginPath(); ctx.moveTo(x, padT); ctx.lineTo(x, padT + plotH); ctx.stroke();
+    }
+    for (let i = 0; i <= 4; i++) {
+      const y = padT + (plotH * i) / 4;
+      ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(padL + plotW, y); ctx.stroke();
+    }
+
+    // axes
+    ctx.strokeStyle = '#4a5a70';
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(padL, padT); ctx.lineTo(padL, padT + plotH); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(padL, padT + plotH); ctx.lineTo(padL + plotW, padT + plotH); ctx.stroke();
+
+    // scale: U in [-mB, mB], torque in [0, mB]
+    const mB = m * B_eff;
+    const uMax = Math.max(mB, 1e-9);
+    const yU = (val) => padT + plotH / 2 - (val / uMax) * (plotH / 2);
+    const yT = (val) => padT + plotH - (val / uMax) * plotH;
+
+    // U_m curve (blue)
+    ctx.strokeStyle = '#4cc9f0';
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    for (let k = 0; k <= 180; k++) {
+      const th = k * Math.PI / 180;
+      const val = -mB * Math.cos(th);
+      const x = padL + (plotW * k) / 180;
+      const y = yU(val);
+      if (k === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // |T| curve (magenta)
+    ctx.strokeStyle = '#f72585';
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    for (let k = 0; k <= 180; k++) {
+      const th = k * Math.PI / 180;
+      const val = mB * Math.sin(th);
+      const x = padL + (plotW * k) / 180;
+      const y = yT(val);
+      if (k === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // current angle marker
+    const xc = padL + (plotW * st.loop_angle_deg) / 180;
+    ctx.strokeStyle = '#ffd166';
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([4, 4]);
+    ctx.beginPath(); ctx.moveTo(xc, padT); ctx.lineTo(xc, padT + plotH); ctx.stroke();
+    ctx.setLineDash([]);
+
+    // labels
+    ctx.fillStyle = '#9fb3c8';
+    ctx.font = '13px sans-serif';
+    ctx.fillText('U_m (blue)  |T| (magenta)', padL + 8, padT + 16);
+    ctx.fillText('theta (deg)', padL + plotW - 70, padT + plotH + 30);
+    ctx.save();
+    ctx.translate(18, padT + plotH / 2);
+    ctx.rotate(-Math.PI / 2);
+    ctx.fillText('energy / torque', -60, 0);
+    ctx.restore();
+
+    // tick labels
+    ctx.fillStyle = '#7d8fa3';
+    ctx.font = '11px sans-serif';
+    for (let k = 0; k <= 180; k += 30) {
+      const x = padL + (plotW * k) / 180;
+      ctx.fillText(String(k), x - 8, padT + plotH + 18);
+    }
+
+    // ---- HUD ----
+    setHud(
+      'Magnetic Dipoles & Material Classes',
+      '\\mathbf{m} = I A \\hat{\\mathbf{n}},\\quad \\mathbf{T} = \\mathbf{m}\\times\\mathbf{B},\\quad U_m = -\\mathbf{m}\\cdot\\mathbf{B}',
+      [
+        { k: '|m|', v: m.toFixed(3) + ' A·m²' },
+        { k: 'Torque', v: (torque * 1e6).toFixed(2) + ' µN·m' },
+        { k: 'Energy U_m', v: (U * 1e6).toFixed(2) + ' µJ' },
+        { k: 'Class', v: clsName + ' (µ_r = ' + mu_r + ')' }
+      ]
+    );
+  },
+
+  tick(dt) {
+    this._t += dt;
+    // animate the electron around the loop
+    const e = this.meshRefs.electron;
+    const ang = this._t * 2.0;
+    e.position.set(Math.cos(ang) * 1.0, 0, Math.sin(ang) * 1.0);
+    // apply loop quaternion to electron position
+    e.position.applyQuaternion(this.meshRefs.loop.quaternion);
+  },
+
+  lesson: `<p>A current loop of area <b>A</b> carrying current <b>I</b> has a magnetic dipole moment <b>m = I A n̂</b>. For an orbiting electron, <b>m_orb = −e L / (2 m_e)</b>, plus an intrinsic spin moment. In a uniform field <b>B</b>, the torque is <b>T = m × B</b> and the potential energy is <b>U_m = −m·B</b>. Torque is maximal at 90° (|T| = mB) and zero at 0° and 180°, while U_m is minimized when m aligns with B (θ = 0) and maximized when anti-aligned (θ = 180°).</p>
+<p>Magnetic materials respond via the susceptibility χ_m and relative permeability μ_r = 1 + χ_m. Diamagnets have χ_m &lt; 0 (μ_r slightly below 1), paramagnets have χ_m &gt; 0 (μ_r slightly above 1), and ferromagnets have χ_m ≫ 1 with μ_r reaching 10⁴–10⁵. The internal field is enhanced by μ_r, so the same applied B produces a much larger torque and energy in a ferromagnetic medium.</p>`,
+
+  quiz: [
+    { q: 'The magnetic dipole moment of a current loop is given by:', options: ['m = I/A', 'm = I A n̂', 'm = B A', 'm = I B'], answer: 1 },
+    { q: 'The torque on a magnetic dipole in a uniform field is:', options: ['T = m·B', 'T = m × B', 'T = B × m / |m|', 'T = −m·B'], answer: 1 },
+    { q: 'Which material class has μ_r slightly less than 1?', options: ['Ferromagnetic', 'Paramagnetic', 'Diamagnetic', 'Non-magnetic'], answer: 2 }
+  ]
+});
 /* === UI CONTROLLER === */
     const modSelect = document.getElementById('modSelect');
     const controlsHost = document.getElementById('controlsHost');
