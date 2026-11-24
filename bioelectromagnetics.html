@@ -1,0 +1,2351 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Chapter 9: Bioelectromagnetics — Kraus &amp; Fleisch, Electromagnetics with Applications</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" />
+<style>
+  :root{
+    --bg:#0b1016; --panel:#121a24; --panel2:#0f1620; --line:#22303f;
+    --ink:#dbe7f3; --dim:#8fa3b8; --accent:#7fd1ff; --accent2:#ffb86b;
+    --good:#5fd38d; --bad:#ff6b6b;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);
+    font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+  #app{display:grid;grid-template-columns:300px 1fr 340px;height:100vh;overflow:hidden}
+  /* ---------- LEFT SIDEBAR ---------- */
+  #sidebar{background:var(--panel);border-right:1px solid var(--line);
+    display:flex;flex-direction:column;overflow:hidden}
+  #brand{padding:14px 16px;border-bottom:1px solid var(--line)}
+  #brand h1{margin:0;font-size:14px;letter-spacing:.06em;text-transform:uppercase;color:var(--accent)}
+  #brand p{margin:6px 0 0;font-size:11.5px;color:var(--dim);line-height:1.45}
+  #moduleList{flex:1;overflow-y:auto;padding:8px}
+  .modBtn{display:block;width:100%;text-align:left;background:var(--panel2);
+    border:1px solid var(--line);color:var(--ink);border-radius:8px;
+    padding:9px 11px;margin:6px 0;font-size:12.5px;cursor:pointer;transition:.15s}
+  .modBtn:hover{border-color:var(--accent);color:#fff}
+  .modBtn.active{background:#16324a;border-color:var(--accent);color:#fff}
+  .modBtn .num{color:var(--accent2);font-weight:700;margin-right:6px}
+  /* ---------- CENTER STAGE ---------- */
+  #stage{position:relative;display:flex;flex-direction:column;min-width:0}
+  #glWrap{flex:1;min-height:0;position:relative}
+  #glWrap canvas{display:block;width:100%;height:100%}
+  #chartWrap{height:190px;border-top:1px solid var(--line);background:var(--panel2)}
+  #chartEl{display:block;width:100%;height:100%}
+  #titleBar{padding:10px 16px;border-bottom:1px solid var(--line);
+    font-size:13px;color:var(--dim);display:flex;justify-content:space-between;gap:12px}
+  #titleBar b{color:var(--ink)}
+  /* ---------- RIGHT PANEL ---------- */
+  #right{background:var(--panel);border-left:1px solid var(--line);
+    display:flex;flex-direction:column;overflow-y:auto}
+  .sec{padding:12px 14px;border-bottom:1px solid var(--line)}
+  .sec h2{margin:0 0 8px;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--accent)}
+  /* controls */
+  .ctl{margin:10px 0}
+  .ctl label{display:block;font-size:11.5px;color:var(--dim);margin-bottom:5px}
+  .ctl input[type=range]{width:100%;accent-color:var(--accent)}
+  .ctl select{width:100%;background:var(--panel2);color:var(--ink);
+    border:1px solid var(--line);border-radius:6px;padding:6px 8px;font-size:12px}
+  .ctl .chk{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--ink)}
+  .ctl .val{float:right;color:var(--accent2);font-variant-numeric:tabular-nums}
+  /* HUD */
+  #hudTitle{font-size:12.5px;color:var(--ink);margin-bottom:8px}
+  #hudEq{font-size:13px;color:var(--accent);margin-bottom:10px;overflow-x:auto}
+  #hudRows{display:grid;grid-template-columns:1fr auto;gap:4px 10px;font-size:12px}
+  #hudRows .k{color:var(--dim)}
+  #hudRows .v{color:var(--ink);font-variant-numeric:tabular-nums;text-align:right}
+  /* lesson */
+  #lesson{font-size:12.5px;line-height:1.55;color:var(--ink)}
+  #lesson p{margin:0 0 8px}
+  #lesson code{background:#0a1219;padding:1px 4px;border-radius:4px;color:var(--accent2)}
+  /* quiz */
+  .q{margin:12px 0}
+  .q .qt{font-size:12.5px;margin-bottom:7px}
+  .q .opt{display:block;width:100%;text-align:left;background:var(--panel2);
+    border:1px solid var(--line);color:var(--ink);border-radius:6px;
+    padding:7px 9px;margin:4px 0;font-size:12px;cursor:pointer}
+  .q .opt:hover{border-color:var(--accent)}
+  .q .opt.right{background:#123a26;border-color:var(--good)}
+  .q .opt.wrong{background:#3a1616;border-color:var(--bad)}
+  #quizScore{font-size:12px;color:var(--dim);margin-top:6px}
+  /* misc */
+  .hint{font-size:11px;color:var(--dim);margin-top:6px}
+  #err{position:absolute;left:12px;bottom:12px;background:#3a1616;color:#ffd7d7;
+    border:1px solid var(--bad);border-radius:6px;padding:8px 10px;font-size:12px;display:none}
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- ================= LEFT SIDEBAR ================= -->
+  <aside id="sidebar">
+    <div id="brand">
+      <h1>Chapter 9 · Bioelectromagnetics</h1>
+      <p>John D. Kraus &amp; Daniel A. Fleisch<br/><em>Electromagnetics with Applications</em></p>
+    </div>
+    <nav id="moduleList"></nav>
+  </aside>
+
+  <!-- ================= CENTER STAGE ================= -->
+  <main id="stage">
+    <div id="titleBar"><span id="modTitle">Loading…</span><span id="modId"></span></div>
+    <div id="glWrap"></div>
+    <div id="chartWrap"><canvas id="chartEl"></canvas></div>
+    <div id="err"></div>
+  </main>
+
+  <!-- ================= RIGHT PANEL ================= -->
+  <aside id="right">
+    <section class="sec">
+      <h2>Controls</h2>
+      <div id="controls"></div>
+    </section>
+    <section class="sec">
+      <h2>HUD</h2>
+      <div id="hudTitle"></div>
+      <div id="hudEq"></div>
+      <div id="hudRows"></div>
+    </section>
+    <section class="sec">
+      <h2>Lesson</h2>
+      <div id="lesson"></div>
+    </section>
+    <section class="sec">
+      <h2>Quiz</h2>
+      <div id="quiz"></div>
+      <div id="quizScore"></div>
+    </section>
+  </aside>
+</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+/* ============================================================
+   GLOBAL HARNESS
+   ============================================================ */
+const glWrap   = document.getElementById('glWrap');
+const chartEl  = document.getElementById('chartEl');
+const chartCtx = chartEl.getContext('2d');
+
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setSize(glWrap.clientWidth, glWrap.clientHeight);
+renderer.setClearColor(0x0b1016, 1);
+glWrap.appendChild(renderer.domElement);
+
+const scene  = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(45, glWrap.clientWidth / glWrap.clientHeight, 0.1, 500);
+camera.position.set(6, 5, 9);
+
+const controls3D = new OrbitControls(camera, renderer.domElement);
+controls3D.enableDamping = true;
+controls3D.dampingFactor = 0.08;
+controls3D.target.set(0, 0, 0);
+
+scene.add(new THREE.AmbientLight(0x9fb6cc, 0.75));
+const keyLight = new THREE.DirectionalLight(0xffffff, 1.15);
+keyLight.position.set(8, 12, 6);
+scene.add(keyLight);
+const rimLight = new THREE.DirectionalLight(0x7fd1ff, 0.55);
+rimLight.position.set(-8, -4, -6);
+scene.add(rimLight);
+
+/* Grid floor (visual reference only) */
+const grid = new THREE.GridHelper(20, 20, 0x22303f, 0x182430);
+grid.position.y = -2.2;
+scene.add(grid);
+
+/* The per-module content group. Cleared on every module switch. */
+const content = new THREE.Group();
+scene.add(content);
+
+/* ---------- helpers exposed to modules ---------- */
+function addArrowField(vectors, color = 0x7fd1ff) {
+  const group = new THREE.Group();
+  const mat = new THREE.MeshBasicMaterial({ color });
+  for (const v of vectors) {
+    if (!v || !v.origin || !v.dir) continue;
+    const dir = v.dir.clone();
+    const len = (typeof v.len === 'number' && isFinite(v.len) && v.len > 0) ? v.len : dir.length();
+    if (dir.lengthSq() < 1e-12) continue;
+    dir.normalize();
+    const shaftLen = Math.max(len * 0.82, 1e-3);
+    const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, shaftLen, 8), mat);
+    shaft.position.copy(v.origin).addScaledVector(dir, shaftLen / 2);
+    shaft.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
+    group.add(shaft);
+    const head = new THREE.Mesh(new THREE.ConeGeometry(0.09, Math.max(len * 0.18, 1e-3), 10), mat);
+    head.position.copy(v.origin).addScaledVector(dir, shaftLen + len * 0.09);
+    head.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
+    group.add(head);
+  }
+  group.setVectors = function(nextVecs) {
+    while (group.children.length) {
+      const c = group.children[0];
+      if (c.geometry) c.geometry.dispose();
+      group.remove(c);
+    }
+    for (const v of (nextVecs || [])) {
+      if (!v || !v.origin || !v.dir) continue;
+      const dir = v.dir.clone();
+      const len = (typeof v.len === 'number' && isFinite(v.len) && v.len > 0) ? v.len : dir.length();
+      if (dir.lengthSq() < 1e-12) continue;
+      dir.normalize();
+      const shaftLen = Math.max(len * 0.82, 1e-3);
+      const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, shaftLen, 8), mat);
+      shaft.position.copy(v.origin).addScaledVector(dir, shaftLen / 2);
+      shaft.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
+      group.add(shaft);
+      const head = new THREE.Mesh(new THREE.ConeGeometry(0.09, Math.max(len * 0.18, 1e-3), 10), mat);
+      head.position.copy(v.origin).addScaledVector(dir, shaftLen + len * 0.09);
+      head.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
+      group.add(head);
+    }
+  };
+  content.add(group);
+  return group;
+}
+
+function setHud(titleStr, latexEqStr, rows) {
+  document.getElementById('hudTitle').textContent = titleStr || '';
+  const eqEl = document.getElementById('hudEq');
+  eqEl.textContent = '';
+  if (latexEqStr) {
+    if (window.katex && typeof window.katex.render === 'function') {
+      try {
+        window.katex.render(latexEqStr, eqEl, { throwOnError: false, displayMode: true });
+      } catch (e) {
+        eqEl.textContent = latexEqStr;
+      }
+    } else {
+      eqEl.textContent = latexEqStr;
+    }
+  }
+  const rowsEl = document.getElementById('hudRows');
+  rowsEl.innerHTML = '';
+  if (Array.isArray(rows)) {
+    for (const r of rows) {
+      if (!r) continue;
+      const k = document.createElement('div'); k.className = 'k'; k.textContent = r.k ?? '';
+      const v = document.createElement('div'); v.className = 'v'; v.textContent = r.v ?? '';
+      rowsEl.appendChild(k); rowsEl.appendChild(v);
+    }
+  }
+}
+
+/* ---------- recursive disposal (guardrail #1) ---------- */
+function disposeNode(node) {
+  if (!node) return;
+  if (node.children && node.children.length) {
+    for (const child of node.children.slice()) disposeNode(child);
+  }
+  if (node.geometry) {
+    try { node.geometry.dispose(); } catch (e) { /* ignore */ }
+  }
+  if (node.material) {
+    const mats = Array.isArray(node.material) ? node.material : [node.material];
+    for (const m of mats) {
+      if (!m) continue;
+      for (const key of Object.keys(m)) {
+        const val = m[key];
+        if (val && typeof val === 'object' && typeof val.dispose === 'function') {
+          try { val.dispose(); } catch (e) { /* ignore */ }
+        }
+      }
+      try { m.dispose(); } catch (e) { /* ignore */ }
+    }
+  }
+}
+
+/* ============================================================
+   MODULE REGISTRY
+   ============================================================ */
+const modules = [];
+
+modules.push({
+  id: 'm9_1_introduction',
+  title: '1. Introduction to Bioelectromagnetics',
+  controls: [
+    { id: 'sigma', label: 'Tissue conductivity sigma (S/m)', type: 'range', min: 0.01, max: 1.5, step: 0.01, value: 0.5 },
+    { id: 'freq', label: 'Frequency f (Hz)', type: 'range', min: 1, max: 1000, step: 1, value: 60 },
+    { id: 'current', label: 'Applied current I (mA)', type: 'range', min: 0.1, max: 50, step: 0.1, value: 5 },
+    { id: 'tissue', label: 'Tissue type', type: 'select', options: [
+      { value: 'nerve', label: 'Nerve' },
+      { value: 'muscle', label: 'Muscle' },
+      { value: 'blood', label: 'Blood' },
+      { value: 'fat', label: 'Fat' }
+    ], value: 'nerve' }
+  ],
+
+  build() {
+    const st = this.state;
+    const MU0 = 4 * Math.PI * 1e-7;
+
+    // Tissue slab
+    const slab = new THREE.Mesh(
+      new THREE.BoxGeometry(6, 0.6, 4),
+      new THREE.MeshStandardMaterial({ color: 0x2a4a63, transparent: true, opacity: 0.35, roughness: 0.6, metalness: 0.1 })
+    );
+    slab.position.set(0, 0, 0);
+    content.add(slab);
+    this.slab = slab;
+
+    // Electrode pair (thin cylinders) at x = -2.2 and x = +2.2
+    const elecMat = new THREE.MeshStandardMaterial({ color: 0xd9b45a, metalness: 0.8, roughness: 0.3 });
+    const elecGeo = new THREE.CylinderGeometry(0.09, 0.09, 1.4, 16);
+    const e1 = new THREE.Mesh(elecGeo, elecMat);
+    e1.position.set(-2.2, 0.35, 0);
+    const e2 = new THREE.Mesh(elecGeo, elecMat);
+    e2.position.set(2.2, 0.35, 0);
+    content.add(e1, e2);
+    this.e1 = e1; this.e2 = e2;
+
+    // Current arrow between electrodes
+    const curArrow = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.05, 0.05, 3.4, 12),
+      new THREE.MeshStandardMaterial({ color: 0xff8a3d, emissive: 0x552200 })
+    );
+    curArrow.rotation.z = Math.PI / 2;
+    curArrow.position.set(0, 0.55, 0);
+    content.add(curArrow);
+    this.curArrow = curArrow;
+
+    // Cell sphere at center
+    const cell = new THREE.Mesh(
+      new THREE.SphereGeometry(0.28, 24, 16),
+      new THREE.MeshStandardMaterial({ color: 0x7fd1ff, emissive: 0x1a4a66, transparent: true, opacity: 0.85 })
+    );
+    cell.position.set(0, 0.05, 0);
+    content.add(cell);
+    this.cell = cell;
+
+    // Uniform E-field arrow grid across slab (5 x 3, pointing +x)
+    const vecs = [];
+    for (let i = 0; i < 5; i++) {
+      for (let j = 0; j < 3; j++) {
+        const x = -2.0 + i * 1.0;
+        const z = -1.2 + j * 1.2;
+        vecs.push({ origin: new THREE.Vector3(x, 0.32, z), dir: new THREE.Vector3(1, 0, 0), len: 0.55 });
+      }
+    }
+    addArrowField(vecs, 0x7fd1ff);
+    this.fieldArrows = vecs;
+
+    // Chart setup
+    this.chartCtx = chartEl.getContext('2d');
+    this.chartW = chartEl.width;
+    this.chartH = chartEl.height;
+  },
+
+  update() {
+    const st = this.state;
+    const MU0 = 4 * Math.PI * 1e-7;
+
+    // Tissue presets
+    const presets = { nerve: 0.5, muscle: 0.4, blood: 0.7, fat: 0.03 };
+    if (st.tissue && presets[st.tissue] !== undefined) {
+      st.sigma = presets[st.tissue];
+    }
+
+    const sigma = Math.max(1e-6, st.sigma);
+    const f = Math.max(1e-6, st.freq);
+    const I = st.current * 1e-3; // A
+
+    const omega = 2 * Math.PI * f;
+    const den = (Math.abs(omega * MU0 * sigma) < 1e-12 || !isFinite(omega * MU0 * sigma)) ? 1e-12 : omega * MU0 * sigma;
+    const delta = Math.sqrt(2 / den);
+
+    // Current density: assume electrode area A = 0.01 m^2
+    const A = 0.01;
+    const J = I / A; // A/m^2
+    const E = J / sigma; // V/m  (E = rho*J = J/sigma)
+    const B1cm = MU0 * I / (2 * Math.PI * 0.01); // T at r = 1 cm
+
+    // Update electrode glow / current arrow scale
+    if (this.curArrow) {
+      const s = 0.6 + 0.8 * (st.current / 50);
+      this.curArrow.scale.set(1, s, 1);
+    }
+    if (this.cell) {
+      this.cell.material.opacity = 0.55 + 0.35 * Math.min(1, sigma / 1.5);
+    }
+
+    // HUD
+    setHud(
+      'Tissue field & skin depth',
+      '\\delta = \\sqrt{\\frac{2}{\\omega \\mu_0 \\sigma}}',
+      [
+        { k: 'sigma', v: sigma.toFixed(3) + ' S/m' },
+        { k: 'f', v: f.toFixed(0) + ' Hz' },
+        { k: 'delta', v: delta.toFixed(4) + ' m' },
+        { k: 'J', v: J.toFixed(2) + ' A/m²' },
+        { k: 'E', v: E.toFixed(3) + ' V/m' },
+        { k: 'B @1cm', v: (B1cm * 1e6).toFixed(2) + ' µT' }
+      ]
+    );
+
+    // Draw chart
+    this.drawChart(sigma, f, delta);
+  },
+
+  drawChart(sigma, f, delta) {
+    const ctx = this.chartCtx;
+    const W = this.chartW, H = this.chartH;
+    const MU0 = 4 * Math.PI * 1e-7;
+
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = '#0b1420';
+    ctx.fillRect(0, 0, W, H);
+
+    const padL = 60, padR = 24, padT = 28, padB = 46;
+    const plotW = W - padL - padR;
+    const plotH = H - padT - padB;
+
+    // Log-x axis: f from 1 to 1000 Hz
+    const fMin = 1, fMax = 1000;
+    const logMin = Math.log10(fMin), logMax = Math.log10(fMax);
+
+    // Compute delta range for y-axis (log scale)
+    const dAtMin = Math.sqrt(2 / (2 * Math.PI * fMin * MU0 * sigma));
+    const dAtMax = Math.sqrt(2 / (2 * Math.PI * fMax * MU0 * sigma));
+    const yMin = Math.min(dAtMax, dAtMin) * 0.8;
+    const yMax = Math.max(dAtMax, dAtMin) * 1.2;
+    const logYMin = Math.log10(yMin), logYMax = Math.log10(yMax);
+
+    const xOf = (fv) => padL + (Math.log10(fv) - logMin) / (logMax - logMin) * plotW;
+    const yOf = (dv) => padT + plotH - (Math.log10(dv) - logYMin) / (logYMax - logYMin) * plotH;
+
+    // Gridlines
+    ctx.strokeStyle = '#1e3346';
+    ctx.lineWidth = 1;
+    for (let e = 0; e <= 3; e++) {
+      const fv = Math.pow(10, logMin + e * (logMax - logMin) / 3);
+      const x = xOf(fv);
+      ctx.beginPath(); ctx.moveTo(x, padT); ctx.lineTo(x, padT + plotH); ctx.stroke();
+      ctx.fillStyle = '#8fb6d6';
+      ctx.font = '11px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText(fv.toFixed(0), x, padT + plotH + 18);
+    }
+    for (let e = 0; e <= 4; e++) {
+      const dv = Math.pow(10, logYMin + e * (logYMax - logYMin) / 4);
+      const y = yOf(dv);
+      ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(padL + plotW, y); ctx.stroke();
+      ctx.fillStyle = '#8fb6d6';
+      ctx.textAlign = 'right';
+      ctx.fillText(dv.toFixed(3), padL - 8, y + 4);
+    }
+
+    // Axes
+    ctx.strokeStyle = '#4a7fa5';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(padL, padT); ctx.lineTo(padL, padT + plotH); ctx.lineTo(padL + plotW, padT + plotH); ctx.stroke();
+
+    // Curve
+    ctx.strokeStyle = '#7fd1ff';
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    let guard = 0;
+    for (let i = 0; i <= 200 && guard++ < 400; i++) {
+      const t = i / 200;
+      const fv = Math.pow(10, logMin + t * (logMax - logMin));
+      const den = (Math.abs(2 * Math.PI * fv * MU0 * sigma) < 1e-12) ? 1e-12 : 2 * Math.PI * fv * MU0 * sigma;
+      const dv = Math.sqrt(2 / den);
+      const x = xOf(fv), y = yOf(dv);
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // Current operating point
+    const cx = xOf(Math.min(fMax, Math.max(fMin, f)));
+    const cy = yOf(Math.min(yMax, Math.max(yMin, delta)));
+    ctx.fillStyle = '#ff8a3d';
+    ctx.beginPath(); ctx.arc(cx, cy, 5, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = '#ff8a3d';
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(cx, padT + plotH); ctx.stroke();
+
+    // Labels
+    ctx.fillStyle = '#cfe6f7';
+    ctx.font = '12px monospace';
+    ctx.textAlign = 'left';
+    ctx.fillText('skin depth δ (m) vs f (Hz)', padL, padT - 8);
+    ctx.fillStyle = '#ff8a3d';
+    ctx.textAlign = 'center';
+    ctx.fillText('δ = ' + delta.toFixed(4) + ' m', cx, cy - 10);
+  },
+
+  tick(dt) {
+    // Lightweight animation only: gentle pulse of the cell and current arrow
+    this._phase = (this._phase || 0) + dt * 1.6;
+    if (this.cell) {
+      const s = 1 + 0.06 * Math.sin(this._phase);
+      this.cell.scale.set(s, s, s);
+    }
+    if (this.curArrow) {
+      this.curArrow.material.emissiveIntensity = 0.6 + 0.4 * Math.sin(this._phase * 1.3);
+    }
+  },
+
+  lesson: `Bioelectromagnetics studies how electric and magnetic fields interact with living tissue.
+
+Ohm's law in tissue: E = ρ J, where ρ is tissue resistivity (Ω·m) and J is current density (A/m²). Equivalently J = σ E with conductivity σ = 1/ρ. Typical conductivities: blood ≈ 0.7 S/m, nerve ≈ 0.5 S/m, muscle ≈ 0.3–0.5 S/m, fat ≈ 0.03 S/m. Fat is the poorest conductor, which is why it attenuates current flow strongly.
+
+Current density from an applied current: J = I / A. The magnetic flux density around a current-carrying conductor follows B = μ₀ I / (2π r). Faraday's law gives induced EMF: emf = −dΦ/dt = −A dB/dt.
+
+At radio frequencies, fields do not penetrate tissue uniformly. The skin depth δ = √(2 / (ω μ₀ σ)) sets the depth at which the field falls to 1/e. Higher frequency or higher conductivity both reduce δ, so RF energy is absorbed near the surface.
+
+Below roughly 1 kHz, tissue dimensions are much smaller than the electromagnetic wavelength, so the quasi-static approximation holds: fields are essentially instantaneous and the body can be treated as a resistive volume conductor.`,
+
+  quiz: [
+    {
+      q: 'Which tissue type has the lowest electrical conductivity?',
+      options: ['Nerve', 'Muscle', 'Blood', 'Fat'],
+      answer: 3
+    },
+    {
+      q: 'As frequency increases, the skin depth δ in tissue:',
+      options: ['Increases', 'Decreases', 'Stays constant', 'Becomes zero'],
+      answer: 1
+    }
+  ]
+});
+modules.push({
+  id: 'm9_2_axon',
+  title: '2. The Axon: An Active, Lossless, Shielded, Noiseless Transmission Line',
+  controls: [
+    { id: 'radius', label: 'Axon radius a (um)', type: 'range', min: 0.5, max: 10, step: 0.1, value: 3 },
+    { id: 'myelin', label: 'Myelin sheath thickness d (nm)', type: 'range', min: 1, max: 30, step: 1, value: 10 },
+    { id: 'rhoA', label: 'Axoplasm resistivity (ohm-m)', type: 'range', min: 0.5, max: 5, step: 0.1, value: 1.5 },
+    { id: 'myelinated', label: 'Myelinated', type: 'check', value: true }
+  ],
+
+  build() {
+    this.state = { radius: 3, myelin: 10, rhoA: 1.5, myelinated: true };
+    this.phase = 0;
+    this.group = new THREE.Group();
+    content.add(this.group);
+
+    // axon core
+    this.axonMat = new THREE.MeshStandardMaterial({
+      color: 0xd9b38c, roughness: 0.55, metalness: 0.05
+    });
+    this.axon = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 12, 32, 1, false), this.axonMat);
+    this.axon.rotation.z = Math.PI / 2;
+    this.group.add(this.axon);
+
+    // myelin sheath (translucent)
+    this.myelinMat = new THREE.MeshStandardMaterial({
+      color: 0x9fd8ff, roughness: 0.25, metalness: 0.1,
+      transparent: true, opacity: 0.32, side: THREE.DoubleSide
+    });
+    this.sheath = new THREE.Mesh(new THREE.CylinderGeometry(1.35, 1.35, 12, 32, 1, true), this.myelinMat);
+    this.sheath.rotation.z = Math.PI / 2;
+    this.group.add(this.sheath);
+
+    // nodes of Ranvier rings
+    this.nodes = [];
+    const nodeMat = new THREE.MeshStandardMaterial({ color: 0xffd166, roughness: 0.4, metalness: 0.3 });
+    for (let i = 0; i < 7; i++) {
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(1.05, 0.055, 10, 24), nodeMat);
+      ring.rotation.y = Math.PI / 2;
+      ring.position.x = -5.4 + i * 1.8;
+      this.group.add(ring);
+      this.nodes.push(ring);
+    }
+
+    // traveling voltage pulse
+    this.pulseMat = new THREE.MeshStandardMaterial({
+      color: 0x66ffcc, emissive: 0x33ffaa, emissiveIntensity: 1.6, roughness: 0.2
+    });
+    this.pulse = new THREE.Mesh(new THREE.SphereGeometry(0.28, 20, 16), this.pulseMat);
+    this.pulse.position.set(-5.5, 0, 0);
+    this.group.add(this.pulse);
+
+    // pulse glow halo
+    this.haloMat = new THREE.MeshBasicMaterial({
+      color: 0x66ffcc, transparent: true, opacity: 0.22, side: THREE.DoubleSide
+    });
+    this.halo = new THREE.Mesh(new THREE.SphereGeometry(0.55, 20, 16), this.haloMat);
+    this.halo.position.copy(this.pulse.position);
+    this.group.add(this.halo);
+
+    // axis line
+    const axisGeo = new THREE.BufferGeometry().setFromPoints([
+      new THREE.Vector3(-6.2, 0, 0), new THREE.Vector3(6.2, 0, 0)
+    ]);
+    this.group.add(new THREE.Line(axisGeo, new THREE.LineBasicMaterial({ color: 0x445566 })));
+
+    // directional arrows along axon
+    addArrowField([
+      { origin: new THREE.Vector3(-5.0, 1.5, 0), dir: new THREE.Vector3(1, 0, 0), len: 1.2 },
+      { origin: new THREE.Vector3(-1.0, 1.5, 0), dir: new THREE.Vector3(1, 0, 0), len: 1.2 },
+      { origin: new THREE.Vector3(3.0, 1.5, 0), dir: new THREE.Vector3(1, 0, 0), len: 1.2 }
+    ], 0x7fd1ff);
+
+    this.update();
+  },
+
+  update() {
+    const st = this.state;
+    const a = Math.max(0.5, st.radius) * 1e-6;          // m
+    const d = Math.max(1, st.myelin) * 1e-9;            // m
+    const rhoA = Math.max(0.5, st.rhoA);                // ohm-m
+    const epsM = 5.0e-11;                               // F/m membrane permittivity
+    const rhoM = 1.0e7;                                 // ohm-m membrane resistivity
+
+    const Cm = (2 * Math.PI * a * epsM) / Math.max(d, 1e-12);
+    const Ra = rhoA / (Math.PI * a * a);
+    const Rm = rhoM / (2 * Math.PI * a);
+
+    const lam = Math.sqrt(Rm / Math.max(Ra, 1e-12));
+    const tau = Rm * Cm;
+
+    // effective lambda with myelin: sheath adds series membrane resistance
+    const myelinFactor = st.myelinated ? (1 + (d / 1e-9) * 0.55) : 1;
+    const lamEff = lam * Math.sqrt(myelinFactor);
+
+    // propagation estimate (m/s) — unmyelinated ~ sqrt(d), myelinated ~ d
+    const vUnmy = 1.1 * Math.sqrt(a * 1e6) * 1e-3;
+    const vMy = st.myelinated ? 6.0 * (a * 1e6) * 1e-3 : vUnmy;
+    const v = st.myelinated ? vMy : vUnmy;
+
+    // 3D scaling
+    const rScale = Math.max(0.35, Math.min(1.6, st.radius / 3));
+    this.axon.scale.set(rScale, 1, rScale);
+    this.sheath.scale.set(rScale * 1.35, 1, rScale * 1.35);
+    this.sheath.visible = st.myelinated;
+    this.myelinMat.opacity = st.myelinated ? 0.32 : 0.0;
+    this.nodes.forEach(n => {
+      n.visible = st.myelinated;
+      n.scale.set(rScale, rScale, rScale);
+    });
+
+    // 2D chart: V(x) = V0 exp(-|x|/lambda)
+    const ctx = chartEl.getContext('2d');
+    const W = chartEl.width, H = chartEl.height;
+    ctx.clearRect(0, 0, W, H);
+
+    // background
+    ctx.fillStyle = '#0b1220';
+    ctx.fillRect(0, 0, W, H);
+
+    // grid
+    ctx.strokeStyle = '#1e2a3a';
+    ctx.lineWidth = 1;
+    for (let i = 0; i <= 10; i++) {
+      const x = (i / 10) * W;
+      ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke();
+    }
+    for (let i = 0; i <= 6; i++) {
+      const y = (i / 6) * H;
+      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+    }
+
+    // axes
+    ctx.strokeStyle = '#5b6b80';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(0, H * 0.5); ctx.lineTo(W, H * 0.5); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(W * 0.5, 0); ctx.lineTo(W * 0.5, H); ctx.stroke();
+
+    // helper to draw curve
+    const drawCurve = (lamVal, color, label) => {
+      const L = Math.max(lamVal, 1e-9);
+      const xMax = 6.0 * L;
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      const N = 220;
+      for (let i = 0; i <= N; i++) {
+        const x = -xMax + (2 * xMax) * (i / N);
+        const V = Math.exp(-Math.abs(x) / L);
+        const px = W * 0.5 + (x / xMax) * (W * 0.45);
+        const py = H * 0.5 - V * (H * 0.38);
+        if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+      }
+      ctx.stroke();
+
+      // label
+      ctx.fillStyle = color;
+      ctx.font = '13px sans-serif';
+      ctx.fillText(label, W * 0.62, H * 0.18);
+    };
+
+    drawCurve(lam, '#7fd1ff', 'unmyelinated  lambda = ' + lam.toExponential(2) + ' m');
+    if (st.myelinated) {
+      drawCurve(lamEff, '#ffd166', 'myelinated  lambda_eff = ' + lamEff.toExponential(2) + ' m');
+    }
+
+    // title on chart
+    ctx.fillStyle = '#cfe3ff';
+    ctx.font = 'bold 15px sans-serif';
+    ctx.fillText('Membrane voltage V(x) = V0 exp(-|x|/lambda)', 14, 24);
+
+    // HUD
+    setHud(
+      'Cable equation & axon parameters',
+      '\\lambda^2 \\frac{\\partial^2 V}{\\partial x^2} = \\tau \\frac{\\partial V}{\\partial t} + V',
+      [
+        { k: 'lambda (m)', v: lam.toExponential(3) },
+        { k: 'lambda_eff (m)', v: lamEff.toExponential(3) },
+        { k: 'tau (s)', v: tau.toExponential(3) },
+        { k: 'C_m (F/m)', v: Cm.toExponential(3) },
+        { k: 'R_a (ohm/m)', v: Ra.toExponential(3) },
+        { k: 'R_m (ohm-m)', v: Rm.toExponential(3) },
+        { k: 'v estimate (m/s)', v: v.toExponential(2) }
+      ]
+    );
+  },
+
+  tick(dt) {
+    // phase accumulator only — no update() call
+    this.phase += dt * 0.9;
+    const span = 11.0;
+    const x = -5.5 + ((this.phase % 1.0) * span);
+    this.pulse.position.x = x;
+    this.halo.position.x = x;
+    const s = 1.0 + 0.18 * Math.sin(this.phase * 6.0);
+    this.pulse.scale.setScalar(s);
+    this.halo.scale.setScalar(s * 1.1);
+    this.haloMat.opacity = 0.18 + 0.10 * Math.sin(this.phase * 6.0);
+    this.pulseMat.emissiveIntensity = 1.3 + 0.5 * Math.sin(this.phase * 6.0);
+  },
+
+  lesson: `The axon is a leaky coaxial cable. Current flows longitudinally through the axoplasm (resistance per unit length R_a = rho_a / (pi a^2)) and leaks radially through the membrane (R_m = rho_m / (2 pi a)). The membrane stores charge with capacitance per unit length C_m = 2 pi a eps_m / d. Combining Kirchhoff laws gives the cable equation lambda^2 d2V/dx2 = tau dV/dt + V, where lambda = sqrt(R_m/R_a) is the length constant and tau = R_m C_m is the membrane time constant. A point source produces V(x) = V0 exp(-|x|/lambda), so signals decay over a distance lambda. Myelin wraps the axon in many layers of lipid, greatly increasing effective membrane resistance and reducing capacitance; this raises lambda and speeds conduction. In myelinated fibers the action potential jumps between nodes of Ranvier — saltatory conduction — which is faster and metabolically cheaper. The cable equation is diffusion-like: it spreads voltage in space while relaxing it in time.`
+
+  ,
+  quiz: [
+    {
+      q: 'Why does myelination increase the length constant lambda?',
+      options: [
+        'It raises the effective membrane resistance R_m, so lambda = sqrt(R_m/R_a) grows.',
+        'It lowers the axoplasmic resistance R_a, so lambda shrinks.',
+        'It increases membrane capacitance C_m, which directly raises lambda.',
+        'It removes the nodes of Ranvier, making the cable infinite.'
+      ],
+      answer: 0
+    },
+    {
+      q: 'The cable equation lambda^2 d2V/dx2 = tau dV/dt + V is best described as:',
+      options: [
+        'A diffusion-like equation with a relaxation term.',
+        'A purely wave equation with no damping.',
+        'An algebraic Ohm law with no spatial derivatives.',
+        'A quantum Schrodinger equation for ions.'
+      ],
+      answer: 0
+    }
+  ]
+});
+modules.push({
+  id: 'm9_3_retinal_fibers',
+  title: '3. Retinal Optic Fibers',
+  controls: [
+    { id: 'nCore', label: 'Core index n_core', type: 'range', min: 1.30, max: 1.60, step: 0.01, value: 1.45 },
+    { id: 'nClad', label: 'Cladding index n_clad', type: 'range', min: 1.30, max: 1.60, step: 0.01, value: 1.38 },
+    { id: 'radius', label: 'Fiber radius a (um)', type: 'range', min: 1, max: 20, step: 0.5, value: 5 },
+    { id: 'wavelength', label: 'Wavelength (nm)', type: 'range', min: 400, max: 900, step: 10, value: 550 }
+  ],
+
+  build() {
+    this.group = new THREE.Group();
+    content.add(this.group);
+
+    // translucent outer cladding cylinder
+    const cladGeo = new THREE.CylinderGeometry(1.55, 1.55, 6, 40, 1, true);
+    const cladMat = new THREE.MeshPhysicalMaterial({
+      color: 0x9fd8ff, transparent: true, opacity: 0.16,
+      roughness: 0.25, metalness: 0.0, side: THREE.DoubleSide,
+      transmission: 0.6, depthWrite: false
+    });
+    this.clad = new THREE.Mesh(cladGeo, cladMat);
+    this.clad.rotation.x = Math.PI / 2;
+    this.group.add(this.clad);
+
+    // 7 hexagonal-packed fiber cores
+    this.cores = [];
+    const coreGeo = new THREE.CylinderGeometry(0.42, 0.42, 6, 20);
+    const hexPos = [];
+    hexPos.push([0, 0]);
+    for (let i = 0; i < 6; i++) {
+      const ang = i * Math.PI / 3;
+      hexPos.push([0.9 * Math.cos(ang), 0.9 * Math.sin(ang)]);
+    }
+    for (let i = 0; i < hexPos.length; i++) {
+      const mat = new THREE.MeshStandardMaterial({
+        color: 0x2fd6ff, emissive: 0x1a8fb8, emissiveIntensity: 0.9,
+        roughness: 0.35, metalness: 0.15
+      });
+      const m = new THREE.Mesh(coreGeo, mat);
+      m.rotation.x = Math.PI / 2;
+      m.position.set(hexPos[i][0], hexPos[i][1], 0);
+      this.group.add(m);
+      this.cores.push(m);
+    }
+
+    // light ray entering at acceptance angle
+    this.rayGroup = new THREE.Group();
+    this.group.add(this.rayGroup);
+    this.rayVectors = [{ origin: new THREE.Vector3(-3.2, 0, 0), dir: new THREE.Vector3(1, 0, 0), len: 3.2 }];
+    addArrowField(this.rayVectors, 0xffd166);
+
+    // small marker sphere at entry point
+    const dotGeo = new THREE.SphereGeometry(0.09, 12, 12);
+    const dotMat = new THREE.MeshBasicMaterial({ color: 0xffd166 });
+    this.dot = new THREE.Mesh(dotGeo, dotMat);
+    this.group.add(this.dot);
+
+    this.group.position.set(0, 0, 0);
+    this.phase = 0;
+  },
+
+  update() {
+    const st = this.state;
+    const nCore = st.nCore;
+    const nClad = st.nClad;
+    const a = st.radius;
+    const lambda = st.wavelength;
+
+    const diff = nCore * nCore - nClad * nClad;
+    const NA = diff > 0 ? Math.sqrt(diff) : 0;
+    const thetaMax = Math.asin(Math.min(1, NA)) * 180 / Math.PI;
+    const V = (2 * Math.PI * a / (lambda / 1000)) * NA;
+    const singleMode = V < 2.405;
+
+    // fill factor for 7 fibers in bundle radius R = 1.55 (visual units)
+    const R = 1.55;
+    const fill = (7 * 0.42 * 0.42) / (R * R);
+
+    // update core emissive intensity based on NA
+    for (let i = 0; i < this.cores.length; i++) {
+      const m = this.cores[i];
+      m.material.emissiveIntensity = 0.35 + 0.9 * Math.min(1, NA / 0.6);
+      m.material.color.setHSL(0.52, 0.85, 0.45 + 0.25 * Math.min(1, NA / 0.6));
+    }
+
+    // ray direction at acceptance angle
+    const ang = Math.min(thetaMax, 60) * Math.PI / 180;
+    const dir = new THREE.Vector3(Math.cos(ang), Math.sin(ang), 0);
+    this.rayVectors[0].dir.copy(dir);
+    this.rayVectors[0].origin.set(-3.2 * Math.cos(ang), -3.2 * Math.sin(ang), 0);
+    this.dot.position.set(-3.2 * Math.cos(ang), -3.2 * Math.sin(ang), 0);
+
+    // rebuild arrow field (cheap: only one arrow)
+    // remove old arrow meshes from rayGroup
+    while (this.rayGroup.children.length > 0 && this.rayGroup.children.length < 200) {
+      const c = this.rayGroup.children.pop();
+      if (c.geometry) c.geometry.dispose();
+      if (c.material) c.material.dispose();
+    }
+    addArrowField(this.rayVectors, 0xffd166);
+
+    // 2D chart
+    const ctx = chartEl.getContext('2d');
+    const W = chartEl.width, H = chartEl.height;
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = '#0b1220';
+    ctx.fillRect(0, 0, W, H);
+
+    // left plot: NA and theta vs n_core
+    const pad = 40;
+    const plotW = W * 0.48;
+    const plotH = H - 2 * pad;
+    const x0 = pad, y0 = pad;
+
+    ctx.strokeStyle = '#2a3a52';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(x0, y0, plotW, plotH);
+
+    // axes labels
+    ctx.fillStyle = '#9fb6d4';
+    ctx.font = '12px sans-serif';
+    ctx.fillText('NA & θ_max vs n_core', x0 + 8, y0 - 10);
+
+    // NA curve
+    ctx.beginPath();
+    for (let i = 0; i <= 100; i++) {
+      const nc = 1.30 + (1.60 - 1.30) * i / 100;
+      const d = nc * nc - nClad * nClad;
+      const na = d > 0 ? Math.sqrt(d) : 0;
+      const px = x0 + (nc - 1.30) / 0.30 * plotW;
+      const py = y0 + plotH - na / 0.8 * plotH;
+      if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+    }
+    ctx.strokeStyle = '#4fc3f7';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    // theta curve
+    ctx.beginPath();
+    for (let i = 0; i <= 100; i++) {
+      const nc = 1.30 + (1.60 - 1.30) * i / 100;
+      const d = nc * nc - nClad * nClad;
+      const na = d > 0 ? Math.sqrt(d) : 0;
+      const th = Math.asin(Math.min(1, na)) * 180 / Math.PI;
+      const px = x0 + (nc - 1.30) / 0.30 * plotW;
+      const py = y0 + plotH - th / 90 * plotH;
+      if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+    }
+    ctx.strokeStyle = '#ffd166';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    // current marker
+    const curNA = NA;
+    const curTheta = thetaMax;
+    const mx = x0 + (nCore - 1.30) / 0.30 * plotW;
+    const my = y0 + plotH - curNA / 0.8 * plotH;
+    ctx.fillStyle = '#4fc3f7';
+    ctx.beginPath(); ctx.arc(mx, my, 4, 0, Math.PI * 2); ctx.fill();
+
+    // right plot: V vs radius
+    const x1 = W * 0.52 + pad;
+    const plotW2 = W * 0.48 - pad;
+    ctx.strokeStyle = '#2a3a52';
+    ctx.strokeRect(x1, y0, plotW2, plotH);
+    ctx.fillStyle = '#9fb6d4';
+    ctx.fillText('V-number vs fiber radius a', x1 + 8, y0 - 10);
+
+    // cutoff line V = 2.405
+    const cutY = y0 + plotH - 2.405 / 6 * plotH;
+    ctx.strokeStyle = '#ff6b6b';
+    ctx.setLineDash([5, 4]);
+    ctx.beginPath(); ctx.moveTo(x1, cutY); ctx.lineTo(x1 + plotW2, cutY); ctx.stroke();
+    ctx.setLineDash([]);
+
+    // V curve
+    ctx.beginPath();
+    for (let i = 0; i <= 100; i++) {
+      const aa = 1 + (20 - 1) * i / 100;
+      const vv = (2 * Math.PI * aa / (lambda / 1000)) * NA;
+      const px = x1 + (aa - 1) / 19 * plotW2;
+      const py = y0 + plotH - Math.min(vv, 6) / 6 * plotH;
+      if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+    }
+    ctx.strokeStyle = '#7ee787';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    // current marker
+    const vx = x1 + (a - 1) / 19 * plotW2;
+    const vy = y0 + plotH - Math.min(V, 6) / 6 * plotH;
+    ctx.fillStyle = '#7ee787';
+    ctx.beginPath(); ctx.arc(vx, vy, 4, 0, Math.PI * 2); ctx.fill();
+
+    // legend
+    ctx.font = '11px sans-serif';
+    ctx.fillStyle = '#4fc3f7'; ctx.fillText('NA', x0 + plotW - 60, y0 + 16);
+    ctx.fillStyle = '#ffd166'; ctx.fillText('θ_max', x0 + plotW - 30, y0 + 16);
+
+    setHud(
+      'Optical fiber acceptance',
+      'NA = \\sqrt{n_{core}^2 - n_{clad}^2}',
+      [
+        { k: 'NA', v: NA.toFixed(4) },
+        { k: 'θ_max', v: thetaMax.toFixed(2) + '°' },
+        { k: 'V-number', v: V.toFixed(3) },
+        { k: 'Single-mode', v: singleMode ? 'YES (V < 2.405)' : 'NO (V ≥ 2.405)' },
+        { k: 'Fill factor', v: fill.toFixed(3) }
+      ]
+    );
+  },
+
+  tick(dt) {
+    this.phase += dt;
+    // gentle pulse of core emissive intensity
+    const p = 0.5 + 0.5 * Math.sin(this.phase * 2.0);
+    for (let i = 0; i < this.cores.length; i++) {
+      const m = this.cores[i];
+      m.material.emissiveIntensity = 0.55 + 0.35 * p;
+    }
+    // slow rotation of bundle for depth cue
+    this.group.rotation.z = 0.08 * Math.sin(this.phase * 0.6);
+  },
+
+  lesson: `Retinal optic fibers are the axons of photoreceptors and ganglion cells that carry light-driven electrical signals toward the optic nerve. Physically they behave like a multi-core optical waveguide: each fiber core has a higher refractive index than its cladding, so light is confined by total internal reflection.
+
+The numerical aperture NA = sqrt(n_core^2 - n_clad^2) measures how much light the fiber can collect. The acceptance angle θ_max = asin(NA) is the largest angle at which an incoming ray is guided. A larger index difference gives a larger NA and a wider acceptance cone.
+
+The V-number V = (2πa/λ)·NA combines fiber radius a, wavelength λ, and NA. When V < 2.405 the fiber supports only the fundamental mode (single-mode); above that cutoff, higher-order modes propagate. In a retinal bundle, many such fibers are packed together, and the fill factor (N·a²)/R² describes how densely the cores occupy the bundle cross-section.`,
+
+  quiz: [
+    {
+      q: 'If the core–cladding index difference increases, what happens to the numerical aperture and acceptance angle?',
+      options: [
+        'NA increases and the acceptance angle increases',
+        'NA decreases and the acceptance angle decreases',
+        'NA increases but the acceptance angle decreases',
+        'Both remain unchanged'
+      ],
+      answer: 0
+    },
+    {
+      q: 'A fiber is single-mode when its V-number satisfies which condition?',
+      options: [
+        'V < 2.405',
+        'V > 2.405',
+        'V = 0',
+        'V > 10'
+      ],
+      answer: 0
+    }
+  ]
+});
+modules.push({
+  id: 'm9_4_heart_dipole',
+  title: '4. Heart Dipole Field',
+  controls: [
+    { id: 'pMag', label: 'Dipole moment p (A·m x1e-5)', type: 'range', min: 0.1, max: 5, step: 0.1, value: 1 },
+    { id: 'angle', label: 'Dipole orientation (deg)', type: 'range', min: 0, max: 360, step: 1, value: 45 },
+    { id: 'sigma', label: 'Torso conductivity (S/m)', type: 'range', min: 0.05, max: 0.6, step: 0.01, value: 0.2 },
+    { id: 'lead', label: 'Lead axis', type: 'select', options: [
+      { value: 'I', label: 'Lead I (0 deg)' },
+      { value: 'II', label: 'Lead II (60 deg)' },
+      { value: 'III', label: 'Lead III (120 deg)' }
+    ], value: 'I' }
+  ],
+
+  build() {
+    this.state = { pMag: 1, angle: 45, sigma: 0.2, lead: 'I' };
+    this.leadAngles = { I: 0, II: 60, III: 120 };
+    this.group = new THREE.Group();
+    content.add(this.group);
+
+    // Translucent torso ellipsoid
+    const torsoGeo = new THREE.SphereGeometry(1, 32, 24);
+    const torsoMat = new THREE.MeshPhysicalMaterial({
+      color: 0x9fc7e8, transparent: true, opacity: 0.18,
+      roughness: 0.4, metalness: 0.0, side: THREE.DoubleSide,
+      depthWrite: false
+    });
+    this.torso = new THREE.Mesh(torsoGeo, torsoMat);
+    this.torso.scale.set(1.15, 1.55, 0.85);
+    this.group.add(this.torso);
+
+    // Torso wireframe outline
+    const wire = new THREE.LineSegments(
+      new THREE.WireframeGeometry(new THREE.SphereGeometry(1, 20, 14)),
+      new THREE.LineBasicMaterial({ color: 0x6fa8d8, transparent: true, opacity: 0.25 })
+    );
+    wire.scale.set(1.15, 1.55, 0.85);
+    this.group.add(wire);
+
+    // Dipole: two charges + connecting cylinder
+    this.dipoleGroup = new THREE.Group();
+    this.group.add(this.dipoleGroup);
+
+    const posCharge = new THREE.Mesh(
+      new THREE.SphereGeometry(0.075, 16, 12),
+      new THREE.MeshStandardMaterial({ color: 0xff5a5a, emissive: 0x551111, roughness: 0.4 })
+    );
+    posCharge.position.set(0.32, 0, 0);
+    this.dipoleGroup.add(posCharge);
+
+    const negCharge = new THREE.Mesh(
+      new THREE.SphereGeometry(0.075, 16, 12),
+      new THREE.MeshStandardMaterial({ color: 0x5a8cff, emissive: 0x111155, roughness: 0.4 })
+    );
+    negCharge.position.set(-0.32, 0, 0);
+    this.dipoleGroup.add(negCharge);
+
+    const bar = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.028, 0.028, 0.64, 12),
+      new THREE.MeshStandardMaterial({ color: 0xdfe8f2, roughness: 0.5 })
+    );
+    bar.rotation.z = Math.PI / 2;
+    this.dipoleGroup.add(bar);
+
+    // Dipole moment arrow (p direction)
+    this.pArrow = new THREE.Mesh(
+      new THREE.ConeGeometry(0.055, 0.18, 12),
+      new THREE.MeshStandardMaterial({ color: 0xffd166, emissive: 0x553300 })
+    );
+    this.pArrow.position.set(0.55, 0, 0);
+    this.pArrow.rotation.z = -Math.PI / 2;
+    this.dipoleGroup.add(this.pArrow);
+
+    // Equipotential wireframe sphere
+    this.equip = new THREE.Mesh(
+      new THREE.SphereGeometry(0.85, 20, 14),
+      new THREE.MeshBasicMaterial({ color: 0x7fd1ff, wireframe: true, transparent: true, opacity: 0.22 })
+    );
+    this.group.add(this.equip);
+
+    // Field vectors ring (rebuilt in update)
+    this.fieldGroup = new THREE.Group();
+    this.group.add(this.fieldGroup);
+
+    // Lead axis indicator
+    this.leadLine = new THREE.Line(
+      new THREE.BufferGeometry().setFromPoints([
+        new THREE.Vector3(-1.6, 0, 0), new THREE.Vector3(1.6, 0, 0)
+      ]),
+      new THREE.LineBasicMaterial({ color: 0x9be7a0, transparent: true, opacity: 0.8 })
+    );
+    this.group.add(this.leadLine);
+
+    this.leadTip = new THREE.Mesh(
+      new THREE.ConeGeometry(0.06, 0.16, 10),
+      new THREE.MeshStandardMaterial({ color: 0x9be7a0, emissive: 0x224422 })
+    );
+    this.group.add(this.leadTip);
+
+    // Camera framing
+    camera.position.set(2.6, 1.8, 3.4);
+    camera.lookAt(0, 0, 0);
+  },
+
+  update() {
+    const st = this.state;
+    const p = st.pMag * 1e-5;                 // A·m
+    const sigma = st.sigma;                   // S/m
+    const theta = st.angle * Math.PI / 180;   // dipole angle
+    const leadAngle = this.leadAngles[st.lead] * Math.PI / 180;
+
+    // Orient dipole group
+    this.dipoleGroup.rotation.z = theta;
+
+    // Lead axis orientation
+    this.leadLine.rotation.z = leadAngle;
+    this.leadTip.position.set(1.6 * Math.cos(leadAngle), 1.6 * Math.sin(leadAngle), 0);
+    this.leadTip.rotation.z = leadAngle - Math.PI / 2;
+
+    // Rebuild field vectors on a ring in the xy-plane
+    while (this.fieldGroup.children.length) {
+      const c = this.fieldGroup.children.pop();
+      if (c.geometry) c.geometry.dispose();
+      if (c.material) c.material.dispose();
+    }
+
+    const k = 1 / (4 * Math.PI * sigma);
+    const ringR = 0.55;
+    const vectors = [];
+    for (let i = 0; i < 12; i++) {
+      const phi = (i / 12) * Math.PI * 2;
+      const rhat = new THREE.Vector3(Math.cos(phi), Math.sin(phi), 0);
+      const pVec = new THREE.Vector3(Math.cos(theta), Math.sin(theta), 0);
+      const pDotR = pVec.dot(rhat);
+      // E = k * (3(p·rhat)rhat - p) / r^3
+      const E = new THREE.Vector3()
+        .copy(rhat).multiplyScalar(3 * pDotR)
+        .sub(pVec)
+        .multiplyScalar(k / (ringR * ringR * ringR));
+      const dir = E.clone().normalize();
+      const len = Math.min(0.55, E.length() * 1e5 * 0.35);
+      vectors.push({
+        origin: new THREE.Vector3(ringR * Math.cos(phi), ringR * Math.sin(phi), 0),
+        dir: dir,
+        len: Math.max(0.08, len)
+      });
+    }
+    addArrowField(vectors, 0x7fd1ff);
+
+    // HUD values
+    const r = 0.10; // 10 cm
+    const V10 = (p * Math.cos(theta)) / (4 * Math.PI * sigma * r * r);
+    const Vlead = p * Math.cos(theta - leadAngle);
+
+    setHud(
+      'Heart dipole potential',
+      'V(r) = \\frac{\\mathbf{p}\\cdot\\hat{\\mathbf{r}}}{4\\pi\\sigma r^2}',
+      [
+        { k: 'Dipole moment p', v: (st.pMag).toFixed(2) + ' × 10⁻⁵ A·m' },
+        { k: 'Orientation θ', v: st.angle.toFixed(0) + '°' },
+        { k: 'Conductivity σ', v: sigma.toFixed(2) + ' S/m' },
+        { k: 'V at r = 10 cm', v: (V10 * 1e3).toFixed(3) + ' mV' },
+        { k: 'Lead ' + st.lead + ' projection', v: (Vlead * 1e3).toFixed(3) + ' mV' }
+      ]
+    );
+
+    // 2D chart: V_lead(theta)
+    const ctx = chartEl.getContext('2d');
+    const W = chartEl.width, H = chartEl.height;
+    ctx.clearRect(0, 0, W, H);
+
+    // Background
+    ctx.fillStyle = '#0b1220';
+    ctx.fillRect(0, 0, W, H);
+
+    const padL = 52, padR = 20, padT = 28, padB = 42;
+    const plotW = W - padL - padR;
+    const plotH = H - padT - padB;
+    const cx = padL + plotW / 2;
+    const cy = padT + plotH / 2;
+
+    // Grid
+    ctx.strokeStyle = 'rgba(120,160,200,0.18)';
+    ctx.lineWidth = 1;
+    for (let i = 0; i <= 4; i++) {
+      const y = padT + (plotH * i) / 4;
+      ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(padL + plotW, y); ctx.stroke();
+    }
+    for (let i = 0; i <= 8; i++) {
+      const x = padL + (plotW * i) / 8;
+      ctx.beginPath(); ctx.moveTo(x, padT); ctx.lineTo(x, padT + plotH); ctx.stroke();
+    }
+
+    // Axes
+    ctx.strokeStyle = 'rgba(180,210,240,0.55)';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(padL, cy); ctx.lineTo(padL + plotW, cy); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(cx, padT); ctx.lineTo(cx, padT + plotH); ctx.stroke();
+
+    // Curve V_lead(theta) = p cos(theta - leadAngle)
+    const maxV = p * 1e3; // mV scale
+    ctx.strokeStyle = '#7fd1ff';
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    for (let i = 0; i <= 240; i++) {
+      const th = (i / 240) * Math.PI * 2;
+      const v = p * Math.cos(th - leadAngle) * 1e3;
+      const x = padL + (th / (Math.PI * 2)) * plotW;
+      const y = cy - (v / (maxV || 1e-12)) * (plotH / 2) * 0.9;
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // Current angle marker
+    const curV = p * Math.cos(theta - leadAngle) * 1e3;
+    const mx = padL + (theta / (Math.PI * 2)) * plotW;
+    const my = cy - (curV / (maxV || 1e-12)) * (plotH / 2) * 0.9;
+    ctx.fillStyle = '#ffd166';
+    ctx.beginPath(); ctx.arc(mx, my, 5, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,209,102,0.5)';
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(mx, padT); ctx.lineTo(mx, padT + plotH); ctx.stroke();
+
+    // Labels
+    ctx.fillStyle = '#cfe3f5';
+    ctx.font = '12px system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('dipole angle θ (deg)', cx, H - 12);
+    ctx.save();
+    ctx.translate(14, cy);
+    ctx.rotate(-Math.PI / 2);
+    ctx.fillText('V_lead (mV)', 0, 0);
+    ctx.restore();
+
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#9be7a0';
+    ctx.fillText('Lead ' + st.lead + ' axis = ' + this.leadAngles[st.lead] + '°', padL + 6, padT + 14);
+    ctx.fillStyle = '#ffd166';
+    ctx.fillText('θ = ' + st.angle.toFixed(0) + '°  →  ' + curV.toFixed(2) + ' mV', padL + 6, padT + 32);
+
+    // Tick labels
+    ctx.fillStyle = 'rgba(200,220,240,0.7)';
+    ctx.font = '10px system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    for (let d = 0; d <= 360; d += 90) {
+      const x = padL + (d / 360) * plotW;
+      ctx.fillText(d + '°', x, cy + 16);
+    }
+  },
+
+  tick(dt) {
+    // Gentle breathing / pulse animation of the torso and equipotential shell
+    this.phase = (this.phase || 0) + dt;
+    const s = 1 + 0.012 * Math.sin(this.phase * 2.2);
+    this.torso.scale.set(1.15 * s, 1.55 * s, 0.85 * s);
+    this.equip.scale.setScalar(1 + 0.03 * Math.sin(this.phase * 1.7));
+    this.equip.material.opacity = 0.18 + 0.06 * Math.sin(this.phase * 1.7);
+  },
+
+  lesson: `The heart is modeled as a current dipole embedded in a conducting torso. In a homogeneous conductor of conductivity σ, the potential at a point r from the dipole is V(r) = (p·r̂)/(4πσr²), and the electric field is E = (1/(4πσ))·(3(p·r̂)r̂ − p)/r³. The potential falls off as 1/r², so it is strongest near the heart and weak at the body surface. An ECG lead is characterized by a lead vector L; the measured voltage is the projection V_lead = L·p = |p| cos(θ − θ_lead). Changing the dipole orientation θ therefore modulates each lead's signal sinusoidally, which is why different leads view the same cardiac activity from different angles. Lead I (0°), Lead II (60°), and Lead III (120°) form the standard Einthoven triangle.`,
+
+  quiz: [
+    {
+      q: 'An ECG lead measures which quantity of the cardiac dipole?',
+      options: [
+        'The projection of the dipole moment onto the lead axis',
+        'The total magnitude of the dipole moment',
+        'The distance from the dipole to the electrode',
+        'The conductivity of the torso'
+      ],
+      answer: 0
+    },
+    {
+      q: 'How does the dipole potential in a homogeneous conductor scale with distance r?',
+      options: ['1/r', '1/r²', '1/r³', 'Independent of r'],
+      answer: 1
+    }
+  ]
+});
+modules.push({
+  id: 'm9_5_defibrillators',
+  title: '5. Defibrillators and Pacemakers',
+  controls: [
+    { id: 'voltage', label: 'Pulse voltage (V)', type: 'range', min: 100, max: 3000, step: 10, value: 1500 },
+    { id: 'current', label: 'Pulse current (A)', type: 'range', min: 1, max: 40, step: 0.5, value: 10 },
+    { id: 'duration', label: 'Pulse duration (ms)', type: 'range', min: 1, max: 20, step: 0.5, value: 5 },
+    { id: 'mode', label: 'Device', type: 'select', options: [
+      { value: 'defib', label: 'Defibrillator' },
+      { value: 'pace', label: 'Pacemaker' }
+    ], value: 'defib' }
+  ],
+
+  build() {
+    this.state = { voltage: 1500, current: 10, duration: 5, mode: 'defib' };
+    this.phase = 0;
+    this.group = new THREE.Group();
+    content.add(this.group);
+
+    // Torso
+    const torsoMat = new THREE.MeshStandardMaterial({ color: 0xc98b6b, roughness: 0.8, metalness: 0.05 });
+    const torso = new THREE.Mesh(new THREE.CapsuleGeometry(1.15, 2.2, 8, 20), torsoMat);
+    torso.rotation.z = Math.PI / 2;
+    torso.position.set(0, 0.2, 0);
+    this.group.add(torso);
+
+    // Heart
+    const heartMat = new THREE.MeshStandardMaterial({ color: 0xb23a48, roughness: 0.6, emissive: 0x3a0a10, emissiveIntensity: 0.4 });
+    this.heart = new THREE.Mesh(new THREE.SphereGeometry(0.42, 20, 16), heartMat);
+    this.heart.scale.set(1.0, 1.25, 0.8);
+    this.heart.position.set(0.15, 0.25, 0.35);
+    this.group.add(this.heart);
+
+    // Paddles
+    const paddleMat = new THREE.MeshStandardMaterial({ color: 0x2b2f36, roughness: 0.35, metalness: 0.8 });
+    this.paddleL = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.55, 0.12, 24), paddleMat);
+    this.paddleL.rotation.x = Math.PI / 2;
+    this.paddleL.position.set(-1.35, 0.25, 0.55);
+    this.group.add(this.paddleL);
+
+    this.paddleR = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.55, 0.12, 24), paddleMat);
+    this.paddleR.rotation.x = Math.PI / 2;
+    this.paddleR.position.set(1.35, 0.25, 0.55);
+    this.group.add(this.paddleR);
+
+    // Current path tube
+    const pathMat = new THREE.MeshStandardMaterial({
+      color: 0x7fd1ff, transparent: true, opacity: 0.35,
+      emissive: 0x2a7fb8, emissiveIntensity: 0.6, roughness: 0.3
+    });
+    const curve = new THREE.CatmullRomCurve3([
+      new THREE.Vector3(-1.35, 0.25, 0.55),
+      new THREE.Vector3(-0.55, 0.35, 0.65),
+      new THREE.Vector3(0.15, 0.25, 0.35),
+      new THREE.Vector3(0.65, 0.35, 0.65),
+      new THREE.Vector3(1.35, 0.25, 0.55)
+    ]);
+    this.path = new THREE.Mesh(new THREE.TubeGeometry(curve, 40, 0.055, 8, false), pathMat);
+    this.group.add(this.path);
+
+    // Pacemaker can
+    const canMat = new THREE.MeshStandardMaterial({ color: 0x9aa4b2, roughness: 0.3, metalness: 0.85 });
+    this.can = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.35, 0.22), canMat);
+    this.can.position.set(-0.95, -0.55, 0.75);
+    this.group.add(this.can);
+
+    // Pacemaker lead
+    const leadMat = new THREE.MeshStandardMaterial({ color: 0xe8e8e8, roughness: 0.5, metalness: 0.2 });
+    const leadCurve = new THREE.CatmullRomCurve3([
+      new THREE.Vector3(-0.95, -0.55, 0.75),
+      new THREE.Vector3(-0.55, -0.35, 0.85),
+      new THREE.Vector3(-0.15, -0.05, 0.75),
+      new THREE.Vector3(0.15, 0.25, 0.55)
+    ]);
+    this.lead = new THREE.Mesh(new THREE.TubeGeometry(leadCurve, 30, 0.025, 6, false), leadMat);
+    this.group.add(this.lead);
+
+    // Pulse glow sphere at heart
+    this.glow = new THREE.Mesh(
+      new THREE.SphereGeometry(0.5, 16, 12),
+      new THREE.MeshBasicMaterial({ color: 0x7fd1ff, transparent: true, opacity: 0.0 })
+    );
+    this.glow.position.copy(this.heart.position);
+    this.group.add(this.glow);
+
+    // Arrow field showing current direction
+    addArrowField([
+      { origin: new THREE.Vector3(-1.35, 0.25, 0.55), dir: new THREE.Vector3(1, 0, 0), len: 0.6 },
+      { origin: new THREE.Vector3(-0.55, 0.35, 0.65), dir: new THREE.Vector3(1, 0, 0), len: 0.6 },
+      { origin: new THREE.Vector3(0.15, 0.25, 0.35), dir: new THREE.Vector3(1, 0, 0), len: 0.6 },
+      { origin: new THREE.Vector3(0.65, 0.35, 0.65), dir: new THREE.Vector3(1, 0, 0), len: 0.6 }
+    ], 0x7fd1ff);
+
+    this.update();
+  },
+
+  update() {
+    const st = this.state;
+    const V = st.voltage;
+    const I = st.current;
+    const tp = st.duration / 1000; // seconds
+    const W = V * I * tp;
+    const R = 50; // tissue resistance ohms
+    const Q = I * I * R * tp;
+
+    const isDefib = st.mode === 'defib';
+    this.paddleL.visible = isDefib;
+    this.paddleR.visible = isDefib;
+    this.path.visible = isDefib;
+    this.can.visible = !isDefib;
+    this.lead.visible = !isDefib;
+
+    this.path.material.opacity = isDefib ? 0.35 : 0.0;
+    this.glow.material.opacity = isDefib ? 0.25 : 0.12;
+    this.glow.material.color.setHex(isDefib ? 0x7fd1ff : 0xffd27f);
+
+    setHud(
+      isDefib ? 'Defibrillator pulse energy' : 'Pacemaker pulse energy',
+      'W = \\int V(t)\\,I(t)\\,dt \\approx V I t_p',
+      [
+        { k: 'V', v: V.toFixed(0) + ' V' },
+        { k: 'I', v: I.toFixed(1) + ' A' },
+        { k: 't_p', v: st.duration.toFixed(1) + ' ms' },
+        { k: 'W', v: W.toFixed(2) + ' J' },
+        { k: 'Q', v: Q.toFixed(2) + ' J' }
+      ]
+    );
+
+    this.drawChart(V, I, st.duration, W, isDefib);
+  },
+
+  drawChart(V, I, tpMs, W, isDefib) {
+    const ctx = chartEl.getContext('2d');
+    const w = chartEl.width, h = chartEl.height;
+    ctx.clearRect(0, 0, w, h);
+
+    const pad = 42;
+    const plotW = w - pad * 2;
+    const plotH = h - pad * 2;
+
+    ctx.fillStyle = '#0b1220';
+    ctx.fillRect(0, 0, w, h);
+
+    // axes
+    ctx.strokeStyle = '#334155';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(pad, pad);
+    ctx.lineTo(pad, h - pad);
+    ctx.lineTo(w - pad, h - pad);
+    ctx.stroke();
+
+    // grid
+    ctx.strokeStyle = '#1e293b';
+    for (let i = 0; i <= 4; i++) {
+      const y = pad + (plotH * i) / 4;
+      ctx.beginPath();
+      ctx.moveTo(pad, y);
+      ctx.lineTo(w - pad, y);
+      ctx.stroke();
+    }
+
+    const tMax = tpMs;
+    const xOf = (t) => pad + (t / tMax) * plotW;
+    const yV = (v) => h - pad - (v / 3000) * plotH;
+    const yI = (i) => h - pad - (i / 40) * plotH;
+
+    // energy area shading
+    ctx.fillStyle = isDefib ? 'rgba(127,209,255,0.18)' : 'rgba(255,210,127,0.18)';
+    ctx.beginPath();
+    ctx.moveTo(xOf(0), h - pad);
+    for (let k = 0; k <= 60; k++) {
+      const t = (k / 60) * tMax;
+      ctx.lineTo(xOf(t), yV(V));
+    }
+    ctx.lineTo(xOf(tMax), h - pad);
+    ctx.closePath();
+    ctx.fill();
+
+    // V(t) waveform
+    ctx.strokeStyle = '#7fd1ff';
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    for (let k = 0; k <= 60; k++) {
+      const t = (k / 60) * tMax;
+      const x = xOf(t), y = yV(V);
+      if (k === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // I(t) waveform
+    ctx.strokeStyle = '#ffb86b';
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    for (let k = 0; k <= 60; k++) {
+      const t = (k / 60) * tMax;
+      const x = xOf(t), y = yI(I);
+      if (k === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // labels
+    ctx.fillStyle = '#cbd5e1';
+    ctx.font = '12px system-ui, sans-serif';
+    ctx.fillText('V(t)', pad + 6, pad + 16);
+    ctx.fillStyle = '#ffb86b';
+    ctx.fillText('I(t)', pad + 6, pad + 32);
+    ctx.fillStyle = '#94a3b8';
+    ctx.fillText('t (ms)', w - pad - 46, h - pad + 20);
+    ctx.fillText('0', pad - 10, h - pad + 20);
+    ctx.fillText(tMax.toFixed(1), w - pad - 18, h - pad + 20);
+
+    ctx.fillStyle = '#e2e8f0';
+    ctx.font = 'bold 13px system-ui, sans-serif';
+    ctx.fillText('Pulse waveform — shaded area ∝ delivered energy', pad, 22);
+    ctx.fillStyle = '#94a3b8';
+    ctx.font = '12px system-ui, sans-serif';
+    ctx.fillText('W ≈ ' + W.toFixed(2) + ' J', w - pad - 100, 22);
+  },
+
+  tick(dt) {
+    this.phase += dt;
+    const pulse = 0.5 + 0.5 * Math.sin(this.phase * 6.0);
+    this.glow.material.opacity = (this.state.mode === 'defib' ? 0.18 : 0.08) + 0.12 * pulse;
+    this.glow.scale.setScalar(1.0 + 0.08 * pulse);
+    this.heart.material.emissiveIntensity = 0.35 + 0.25 * pulse;
+  },
+
+  lesson: `Defibrillators and pacemakers both deliver electrical pulses to the heart, but at very different scales.
+
+A defibrillator sends a large current pulse (often 1000–2000 V, 10–40 A, 2–10 ms) to depolarize the whole myocardium and reset chaotic fibrillation. The delivered energy is approximately W = V I t_p, typically 200–360 J. Tissue heating follows Q = I^2 R t_p, so a longer or higher-current pulse deposits more heat and can damage tissue.
+
+A pacemaker instead delivers tiny periodic pulses (~1–5 V, ~1 mA, ~1 ms) at 60–100 beats/min to trigger a controlled contraction. Its energy per pulse is only microjoules to millijoules, so heating is negligible.
+
+Pulse duration matters: the same voltage and current delivered for longer times increases both energy and heating. Defibrillation needs enough energy to reset the heart quickly, while pacing needs minimal energy to avoid tissue damage.`,
+
+  quiz: [
+    {
+      q: 'A defibrillator pulse has V = 1500 V, I = 10 A, and t_p = 5 ms. What is the approximate delivered energy?',
+      options: ['0.75 J', '7.5 J', '75 J', '750 J'],
+      answer: 2
+    },
+    {
+      q: 'Why does a pacemaker use much lower voltage and current than a defibrillator?',
+      options: [
+        'It needs to reset fibrillation across the whole heart.',
+        'It only needs to trigger a small local contraction and avoid tissue damage.',
+        'It must deliver more energy than a defibrillator.',
+        'It operates at a much higher frequency and therefore needs more power.'
+      ],
+      answer: 1
+    }
+  ]
+});
+modules.push({
+  id: 'm9_6_biological_fields',
+  title: '6. Biological Fields',
+  controls: [
+    { id: 'sourceMag', label: 'Source moment (nA·m)', type: 'range', min: 1, max: 100, step: 1, value: 20 },
+    { id: 'distance', label: 'Measurement distance (cm)', type: 'range', min: 1, max: 20, step: 0.5, value: 5 },
+    { id: 'signal', label: 'Signal type', type: 'select', options: [
+      { value: 'eeg', label: 'EEG' }, { value: 'ecg', label: 'ECG' }, { value: 'meg', label: 'MEG' }
+    ], value: 'eeg' }
+  ],
+
+  build() {
+    this.phase = 0;
+    this.head = new THREE.Mesh(
+      new THREE.SphereGeometry(1.2, 32, 24),
+      new THREE.MeshStandardMaterial({ color: 0x9fd8ff, transparent: true, opacity: 0.28, roughness: 0.4 })
+    );
+    content.add(this.head);
+
+    // dipole inside the head
+    this.dipole = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.05, 0.05, 0.5, 12),
+      new THREE.MeshStandardMaterial({ color: 0xffb347, emissive: 0x552200 })
+    );
+    this.dipole.position.set(0.25, 0.15, 0.1);
+    this.dipole.rotation.z = Math.PI / 2;
+    content.add(this.dipole);
+
+    // sensor coil outside
+    this.coil = new THREE.Mesh(
+      new THREE.TorusGeometry(0.28, 0.045, 10, 28),
+      new THREE.MeshStandardMaterial({ color: 0x7fd1ff, emissive: 0x113355, metalness: 0.6, roughness: 0.3 })
+    );
+    this.coil.position.set(2.1, 0.4, 0.2);
+    this.coil.rotation.y = Math.PI / 2;
+    content.add(this.coil);
+
+    // field vectors (rebuilt in update)
+    this.fieldGroup = new THREE.Group();
+    content.add(this.fieldGroup);
+
+    // ground grid hint
+    const grid = new THREE.GridHelper(8, 16, 0x224466, 0x112233);
+    grid.position.y = -1.6;
+    content.add(grid);
+
+    this.update();
+  },
+
+  update() {
+    const st = this.state;
+    const p = st.sourceMag * 1e-9;          // nA·m -> A·m
+    const r = st.distance * 1e-2;          // cm -> m
+    const den = (Math.abs(r) < 1e-12 || !isFinite(r)) ? 1e-12 : r;
+
+    const mu0 = 4 * Math.PI * 1e-7;
+    // B magnitude for perpendicular dipole orientation: mu0/(4pi) * p / r^2
+    const B = (mu0 / (4 * Math.PI)) * p / (den * den);
+
+    // signal amplitude scale factors (typical physiological values)
+    const ampMap = { eeg: 50e-6, ecg: 1e-3, meg: 1e-13 };
+    const amp = ampMap[st.signal];
+
+    // rebuild field arrows
+    while (this.fieldGroup.children.length && this.fieldGroup.children.length < 200) {
+      const c = this.fieldGroup.children.pop();
+      if (c.geometry) c.geometry.dispose();
+      if (c.material) c.material.dispose();
+    }
+    const vectors = [];
+    const n = 10;
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * Math.PI * 2;
+      const rr = 1.45 + 0.25 * Math.sin(i * 1.7);
+      const origin = new THREE.Vector3(Math.cos(a) * rr, 0.35 * Math.sin(a * 2), Math.sin(a) * rr);
+      const dir = new THREE.Vector3(Math.cos(a), 0.25, Math.sin(a)).normalize();
+      const len = 0.25 + 0.35 * (B / 1e-12);
+      vectors.push({ origin, dir, len: Math.min(len, 0.9) });
+    }
+    addArrowField(vectors, 0x7fd1ff);
+
+    // coil position reflects distance
+    this.coil.position.set(1.2 + st.distance * 0.09, 0.4, 0.2);
+
+    // 2D chart: amplitude vs distance, log-y
+    const ctx = chartEl.getContext('2d');
+    const W = chartEl.width, H = chartEl.height;
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = '#0a1420';
+    ctx.fillRect(0, 0, W, H);
+
+    const padL = 60, padR = 20, padT = 30, padB = 45;
+    const plotW = W - padL - padR, plotH = H - padT - padB;
+
+    // axes
+    ctx.strokeStyle = '#2a4a66';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(padL, padT); ctx.lineTo(padL, padT + plotH);
+    ctx.lineTo(padL + plotW, padT + plotH);
+    ctx.stroke();
+
+    // log-y range: 1e-14 .. 1e-2
+    const yMin = -14, yMax = -2;
+    const yOf = (logv) => padT + plotH * (1 - (logv - yMin) / (yMax - yMin));
+    const xOf = (d) => padL + plotW * (d - 1) / 19;
+
+    // gridlines
+    ctx.strokeStyle = '#1b3348';
+    for (let e = yMin; e <= yMax; e += 2) {
+      const y = yOf(e);
+      ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(padL + plotW, y); ctx.stroke();
+      ctx.fillStyle = '#6f9bb8';
+      ctx.font = '11px monospace';
+      ctx.fillText('1e' + e, 8, y + 4);
+    }
+    for (let d = 1; d <= 20; d += 4) {
+      const x = xOf(d);
+      ctx.beginPath(); ctx.moveTo(x, padT); ctx.lineTo(x, padT + plotH); ctx.stroke();
+      ctx.fillStyle = '#6f9bb8';
+      ctx.fillText(d + ' cm', x - 14, padT + plotH + 20);
+    }
+
+    // curve: amplitude ~ 1/r^2 (log slope -2)
+    const baseAmp = ampMap[st.signal];
+    ctx.strokeStyle = '#7fd1ff';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    for (let d = 1; d <= 20; d += 0.25) {
+      const val = baseAmp * Math.pow(1 / d, 2) * 25; // normalized reference at 5 cm
+      const lv = Math.log10(Math.max(val, 1e-16));
+      const x = xOf(d), y = yOf(Math.max(Math.min(lv, yMax), yMin));
+      if (d === 1) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // marker at current distance
+    const curVal = baseAmp * Math.pow(1 / st.distance, 2) * 25;
+    const lv = Math.log10(Math.max(curVal, 1e-16));
+    const mx = xOf(st.distance), my = yOf(Math.max(Math.min(lv, yMax), yMin));
+    ctx.fillStyle = '#ffb347';
+    ctx.beginPath(); ctx.arc(mx, my, 5, 0, Math.PI * 2); ctx.fill();
+
+    ctx.fillStyle = '#cfe6f5';
+    ctx.font = '13px monospace';
+    ctx.fillText('Signal amplitude vs distance (log scale)', padL, 20);
+
+    setHud(
+      'Biomagnetic field strength',
+      'B = \\frac{\\mu_0}{4\\pi}\\frac{\\mathbf{p}\\times\\hat{\\mathbf{r}}}{r^2}',
+      [
+        { k: 'Source moment', v: st.sourceMag + ' nA·m' },
+        { k: 'Distance', v: st.distance + ' cm' },
+        { k: 'B (T)', v: B.toExponential(2) },
+        { k: 'Signal amplitude', v: amp.toExponential(1) + ' V' }
+      ]
+    );
+  },
+
+  tick(dt) {
+    this.phase += dt;
+    this.dipole.rotation.y = Math.sin(this.phase * 1.5) * 0.3;
+    this.coil.rotation.x = Math.sin(this.phase * 0.8) * 0.15;
+    this.head.rotation.y = this.phase * 0.05;
+  },
+
+  lesson: `Living tissue is electrically active: neurons and muscle cells drive ionic currents that produce electric and magnetic fields. The biomagnetic field of a current dipole is B = (mu0/4pi)(p x r_hat)/r^2, so it falls off as 1/r^2 and is extremely small. Typical amplitudes: EEG ~10-100 uV, ECG ~1 mV, MEG ~1e-13 T, and the magnetic field of a single nerve impulse ~1e-12 T. Because MEG signals are ~1e-13 T (about a billionth of Earth's field), magnetically shielded rooms and SQUID sensors are required. External fields penetrate tissue with a skin depth that depends on frequency and conductivity, which is why low-frequency biomagnetic measurements need careful shielding.`,
+
+  quiz: [
+    { q: 'Approximately what field strength is a typical MEG signal?', options: ['1e-3 T', '1e-6 T', '1e-13 T', '1e-9 T'], answer: 2 },
+    { q: 'How does the biomagnetic field of a current dipole fall off with distance?', options: ['1/r', '1/r^2', '1/r^3', 'independent of r'], answer: 1 }
+  ]
+});
+modules.push({
+  id: 'm9_7_hazards',
+  title: '7. Electromagnetic Hazards and the Environment',
+  controls: [
+    { id: 'field', label: 'Electric field E (V/m)', type: 'range', min: 1, max: 1000, step: 1, value: 100 },
+    { id: 'freq', label: 'Frequency (MHz)', type: 'range', min: 1, max: 3000, step: 1, value: 900 },
+    { id: 'sigma', label: 'Tissue conductivity (S/m)', type: 'range', min: 0.05, max: 1.5, step: 0.01, value: 0.5 },
+    { id: 'exposure', label: 'Exposure time (min)', type: 'range', min: 1, max: 60, step: 1, value: 10 }
+  ],
+
+  build() {
+    this.state = { field: 100, freq: 900, sigma: 0.5, exposure: 10 };
+    this.phase = 0;
+    this.rho = 1000; // tissue mass density kg/m^3
+    this.Z0 = 377;
+
+    // Human figure: capsule body + head
+    this.human = new THREE.Group();
+    const bodyMat = new THREE.MeshStandardMaterial({ color: 0x9fc7ff, roughness: 0.55, metalness: 0.1 });
+    const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.32, 1.15, 8, 16), bodyMat);
+    body.position.y = 0.95;
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.24, 16, 12), bodyMat);
+    head.position.y = 1.85;
+    this.human.add(body, head);
+    this.human.position.y = 0.0;
+    content.add(this.human);
+
+    // SAR hotspot sphere around torso
+    this.hotspotMat = new THREE.MeshBasicMaterial({
+      color: 0xff6b4a, transparent: true, opacity: 0.22, side: THREE.DoubleSide, depthWrite: false
+    });
+    this.hotspot = new THREE.Mesh(new THREE.SphereGeometry(0.62, 20, 16), this.hotspotMat);
+    this.hotspot.position.y = 1.05;
+    content.add(this.hotspot);
+
+    // Ground plane
+    const ground = new THREE.Mesh(
+      new THREE.CircleGeometry(3.2, 40),
+      new THREE.MeshStandardMaterial({ color: 0x1b2433, roughness: 0.9 })
+    );
+    ground.rotation.x = -Math.PI / 2;
+    ground.position.y = -0.02;
+    content.add(ground);
+
+    // Incident EM wave arrows (rebuilt in update)
+    this.arrowGroup = new THREE.Group();
+    content.add(this.arrowGroup);
+
+    // Chart canvas setup
+    this.ctx = chartEl.getContext('2d');
+    this.chartW = chartEl.width;
+    this.chartH = chartEl.height;
+  },
+
+  update() {
+    const st = this.state;
+    const E = st.field;
+    const fMHz = st.freq;
+    const sigma = st.sigma;
+    const tMin = st.exposure;
+
+    const denRho = (Math.abs(this.rho) < 1e-12 || !isFinite(this.rho)) ? 1e-12 : this.rho;
+    const SAR = (sigma * E * E) / (2 * denRho); // W/kg
+    const S = (E * E) / (2 * this.Z0);          // W/m^2
+    const dose = SAR * tMin * 60;               // J/kg over exposure
+
+    const wholeBodyLimit = 0.08;
+    const localLimit = 2.0;
+    const overWhole = SAR > wholeBodyLimit;
+    const overLocal = SAR > localLimit;
+
+    // HUD
+    setHud(
+      'Specific absorption rate',
+      'SAR = \\frac{\\sigma E^2}{2\\rho}',
+      [
+        { k: 'E', v: E.toFixed(0) + ' V/m' },
+        { k: 'f', v: fMHz.toFixed(0) + ' MHz' },
+        { k: 'SAR', v: SAR.toFixed(3) + ' W/kg' },
+        { k: 'Power density', v: S.toFixed(2) + ' W/m^2' },
+        { k: 'Whole-body limit', v: overWhole ? 'EXCEEDED (0.08 W/kg)' : 'within 0.08 W/kg' },
+        { k: 'Localized limit', v: overLocal ? 'EXCEEDED (2 W/kg)' : 'within 2 W/kg' },
+        { k: 'Dose', v: dose.toFixed(1) + ' J/kg' }
+      ]
+    );
+
+    // Hotspot visual intensity
+    const heat = Math.min(1, SAR / localLimit);
+    this.hotspotMat.opacity = 0.10 + 0.42 * heat;
+    this.hotspotMat.color.setHSL(0.02 + 0.10 * (1 - heat), 0.9, 0.55);
+    this.hotspot.scale.setScalar(0.85 + 0.35 * heat);
+
+    // Rebuild incident wave arrows
+    while (this.arrowGroup.children.length > 0) {
+      const c = this.arrowGroup.children.pop();
+      if (c.geometry) c.geometry.dispose();
+      if (c.material) c.material.dispose();
+    }
+    const vectors = [];
+    const n = 14;
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * Math.PI * 2;
+      const r = 1.6 + 0.9 * ((i % 3) / 2);
+      const origin = new THREE.Vector3(Math.cos(a) * r, 0.35 + 0.9 * ((i % 4) / 3), Math.sin(a) * r);
+      const dir = new THREE.Vector3(-Math.cos(a), 0.15, -Math.sin(a)).normalize();
+      vectors.push({ origin, dir, len: 0.55 + 0.35 * (E / 1000) });
+    }
+    addArrowField(vectors, 0x7fd1ff);
+
+    // Draw SAR vs frequency chart
+    const ctx = this.ctx;
+    const W = this.chartW, H = this.chartH;
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = '#0b1220';
+    ctx.fillRect(0, 0, W, H);
+
+    const padL = 52, padR = 18, padT = 26, padB = 42;
+    const plotW = W - padL - padR;
+    const plotH = H - padT - padB;
+
+    // Axes
+    ctx.strokeStyle = '#3a4a63';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(padL, padT);
+    ctx.lineTo(padL, padT + plotH);
+    ctx.lineTo(padL + plotW, padT + plotH);
+    ctx.stroke();
+
+    // SAR vs f (fixed E, sigma)
+    const fMin = 1, fMax = 3000;
+    const sarAt = (f) => (sigma * E * E) / (2 * denRho); // frequency-independent in this simple model
+    const yMax = Math.max(2.4, SAR * 1.25, 0.12);
+    const xOf = (f) => padL + ((f - fMin) / (fMax - fMin)) * plotW;
+    const yOf = (sar) => padT + plotH - (sar / yMax) * plotH;
+
+    // ICNIRP whole-body limit line
+    ctx.strokeStyle = '#ffcc4d';
+    ctx.setLineDash([6, 5]);
+    ctx.beginPath();
+    ctx.moveTo(padL, yOf(wholeBodyLimit));
+    ctx.lineTo(padL + plotW, yOf(wholeBodyLimit));
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Localized limit line
+    ctx.strokeStyle = '#ff6b4a';
+    ctx.setLineDash([3, 4]);
+    ctx.beginPath();
+    ctx.moveTo(padL, yOf(localLimit));
+    ctx.lineTo(padL + plotW, yOf(localLimit));
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // SAR curve (flat with frequency in this model)
+    ctx.strokeStyle = '#7fd1ff';
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.moveTo(xOf(fMin), yOf(sarAt(fMin)));
+    ctx.lineTo(xOf(fMax), yOf(sarAt(fMax)));
+    ctx.stroke();
+
+    // Current operating point
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.arc(xOf(fMHz), yOf(SAR), 4.5, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Labels
+    ctx.fillStyle = '#9fb3cc';
+    ctx.font = '12px system-ui, sans-serif';
+    ctx.fillText('SAR (W/kg)', 8, padT + 10);
+    ctx.fillText('Frequency (MHz)', padL + plotW / 2 - 52, H - 12);
+    ctx.fillStyle = '#ffcc4d';
+    ctx.fillText('0.08 W/kg whole-body', padL + 8, yOf(wholeBodyLimit) - 6);
+    ctx.fillStyle = '#ff6b4a';
+    ctx.fillText('2 W/kg localized', padL + 8, yOf(localLimit) - 6);
+
+    // Tick marks
+    ctx.fillStyle = '#6f8299';
+    for (let f = 0; f <= 3000; f += 500) {
+      const x = xOf(Math.max(fMin, f));
+      ctx.fillRect(x, padT + plotH, 1, 5);
+      ctx.fillText(String(f), x - 10, padT + plotH + 18);
+    }
+  },
+
+  tick(dt) {
+    this.phase += dt * 1.6;
+    // Gentle pulse of hotspot and human breathing
+    const pulse = 0.5 + 0.5 * Math.sin(this.phase);
+    this.hotspot.scale.setScalar(this.hotspot.scale.x * 0.0 + (0.9 + 0.12 * pulse));
+    this.human.position.y = 0.02 * Math.sin(this.phase * 0.8);
+    this.human.rotation.y = 0.15 * Math.sin(this.phase * 0.35);
+  },
+
+  lesson: `Electromagnetic hazards are governed by how much energy tissue absorbs, not simply by field strength. The specific absorption rate (SAR) is SAR = \\frac{\\sigma E^2}{2\\rho}, where \\sigma is tissue conductivity, E is the internal electric field, and \\rho is mass density. Because SAR scales with E^2, doubling the field quadruples the absorption rate. In the far field the power density is S = \\frac{E^2}{2Z_0} with Z_0 \\approx 377 \\Omega, so E = \\sqrt{2Z_0 S}. ICNIRP occupational limits are 0.08 W/kg averaged over the whole body and 2 W/kg localized. Frequency matters because tissue conductivity and penetration depth change with frequency; higher frequencies tend to be absorbed more strongly near the body surface, producing localized hotspots. Exposure duration converts SAR into a dose (J/kg), which is why both field strength and time must be controlled.`,
+
+  quiz: [
+    {
+      q: 'If the electric field strength is doubled while tissue properties stay fixed, what happens to SAR?',
+      options: ['It doubles', 'It quadruples', 'It stays the same', 'It halves'],
+      answer: 1
+    },
+    {
+      q: 'What is the ICNIRP whole-body SAR limit for occupational exposure?',
+      options: ['2 W/kg', '0.08 W/kg', '0.8 W/kg', '20 W/kg'],
+      answer: 1
+    }
+  ]
+});
+modules.push({
+  id: 'm9_8_capstone',
+  title: '8. Capstone Projects & Problems',
+  controls: [
+    { id: 'axonLambda', label: 'Axon lambda (mm)', type: 'range', min: 0.1, max: 10, step: 0.1, value: 1 },
+    { id: 'dipoleP', label: 'Heart dipole p (A·m x1e-5)', type: 'range', min: 0.1, max: 5, step: 0.1, value: 1 },
+    { id: 'defibE', label: 'Defibrillator energy (J)', type: 'range', min: 50, max: 400, step: 10, value: 200 },
+    { id: 'sarE', label: 'Incident E field (V/m)', type: 'range', min: 1, max: 500, step: 1, value: 100 }
+  ],
+
+  build() {
+    this.phase = 0;
+    this.axon = new THREE.Group();
+    this.axon.position.set(-3.2, 0, 0);
+    const axonMat = new THREE.MeshStandardMaterial({ color: 0x8fd3ff, roughness: 0.35, metalness: 0.15 });
+    const axonBody = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.28, 3.2, 24), axonMat);
+    axonBody.rotation.z = Math.PI / 2;
+    this.axon.add(axonBody);
+    const myelinMat = new THREE.MeshStandardMaterial({ color: 0xffe6a8, roughness: 0.5 });
+    for (let i = 0; i < 5; i++) {
+      const seg = new THREE.Mesh(new THREE.CylinderGeometry(0.36, 0.36, 0.42, 20), myelinMat);
+      seg.rotation.z = Math.PI / 2;
+      seg.position.x = -1.25 + i * 0.62;
+      this.axon.add(seg);
+    }
+    this.axonLabel = new THREE.Mesh(
+      new THREE.TorusGeometry(0.55, 0.035, 8, 40),
+      new THREE.MeshStandardMaterial({ color: 0x7fd1ff, emissive: 0x1a4a66 })
+    );
+    this.axonLabel.rotation.y = Math.PI / 2;
+    this.axonLabel.position.x = 1.55;
+    this.axon.add(this.axonLabel);
+    content.add(this.axon);
+
+    this.heart = new THREE.Group();
+    this.heart.position.set(0, 0.15, 0);
+    const heartMat = new THREE.MeshStandardMaterial({ color: 0xff6b7a, roughness: 0.45, emissive: 0x3a0d12 });
+    const heartMesh = new THREE.Mesh(new THREE.SphereGeometry(0.62, 28, 20), heartMat);
+    heartMesh.scale.set(1, 1.15, 0.85);
+    this.heart.add(heartMesh);
+    const arrowMat = new THREE.MeshStandardMaterial({ color: 0xffd166, emissive: 0x5a3a00 });
+    const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.055, 1.5, 12), arrowMat);
+    shaft.position.set(0, 0.95, 0);
+    this.heart.add(shaft);
+    const tip = new THREE.Mesh(new THREE.ConeGeometry(0.16, 0.34, 14), arrowMat);
+    tip.position.set(0, 1.78, 0);
+    this.heart.add(tip);
+    this.dipoleArrow = new THREE.Group();
+    this.dipoleArrow.add(shaft, tip);
+    content.add(this.heart);
+
+    this.paddle = new THREE.Group();
+    this.paddle.position.set(3.3, 0, 0);
+    const padMat = new THREE.MeshStandardMaterial({ color: 0xc9d6e3, roughness: 0.3, metalness: 0.6 });
+    const pad = new THREE.Mesh(new THREE.CylinderGeometry(0.62, 0.62, 0.16, 28), padMat);
+    pad.rotation.x = Math.PI / 2;
+    this.paddle.add(pad);
+    const handle = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 1.1, 12), padMat);
+    handle.position.set(0, 0.62, 0);
+    this.paddle.add(handle);
+    const sparkMat = new THREE.MeshStandardMaterial({ color: 0xfff2a8, emissive: 0xffb703, transparent: true, opacity: 0.8 });
+    this.spark = new THREE.Mesh(new THREE.SphereGeometry(0.16, 14, 10), sparkMat);
+    this.spark.position.set(-0.62, 0, 0);
+    this.paddle.add(this.spark);
+    content.add(this.paddle);
+
+    this.fieldGroup = new THREE.Group();
+    this.fieldGroup.position.set(0, -1.6, -2.2);
+    const fieldMat = new THREE.MeshStandardMaterial({ color: 0x7fd1ff, emissive: 0x123a52, transparent: true, opacity: 0.55 });
+    for (let i = 0; i < 6; i++) {
+      for (let j = 0; j < 4; j++) {
+        const bar = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.55, 8), fieldMat);
+        bar.position.set(-2.5 + i * 1.0, 0, -1.5 + j * 0.9);
+        bar.rotation.z = Math.PI / 2;
+        this.fieldGroup.add(bar);
+      }
+    }
+    content.add(this.fieldGroup);
+
+    this.fieldVectors = [];
+    for (let i = 0; i < 6; i++) {
+      for (let j = 0; j < 4; j++) {
+        this.fieldVectors.push({
+          origin: new THREE.Vector3(-2.5 + i * 1.0, -1.6, -3.7 + j * 0.9),
+          dir: new THREE.Vector3(1, 0, 0),
+          len: 0.55
+        });
+      }
+    }
+    addArrowField(this.fieldVectors, 0x7fd1ff);
+
+    this.light = new THREE.PointLight(0xffd6a0, 1.2, 12);
+    this.light.position.set(0, 3, 3);
+    content.add(this.light);
+  },
+
+  update() {
+    const st = this.state;
+    const lambda = st.axonLambda;
+    const p = st.dipoleP * 1e-5;
+    const W = st.defibE;
+    const E = st.sarE;
+
+    const sigma = 0.5;
+    const r = 0.05;
+    const den = (Math.abs(r) < 1e-12 || !isFinite(r)) ? 1e-12 : r;
+    const V = p / (4 * Math.PI * sigma * den * den);
+
+    const rho = 1000;
+    const SAR = sigma * E * E / (2 * rho);
+
+    this.axon.scale.set(1, 1, 1);
+    this.axonLabel.scale.setScalar(0.6 + lambda * 0.12);
+    this.heart.scale.setScalar(0.8 + p * 2e4);
+    this.dipoleArrow.scale.setScalar(0.7 + p * 3e4);
+    this.spark.scale.setScalar(0.5 + W / 400);
+    this.spark.material.opacity = 0.35 + W / 600;
+    this.fieldGroup.scale.setScalar(0.6 + E / 500);
+
+    setHud(
+      'Capstone summary',
+      '\\lambda = \\sqrt{R_m/R_a},\\quad V = \\frac{\\mathbf{p}\\cdot\\hat{\\mathbf{r}}}{4\\pi\\sigma r^2}',
+      [
+        { k: 'Axon lambda', v: lambda.toFixed(2) + ' mm' },
+        { k: 'Dipole V', v: V.toFixed(3) + ' V' },
+        { k: 'Defib energy', v: W.toFixed(0) + ' J' },
+        { k: 'SAR', v: SAR.toFixed(4) + ' W/kg' }
+      ]
+    );
+
+    const ctx = chartEl.getContext('2d');
+    const w = chartEl.width, h = chartEl.height;
+    ctx.clearRect(0, 0, w, h);
+    ctx.fillStyle = '#0b1220';
+    ctx.fillRect(0, 0, w, h);
+
+    const panels = [
+      { x: 0, y: 0, w: w / 3, h: h, title: 'lambda vs axon radius', color: '#7fd1ff' },
+      { x: w / 3, y: 0, w: w / 3, h: h, title: 'V vs distance', color: '#ff8fa3' },
+      { x: 2 * w / 3, y: 0, w: w / 3, h: h, title: 'SAR vs E', color: '#ffd166' }
+    ];
+
+    for (const panel of panels) {
+      ctx.strokeStyle = '#24344d';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(panel.x + 6, panel.y + 6, panel.w - 12, panel.h - 12);
+      ctx.fillStyle = '#9fb3c8';
+      ctx.font = '11px sans-serif';
+      ctx.fillText(panel.title, panel.x + 12, panel.y + 22);
+    }
+
+    const drawCurve = (panel, fn, xMin, xMax, yMin, yMax) => {
+      ctx.strokeStyle = panel.color;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      for (let i = 0; i <= 80; i++) {
+        const t = i / 80;
+        const x = xMin + t * (xMax - xMin);
+        const y = fn(x);
+        const px = panel.x + 12 + t * (panel.w - 24);
+        const py = panel.y + panel.h - 18 - ((y - yMin) / (yMax - yMin)) * (panel.h - 44);
+        if (i === 0) ctx.moveTo(px, py);
+        else ctx.lineTo(px, py);
+      }
+      ctx.stroke();
+    };
+
+    drawCurve(panels[0], (a) => Math.sqrt(a), 0.1, 10, 0, 3.2);
+    drawCurve(panels[1], (d) => 1 / (d * d), 0.05, 1.0, 0, 400);
+    drawCurve(panels[2], (e) => e * e, 1, 500, 0, 250000);
+
+    ctx.fillStyle = '#e8f1ff';
+    ctx.font = '12px sans-serif';
+    ctx.fillText('lambda = ' + lambda.toFixed(2) + ' mm', 12, h - 12);
+    ctx.fillText('V = ' + V.toFixed(3) + ' V', w / 3 + 12, h - 12);
+    ctx.fillText('SAR = ' + SAR.toFixed(4) + ' W/kg', 2 * w / 3 + 12, h - 12);
+  },
+
+  tick(dt) {
+    this.phase += dt;
+    this.spark.position.x = -0.62 + Math.sin(this.phase * 6) * 0.06;
+    this.spark.material.opacity = 0.35 + 0.25 * (0.5 + 0.5 * Math.sin(this.phase * 8));
+    this.heart.rotation.y = Math.sin(this.phase * 0.8) * 0.12;
+    this.fieldGroup.position.y = -1.6 + Math.sin(this.phase * 1.2) * 0.05;
+  },
+
+  lesson: `This capstone ties together four quantitative threads from the chapter. The axon cable model shows that the length constant lambda = sqrt(R_m/R_a) grows with membrane resistance and shrinks with axial resistance, setting how far a signal spreads before decaying. The heart dipole relation V = p·r_hat/(4*pi*sigma*r^2) shows that the potential falls as 1/r^2 and depends on tissue conductivity. The defibrillator delivers energy W = V*I*t_p, so a higher voltage, current, or pulse duration deposits more energy into the heart. Finally, the EM hazard SAR = sigma*E^2/(2*rho) shows that absorbed power per unit mass scales with the square of the incident field. Together these relations connect cable theory, cardiac electrophysiology, defibrillation therapy, and electromagnetic safety limits in real biomedical devices.`,
+
+  quiz: [
+    {
+      q: 'According to the cable equation lambda = sqrt(R_m/R_a), what happens to lambda if membrane resistance R_m increases?',
+      options: ['lambda decreases', 'lambda increases', 'lambda stays constant', 'lambda becomes imaginary'],
+      answer: 1
+    },
+    {
+      q: 'The specific absorption rate SAR = sigma*E^2/(2*rho) is proportional to which quantity?',
+      options: ['E', 'E^2', '1/E', '1/E^2'],
+      answer: 1
+    }
+  ]
+});
+/* === UI CONTROLLER === */
+let currentIndex = -1;
+let currentModule = null;
+let lastTime = performance.now();
+let rafId = 0;
+
+function buildControls(mod) {
+  const host = document.getElementById('controls');
+  host.innerHTML = '';
+  const st = mod.state || (mod.state = {});
+  for (const c of (mod.controls || [])) {
+    const wrap = document.createElement('div');
+    wrap.className = 'ctl';
+    const label = document.createElement('label');
+    label.textContent = c.label || c.id;
+    wrap.appendChild(label);
+
+    if (c.type === 'range') {
+      const valSpan = document.createElement('span');
+      valSpan.className = 'val';
+      const input = document.createElement('input');
+      input.type = 'range';
+      input.min = c.min ?? 0;
+      input.max = c.max ?? 1;
+      input.step = c.step ?? 0.01;
+      input.value = c.value ?? c.min ?? 0;
+      st[c.id] = Number(input.value);
+      valSpan.textContent = String(st[c.id]);
+      input.addEventListener('input', () => {
+        st[c.id] = Number(input.value);
+        valSpan.textContent = String(st[c.id]);
+        if (typeof mod.update === 'function') mod.update();
+      });
+      label.appendChild(valSpan);
+      wrap.appendChild(input);
+    } else if (c.type === 'select') {
+      const sel = document.createElement('select');
+      for (const o of (c.options || [])) {
+        const opt = document.createElement('option');
+        opt.value = o.value;
+        opt.textContent = o.label ?? o.value;
+        sel.appendChild(opt);
+      }
+      sel.value = c.value ?? (c.options && c.options[0] ? c.options[0].value : '');
+      st[c.id] = sel.value;
+      sel.addEventListener('change', () => {
+        st[c.id] = sel.value;
+        if (typeof mod.update === 'function') mod.update();
+      });
+      wrap.appendChild(sel);
+    } else if (c.type === 'check') {
+      const row = document.createElement('div');
+      row.className = 'chk';
+      const box = document.createElement('input');
+      box.type = 'checkbox';
+      box.checked = !!c.value;
+      st[c.id] = !!c.value;
+      box.addEventListener('change', () => {
+        st[c.id] = box.checked;
+        if (typeof mod.update === 'function') mod.update();
+      });
+      row.appendChild(box);
+      const txt = document.createElement('span');
+      txt.textContent = c.label || c.id;
+      row.appendChild(txt);
+      wrap.appendChild(row);
+    }
+    host.appendChild(wrap);
+  }
+}
+
+function buildQuiz(mod) {
+  const host = document.getElementById('quiz');
+  host.innerHTML = '';
+  const scoreEl = document.getElementById('quizScore');
+  let answered = 0, correct = 0;
+  const items = mod.quiz || [];
+  items.forEach((item, qi) => {
+    const box = document.createElement('div');
+    box.className = 'q';
+    const qt = document.createElement('div');
+    qt.className = 'qt';
+    qt.textContent = `${qi + 1}. ${item.q}`;
+    box.appendChild(qt);
+    const opts = item.options || [];
+    opts.forEach((optText, oi) => {
+      const btn = document.createElement('button');
+      btn.className = 'opt';
+      btn.textContent = optText;
+      btn.addEventListener('click', () => {
+        if (box.dataset.done === '1') return;
+        box.dataset.done = '1';
+        answered++;
+        if (oi === item.answer) {
+          btn.classList.add('right');
+          correct++;
+        } else {
+          btn.classList.add('wrong');
+          const rightBtn = box.querySelectorAll('.opt')[item.answer];
+          if (rightBtn) rightBtn.classList.add('right');
+        }
+        scoreEl.textContent = `Score: ${correct} / ${answered} answered (${items.length} total)`;
+      });
+      box.appendChild(btn);
+    });
+    host.appendChild(box);
+  });
+  scoreEl.textContent = `Score: 0 / 0 answered (${items.length} total)`;
+}
+
+function loadModule(idx) {
+  if (idx < 0 || idx >= modules.length) return;
+  currentIndex = idx;
+  currentModule = modules[idx];
+
+  /* --- guardrail #1: free all WebGL resources before rebuilding --- */
+  disposeNode(content);
+  while (content.children.length) content.remove(content.children[0]);
+  renderer.renderLists.dispose();
+
+  /* reset camera to a sane default per module */
+  camera.position.set(6, 5, 9);
+  controls3D.target.set(0, 0, 0);
+  controls3D.update();
+
+  document.getElementById('modTitle').textContent = currentModule.title || `Module ${idx + 1}`;
+  document.getElementById('modId').textContent = currentModule.id || '';
+  document.getElementById('lesson').innerHTML = currentModule.lesson || '';
+  document.getElementById('err').style.display = 'none';
+
+  currentModule.state = currentModule.state || {};
+  buildControls(currentModule);
+  buildQuiz(currentModule);
+
+  try {
+    if (typeof currentModule.build === 'function') currentModule.build();
+    if (typeof currentModule.update === 'function') currentModule.update();
+  } catch (e) {
+    const errEl = document.getElementById('err');
+    errEl.textContent = 'Module error: ' + (e && e.message ? e.message : String(e));
+    errEl.style.display = 'block';
+    console.error(e);
+  }
+
+  /* highlight sidebar */
+  document.querySelectorAll('.modBtn').forEach((b, i) => {
+    b.classList.toggle('active', i === idx);
+  });
+}
+
+function buildSidebar() {
+  const nav = document.getElementById('moduleList');
+  nav.innerHTML = '';
+  modules.forEach((m, i) => {
+    const btn = document.createElement('button');
+    btn.className = 'modBtn';
+    const num = document.createElement('span');
+    num.className = 'num';
+    num.textContent = String(i + 1);
+    btn.appendChild(num);
+    btn.appendChild(document.createTextNode(m.title || m.id));
+    btn.addEventListener('click', () => loadModule(i));
+    nav.appendChild(btn);
+  });
+}
+
+/* ============================================================
+   RENDER LOOP
+   ============================================================ */
+function resize() {
+  const w = glWrap.clientWidth, h = glWrap.clientHeight;
+  if (w === 0 || h === 0) return;
+  renderer.setSize(w, h);
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+  const cw = chartEl.clientWidth, ch = chartEl.clientHeight;
+  if (cw > 0 && ch > 0) {
+    chartEl.width = Math.floor(cw * Math.min(window.devicePixelRatio, 2));
+    chartEl.height = Math.floor(ch * Math.min(window.devicePixelRatio, 2));
+  }
+}
+window.addEventListener('resize', resize);
+
+function tick(dt) {
+  controls3D.update();
+  if (currentModule && typeof currentModule.tick === 'function') {
+    try {
+      /* guardrail #2: tick() must only touch lightweight transform/phase state,
+         never call the full update() (which redraws meshes + chart + HUD). */
+      currentModule.tick(dt);
+    } catch (e) {
+      console.error('tick error', e);
+    }
+  }
+  renderer.render(scene, camera);
+}
+
+function animate(now) {
+  rafId = requestAnimationFrame(animate);
+  const dt = Math.min((now - lastTime) / 1000, 0.05);
+  lastTime = now;
+  tick(dt);
+}
+
+/* ============================================================
+   BOOT
+   ============================================================ */
+function boot() {
+  resize();
+  buildSidebar();
+  if (modules.length > 0) loadModule(0);
+  lastTime = performance.now();
+  rafId = requestAnimationFrame(animate);
+}
+
+/* KaTeX is loaded lazily so the page works even offline */
+(function loadKatex() {
+  if (window.katex) { boot(); return; }
+  const s = document.createElement('script');
+  s.src = 'https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js';
+  s.onload = boot;
+  s.onerror = boot;
+  document.head.appendChild(s);
+})();
+</script>
+</body>
+</html>
