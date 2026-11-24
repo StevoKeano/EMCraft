@@ -1682,6 +1682,1766 @@ modules.push({
     { q: 'A deuteron has roughly twice the mass of a proton with the same charge. Compared with a proton in the same B, its gyrofrequency is:', options: ['Twice as large', 'The same', 'Half as large', 'Four times as large'], answer: 2 }
   ]
 });
+modules.push({
+  id: 'crt_magnetic_deflection',
+  title: '6-5 Cathode-Ray Tube; Magnetic Deflection',
+  controls: [
+    { id: 'Va_kV', label: 'Anode voltage V_a (kV)', type: 'range', min: 1, max: 25, step: 0.5, value: 10 },
+    { id: 'B_mT', label: 'Yoke field B (mT)', type: 'range', min: -8, max: 8, step: 0.25, value: 3.0 },
+    { id: 'yoke_l_cm', label: 'Yoke length l (cm)', type: 'range', min: 2, max: 6, step: 0.5, value: 4.0 },
+    { id: 'screen_L_cm', label: 'Yoke-center to screen L (cm)', type: 'range', min: 15, max: 35, step: 1, value: 25 }
+  ],
+
+  build() {
+    const g = new THREE.Group();
+    content.add(g);
+    this.group = g;
+
+    // ---- CRT envelope (axis along +x) ----
+    const glassMat = new THREE.MeshStandardMaterial({
+      color: 0x9fd8ff, emissive: 0x1b4a66, emissiveIntensity: 0.55,
+      transparent: true, opacity: 0.28, roughness: 0.15, metalness: 0.1,
+      side: THREE.DoubleSide
+    });
+    const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.55, 6.2, 28, 1, true), glassMat);
+    neck.rotation.z = Math.PI / 2;
+    neck.position.set(-3.1, 0, 0);
+    g.add(neck);
+
+    const cone = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 2.1, 3.4, 32, 1, true), glassMat);
+    cone.rotation.z = -Math.PI / 2;
+    cone.position.set(1.7, 0, 0);
+    g.add(cone);
+
+    // phosphor screen face
+    const screenMat = new THREE.MeshStandardMaterial({
+      color: 0x2b6b4a, emissive: 0x2fbf7a, emissiveIntensity: 0.9, roughness: 0.6
+    });
+    const screen = new THREE.Mesh(new THREE.CircleGeometry(2.1, 40), screenMat);
+    screen.rotation.y = Math.PI / 2;
+    screen.position.set(3.4, 0, 0);
+    g.add(screen);
+
+    // cathode / gun
+    const gunMat = new THREE.MeshStandardMaterial({ color: 0xffb066, emissive: 0xff7a2a, emissiveIntensity: 0.8 });
+    const gun = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, 0.9, 16), gunMat);
+    gun.rotation.z = Math.PI / 2;
+    gun.position.set(-6.2, 0, 0);
+    g.add(gun);
+
+    // ---- deflection yoke coils (saddle coils, above & below neck) ----
+    const coilMat = new THREE.MeshStandardMaterial({ color: 0xff8a3d, emissive: 0xd94a12, emissiveIntensity: 0.7, roughness: 0.4 });
+    this.coils = [];
+    for (let s = -1; s <= 1; s += 2) {
+      const c = new THREE.Mesh(new THREE.TorusGeometry(0.78, 0.16, 12, 30), coilMat);
+      c.rotation.y = Math.PI / 2;
+      c.position.set(0, s * 0.72, 0);
+      g.add(c);
+      this.coils.push(c);
+    }
+    // yoke field region marker (translucent box)
+    const yokeMat = new THREE.MeshStandardMaterial({
+      color: 0x66ccff, emissive: 0x2a7fb8, emissiveIntensity: 0.35,
+      transparent: true, opacity: 0.16, side: THREE.DoubleSide
+    });
+    this.yokeBox = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), yokeMat);
+    g.add(this.yokeBox);
+
+    // ---- B-field arrows inside yoke (persistent arrow field) ----
+    this.bArrows = addArrowField([], 0x7fd1ff);
+
+    // ---- electron trajectory (line, rebuilt each update) ----
+    const trajMat = new THREE.LineBasicMaterial({ color: 0x7fffd4 });
+    this.trajGeo = new THREE.BufferGeometry();
+    this.traj = new THREE.Line(this.trajGeo, trajMat);
+    g.add(this.traj);
+
+    // ---- radius-of-curvature dashed indicator ----
+    const dashMat = new THREE.LineDashedMaterial({ color: 0xffd166, dashSize: 0.18, gapSize: 0.12 });
+    this.radGeo = new THREE.BufferGeometry();
+    this.radLine = new THREE.Line(this.radGeo, dashMat);
+    g.add(this.radLine);
+
+    // ---- impact spot on screen ----
+    const spotMat = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0x9dffcf, emissiveIntensity: 2.0 });
+    this.spot = new THREE.Mesh(new THREE.SphereGeometry(0.11, 16, 12), spotMat);
+    g.add(this.spot);
+
+    // ---- axis guide line ----
+    const axisGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(-6.6, 0, 0), new THREE.Vector3(3.4, 0, 0)]);
+    g.add(new THREE.Line(axisGeo, new THREE.LineBasicMaterial({ color: 0x3a6a8a })));
+
+    this.meshRefs = { neck, cone, screen, gun, yokeBox: this.yokeBox, traj: this.traj, radLine: this.radLine, spot: this.spot };
+  },
+
+  update() {
+    const st = this.state;
+    const Va = st.Va_kV * 1e3;          // volts
+    const B = st.B_mT * 1e-3;           // tesla
+    const l = st.yoke_l_cm * 1e-2;      // m
+    const L = st.screen_L_cm * 1e-2;    // m
+    const e = 1.602e-19, me = 9.109e-31;
+
+    const vx = Math.sqrt(2 * e * Va / me);
+    const R = (me * vx) / (e * Math.abs(B) || 1e-9);   // m
+    const sinA = Math.min(1, l / R);
+    const alpha = Math.asin(sinA);
+    const tanA = Math.tan(alpha);
+    const Dm = L * tanA;                                // m
+    const sens = (Dm * 1e3) / (st.B_mT || 1e-9);        // mm/mT
+
+    // ---- 3D scaling: 1 world unit = 1 cm ----
+    const lw = st.yoke_l_cm;                 // yoke length in world units
+    const Lw = st.screen_L_cm;               // yoke center -> screen
+    const Rw = R * 100;                      // radius in cm
+    const Dw = Dm * 100;                     // deflection in cm
+
+    // yoke box
+    this.yokeBox.scale.set(lw, 1.5, 1.5);
+    this.yokeBox.position.set(0, 0, 0);
+
+    // coils follow yoke length
+    this.coils.forEach((c, i) => {
+      c.position.x = 0;
+      c.scale.set(1, 1, 1);
+    });
+
+    // ---- trajectory: straight from gun to yoke entry, arc inside yoke, straight to screen ----
+    const pts = [];
+    const x0 = -6.2, xIn = -lw / 2, xOut = lw / 2;
+    pts.push(new THREE.Vector3(x0, 0, 0));
+    pts.push(new THREE.Vector3(xIn, 0, 0));
+
+    // arc: circle center at (xIn, 0, sgn*Rw) with radius Rw, bending in +z for B>0
+    const sgn = B >= 0 ? 1 : -1;
+    const cz = sgn * Rw;
+    const a0 = Math.atan2(0 - cz, xIn - xIn); // start angle relative to center
+    // parametrize by angle swept = alpha
+    const steps = 40;
+    for (let i = 0; i <= steps; i++) {
+      const t = i / steps;
+      const ang = -sgn * alpha * t; // rotate about center
+      const px = xIn + Rw * Math.sin(Math.abs(ang)) * 0; // placeholder
+      // use proper rotation: point on circle starting at (xIn,0)
+      const dx = Rw * Math.sin(alpha * t);
+      const dz = sgn * Rw * (1 - Math.cos(alpha * t));
+      pts.push(new THREE.Vector3(xIn + dx, 0, dz));
+    }
+
+    // exit point
+    const exitX = xIn + Rw * Math.sin(alpha);
+    const exitZ = sgn * Rw * (1 - Math.cos(alpha));
+    // straight to screen at x = Lw (screen plane)
+    const xScreen = Lw;
+    const zScreen = exitZ + (xScreen - exitX) * Math.tan(alpha) * sgn;
+    pts.push(new THREE.Vector3(xScreen, 0, zScreen));
+
+    this.trajGeo.setFromPoints(pts);
+    this.trajGeo.attributes.position.needsUpdate = true;
+
+    // spot on screen
+    this.spot.position.set(xScreen, 0, zScreen);
+
+    // radius indicator: from arc center to arc midpoint
+    const midT = 0.5;
+    const mx = xIn + Rw * Math.sin(alpha * midT);
+    const mz = sgn * Rw * (1 - Math.cos(alpha * midT));
+    const center = new THREE.Vector3(xIn, 0, cz);
+    this.radGeo.setFromPoints([center, new THREE.Vector3(mx, 0, mz)]);
+    this.radLine.computeLineDistances();
+    this.radGeo.attributes.position.needsUpdate = true;
+
+    // ---- B-field arrows inside yoke ----
+    const arrows = [];
+    const nCols = 5, nRows = 3;
+    for (let i = 0; i < nCols; i++) {
+      for (let j = 0; j < nRows; j++) {
+        const x = -lw / 2 + (i + 0.5) * (lw / nCols);
+        const z = -0.55 + j * 0.55;
+        arrows.push({
+          origin: new THREE.Vector3(x, -0.55, z),
+          dir: new THREE.Vector3(0, 1, 0),
+          len: 0.9
+        });
+      }
+    }
+    this.bArrows.setVectors(arrows);
+
+    // ---- 2D chart: D_m vs V_a (magnetic) and D_e vs V_a (electric) ----
+    const ctx = chartEl.getContext('2d');
+    const W = chartEl.width, H = chartEl.height;
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = '#0b1220';
+    ctx.fillRect(0, 0, W, H);
+
+    const padL = 62, padR = 22, padT = 34, padB = 46;
+    const plotW = W - padL - padR, plotH = H - padT - padB;
+    const Vmin = 1, Vmax = 25;
+
+    // grid
+    ctx.strokeStyle = '#1e2c44';
+    ctx.lineWidth = 1;
+    for (let i = 0; i <= 6; i++) {
+      const x = padL + (i / 6) * plotW;
+      ctx.beginPath(); ctx.moveTo(x, padT); ctx.lineTo(x, padT + plotH); ctx.stroke();
+    }
+    for (let i = 0; i <= 5; i++) {
+      const y = padT + (i / 5) * plotH;
+      ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(padL + plotW, y); ctx.stroke();
+    }
+
+    // normalize both curves at Va = 5 kV
+    const Vref = 5;
+    const DmRef = (L * l * Math.abs(B)) / Math.sqrt(2 * me * (Vref * 1e3) / e);
+    const DeRef = 1 / (Vref * 1e3); // arbitrary electric normalization
+
+    const toX = v => padL + ((v - Vmin) / (Vmax - Vmin)) * plotW;
+    const toY = d => padT + plotH - (d / 1.15) * plotH;
+
+    // magnetic curve: Dm ∝ 1/sqrt(Va)
+    ctx.strokeStyle = '#7fffd4';
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    for (let i = 0; i <= 200; i++) {
+      const v = Vmin + (i / 200) * (Vmax - Vmin);
+      const d = DmRef * Math.sqrt(Vref / v) / DmRef; // normalized to 1 at Vref
+      const y = toY(d);
+      if (i === 0) ctx.moveTo(toX(v), y); else ctx.lineTo(toX(v), y);
+    }
+    ctx.stroke();
+
+    // electric curve: De ∝ 1/Va
+    ctx.strokeStyle = '#ff9f6b';
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    for (let i = 0; i <= 200; i++) {
+      const v = Vmin + (i / 200) * (Vmax - Vmin);
+      const d = Vref / v;
+      const y = toY(d);
+      if (i === 0) ctx.moveTo(toX(v), y); else ctx.lineTo(toX(v), y);
+    }
+    ctx.stroke();
+
+    // axes labels
+    ctx.fillStyle = '#9fb6d4';
+    ctx.font = '13px system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Anode voltage V_a (kV)', padL + plotW / 2, H - 12);
+    ctx.save();
+    ctx.translate(16, padT + plotH / 2);
+    ctx.rotate(-Math.PI / 2);
+    ctx.fillText('Normalized deflection', 0, 0);
+    ctx.restore();
+
+    // legend
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#7fffd4';
+    ctx.fillText('D_m ∝ V_a^{-1/2}  (magnetic)', padL + 12, padT + 18);
+    ctx.fillStyle = '#ff9f6b';
+    ctx.fillText('D_e ∝ V_a^{-1}  (electric)', padL + 12, padT + 36);
+
+    // current operating point marker
+    const vNow = st.Va_kV;
+    const dNow = Math.sqrt(Vref / vNow);
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.arc(toX(vNow), toY(dNow), 4.5, 0, Math.PI * 2);
+    ctx.fill();
+
+    // ---- HUD ----
+    setHud(
+      'CRT Magnetic Deflection',
+      'R = \\frac{1}{B}\\sqrt{\\frac{2 m_e V_a}{e}},\\quad D_m \\approx \\frac{L\\,l\\,B}{\\sqrt{2 m_e V_a / e}}',
+      [
+        { k: 'Arc radius R', v: (R * 100).toFixed(2) + ' cm' },
+        { k: 'Deflection angle α', v: (alpha * 180 / Math.PI).toFixed(2) + '°' },
+        { k: 'Screen deflection D_m', v: (Dm * 1e3).toFixed(2) + ' mm' },
+        { k: 'Sensitivity D_m/B', v: sens.toFixed(3) + ' mm/mT' }
+      ]
+    );
+  },
+
+  tick(dt) {
+    // gentle pulsing of the phosphor spot
+    if (this.meshRefs && this.meshRefs.spot) {
+      const t = performance.now() * 0.004;
+      this.meshRefs.spot.material.emissiveIntensity = 1.6 + 0.6 * Math.sin(t);
+    }
+  },
+
+  lesson: `<p>Inside the magnetic yoke the electron moves on a circular arc of radius
+  <em>R = m_e v_x /(eB) = (1/B)√(2m_e V_a/e)</em>. The arc length is the yoke length <em>l</em>,
+  so the exit angle satisfies <em>sin α = l/R</em> and the screen deflection is
+  <em>D_m = L tan α ≈ L l B √(e/(2m_e V_a))</em>.</p>
+  <p>Because <em>D_m ∝ V_a^{-1/2}</em> while electrostatic deflection falls as <em>V_a^{-1}</em>,
+  magnetic deflection loses sensitivity far more slowly as the anode voltage rises — which is why
+  high-voltage TV and radar CRTs use magnetic yokes. Magnetic deflection also depends on <em>√(e/m)</em>,
+  so heavy positive ions are deflected much less than electrons; if the beam is misaligned they can
+  strike the phosphor and cause ion burn.</p>`,
+
+  quiz: [
+    { q: 'Inside the yoke, the electron path is best described as:', options: ['a straight line', 'a circular arc of radius R = m v/(eB)', 'a parabola', 'an ellipse'], answer: 1 },
+    { q: 'Compared with electrostatic deflection, magnetic deflection at high V_a scales as:', options: ['V_a^{-1}', 'V_a^{-1/2}', 'V_a^{+1/2}', 'independent of V_a'], answer: 1 },
+    { q: 'Why can magnetically deflected CRTs suffer ion burn?', options: ['Ions have larger charge', 'Ions have much larger mass, so they deflect far less and hit the screen', 'The magnetic field accelerates ions', 'Ions are repelled by the yoke'], answer: 1 }
+  ]
+});
+modules.push({
+  id: 'rotary_motor_generator',
+  title: '6-6 Rotary Motor or Generator',
+  controls: [
+    { id: 'mode', label: 'Mode', type: 'select', options: ['AC Generator (Slip Rings)', 'DC Motor (Commutator)'], value: 'AC Generator (Slip Rings)' },
+    { id: 'B_T', label: 'Stator field B (T)', type: 'range', min: 0.1, max: 1.5, step: 0.05, value: 0.6 },
+    { id: 'N_turns', label: 'Coil turns N', type: 'range', min: 10, max: 200, step: 10, value: 50 },
+    { id: 'rpm', label: 'Shaft speed (RPM)', type: 'range', min: 100, max: 3000, step: 100, value: 1200 },
+    { id: 'I_or_R', label: 'Load R_L (ohm) / Motor I (A)', type: 'range', min: 1, max: 20, step: 1, value: 10 },
+    { id: 'animate', label: 'Animate', type: 'check', value: true }
+  ],
+
+  build() {
+    const g = new THREE.Group();
+    // stator pole pieces (curved, red N / blue S) with field along +x
+    const poleGeo = new THREE.TorusGeometry(2.6, 0.55, 12, 40, Math.PI * 0.55);
+    const nMat = new THREE.MeshStandardMaterial({ color: 0xff4a4a, emissive: 0x551010, metalness: 0.5, roughness: 0.4 });
+    const sMat = new THREE.MeshStandardMaterial({ color: 0x4a7bff, emissive: 0x101a55, metalness: 0.5, roughness: 0.4 });
+    const nPole = new THREE.Mesh(poleGeo, nMat);
+    nPole.rotation.z = Math.PI * 0.5; nPole.position.set(0, 0, 0);
+    const sPole = new THREE.Mesh(poleGeo, sMat);
+    sPole.rotation.z = -Math.PI * 0.5;
+    g.add(nPole, sPole);
+
+    // shaft
+    const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 6.4, 16),
+      new THREE.MeshStandardMaterial({ color: 0xbfc6d0, metalness: 0.9, roughness: 0.25 }));
+    shaft.rotation.x = Math.PI / 2; g.add(shaft);
+
+    // armature: rectangular coil (width w along z, length l along x)
+    const arm = new THREE.Group();
+    const copper = new THREE.MeshStandardMaterial({ color: 0xd98a3a, emissive: 0x3a1d05, metalness: 0.85, roughness: 0.3 });
+    const l = 3.2, w = 2.2;
+    const bar = (len, rot, pos) => {
+      const m = new THREE.Mesh(new THREE.BoxGeometry(len, 0.09, 0.09), copper);
+      m.rotation.y = rot; m.position.copy(pos); return m;
+    };
+    arm.add(bar(l, 0, new THREE.Vector3(0, 0, w / 2)));
+    arm.add(bar(l, 0, new THREE.Vector3(0, 0, -w / 2)));
+    arm.add(bar(w, Math.PI / 2, new THREE.Vector3(l / 2, 0, 0)));
+    arm.add(bar(w, Math.PI / 2, new THREE.Vector3(-l / 2, 0, 0)));
+    // a few "turn" hints
+    for (let i = 0; i < 4; i++) {
+      const t = new THREE.Mesh(new THREE.TorusGeometry(0.05, 0.02, 6, 12), copper);
+      t.position.set(-l / 2 + 0.4 + i * 0.8, 0, w / 2); arm.add(t);
+    }
+    g.add(arm);
+
+    // slip rings / commutator
+    const ringMat = new THREE.MeshStandardMaterial({ color: 0xe0b060, metalness: 0.9, roughness: 0.25 });
+    const slipA = new THREE.Mesh(new THREE.TorusGeometry(0.28, 0.06, 8, 24), ringMat);
+    slipA.position.set(-l / 2 - 0.55, 0, 0); slipA.rotation.y = Math.PI / 2;
+    const slipB = slipA.clone(); slipB.position.x -= 0.35;
+    g.add(slipA, slipB);
+    // brushes
+    const brushMat = new THREE.MeshStandardMaterial({ color: 0x333333, roughness: 0.8 });
+    const br1 = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.5, 0.12), brushMat);
+    br1.position.set(-l / 2 - 0.55, 0.42, 0);
+    const br2 = br1.clone(); br2.position.x -= 0.35;
+    g.add(br1, br2);
+
+    // output bulb indicator
+    const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.32, 16, 12),
+      new THREE.MeshStandardMaterial({ color: 0xffe08a, emissive: 0xffcc44, emissiveIntensity: 0.2 }));
+    bulb.position.set(0, 2.4, 0); g.add(bulb);
+
+    // field arrows (persistent)
+    const fieldVecs = [];
+    for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) {
+      fieldVecs.push({ origin: new THREE.Vector3(-2.0, i * 0.9, j * 0.9), dir: new THREE.Vector3(1, 0, 0), len: 1.6 });
+    }
+    this.fieldArrows = addArrowField(fieldVecs, 0x7fd1ff);
+
+    // force arrows (persistent, updated)
+    this.forceArrows = addArrowField([
+      { origin: new THREE.Vector3(0, 0, 1.1), dir: new THREE.Vector3(0, 1, 0), len: 1 },
+      { origin: new THREE.Vector3(0, 0, -1.1), dir: new THREE.Vector3(0, -1, 0), len: 1 }
+    ], 0xffd166);
+
+    content.add(g);
+    this.meshRefs = { g, arm, bulb, slipA, slipB, br1, br2, l, w };
+    this.theta = 0;
+  },
+
+  update() {
+    const st = this.state;
+    const B = st.B_T, N = st.N_turns, rpm = st.rpm, val = st.I_or_R;
+    const omega = 2 * Math.PI * rpm / 60;
+    const l = this.meshRefs.l, w = this.meshRefs.w, A = l * w;
+    const isGen = st.mode === 'AC Generator (Slip Rings)';
+
+    const Vpeak = N * B * A * omega;
+    const Rc = 2.0;
+    const I = isGen ? Vpeak / (val + Rc) : val;
+    const Tpeak = N * I * A * B;
+    const Tavg = (2 / Math.PI) * Tpeak;
+    const P = isGen ? I * I * val : Tavg * omega;
+
+    // rotate armature
+    this.meshRefs.arm.rotation.x = this.theta;
+    // commutator visual: split ring halves
+    this.meshRefs.slipA.rotation.x = this.theta;
+    this.meshRefs.slipB.rotation.x = this.theta;
+
+    // force arrows: tangential on the two active conductors (z = ±w/2)
+    const s = Math.sin(this.theta), c = Math.cos(this.theta);
+    const fMag = Math.min(1.6, 0.35 + 0.9 * Math.abs(s) * (isGen ? 1 : 1));
+    const dirA = new THREE.Vector3(0, s >= 0 ? 1 : -1, 0);
+    const dirB = new THREE.Vector3(0, s >= 0 ? -1 : 1, 0);
+    const pA = new THREE.Vector3(0, 0, (w / 2) * c);
+    const pB = new THREE.Vector3(0, 0, -(w / 2) * c);
+    this.forceArrows.setVectors([
+      { origin: pA, dir: dirA, len: fMag },
+      { origin: pB, dir: dirB, len: fMag }
+    ]);
+
+    // bulb brightness
+    const bright = isGen ? Math.abs(s) : Math.abs(s);
+    this.meshRefs.bulb.material.emissiveIntensity = 0.15 + 1.6 * bright;
+
+    // ---- 2D chart ----
+    const ctx = chartEl.getContext('2d');
+    const W = chartEl.width, H = chartEl.height;
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = '#0b1020'; ctx.fillRect(0, 0, W, H);
+
+    const pad = 46;
+    const x0 = pad, x1 = W - pad, y0 = H - pad, y1 = pad;
+    const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
+
+    // grid
+    ctx.strokeStyle = '#1e2a44'; ctx.lineWidth = 1;
+    for (let i = 0; i <= 8; i++) {
+      const x = x0 + (x1 - x0) * i / 8;
+      ctx.beginPath(); ctx.moveTo(x, y1); ctx.lineTo(x, y0); ctx.stroke();
+    }
+    for (let i = 0; i <= 6; i++) {
+      const y = y1 + (y0 - y1) * i / 6;
+      ctx.beginPath(); ctx.moveTo(x0, y); ctx.lineTo(x1, y); ctx.stroke();
+    }
+    // zero axis
+    ctx.strokeStyle = '#3a4a66'; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(x0, cy); ctx.lineTo(x1, cy); ctx.stroke();
+
+    const scaleY = (y0 - y1) * 0.42;
+    const norm = Math.max(Vpeak, Tpeak, 1e-6);
+
+    // EMF curve
+    ctx.lineWidth = 2.5; ctx.strokeStyle = '#7fd1ff';
+    ctx.beginPath();
+    for (let i = 0; i <= 400; i++) {
+      const th = (i / 400) * 4 * Math.PI;
+      const v = Vpeak * Math.sin(th) / norm;
+      const x = x0 + (x1 - x0) * (i / 400);
+      const y = cy - v * scaleY;
+      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // torque curve
+    ctx.strokeStyle = '#ffd166'; ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    for (let i = 0; i <= 400; i++) {
+      const th = (i / 400) * 4 * Math.PI;
+      let t;
+      if (isGen) t = Tpeak * Math.sin(th);
+      else t = Tpeak * Math.abs(Math.sin(th));
+      const x = x0 + (x1 - x0) * (i / 400);
+      const y = cy - (t / norm) * scaleY;
+      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // labels
+    ctx.fillStyle = '#9fb4d6'; ctx.font = '13px sans-serif';
+    ctx.fillText('0°', x0 - 6, y0 + 20);
+    ctx.fillText('360°', cx - 14, y0 + 20);
+    ctx.fillText('720°', x1 - 22, y0 + 20);
+    ctx.fillStyle = '#7fd1ff'; ctx.fillText('EMF (V)', x0 + 6, y1 + 14);
+    ctx.fillStyle = '#ffd166'; ctx.fillText('Torque (N·m)', x0 + 6, y1 + 30);
+
+    setHud('Rotary Electromechanical Energy Conversion',
+      '\\mathcal{E}(t) = N B A \\omega \\sin(\\omega t),\\quad \\tau(t) = N I A B \\sin\\theta',
+      [
+        { k: 'Peak EMF V_peak', v: Vpeak.toFixed(2) + ' V' },
+        { k: 'Angular speed omega', v: omega.toFixed(1) + ' rad/s' },
+        { k: 'Peak / Avg Torque', v: Tpeak.toFixed(2) + ' / ' + Tavg.toFixed(2) + ' N·m' },
+        { k: 'Electrical Power', v: P.toFixed(1) + ' W' }
+      ]);
+  },
+
+  tick(dt) {
+    if (!this.state.animate) return;
+    const omega = 2 * Math.PI * this.state.rpm / 60;
+    this.theta += omega * dt;
+    this.update();
+  },
+
+  lesson: `<p>A rotary machine is one device viewed two ways. In <b>generator mode</b>, the flux linkage through the N-turn coil is <em>Λ(t) = N B A cos(ωt)</em>; Faraday's law gives <em>ℰ = −dΛ/dt = N B A ω sin(ωt)</em>. The induced current, limited by load and coil resistance, produces a Lorentz torque <em>τ = N I A B sin θ</em> that opposes rotation (Lenz's law) — mechanical work is converted to electrical energy.</p>
+  <p>In <b>motor mode</b>, an externally supplied current I experiences the same Lorentz torque <em>τ = N I A B sin θ</em>, driving the shaft. The rotating coil also generates a <b>back-EMF</b> <em>ℰ_back = N B A ω sin θ</em> that opposes the supply. A split-ring commutator reverses the coil connections every half turn, rectifying the torque so its average is <em>τ_avg = (2/π) N I A B</em> instead of zero.</p>
+  <p>Limiting cases: at ω → 0 the generator EMF vanishes and the motor's back-EMF vanishes (stall current is limited only by resistance); at high ω the back-EMF nearly cancels the supply, so motor current and torque fall. Slip rings preserve the alternating waveform; the commutator produces a rectified, always-positive torque.</p>`,
+
+  quiz: [
+    { q: 'In generator mode, the induced EMF is proportional to which quantity?', options: ['N B A ω', 'N B A / ω', 'N I A B', 'B A / N'], answer: 0 },
+    { q: 'Why does a spinning motor draw less current at high speed?', options: ['Resistance increases with speed', 'Back-EMF opposes the supply voltage', 'The commutator opens the circuit', 'The magnetic field weakens'], answer: 1 },
+    { q: 'A commutator changes the average torque compared with slip rings because it:', options: ['Increases N', 'Rectifies the current direction each half turn', 'Removes the back-EMF', 'Doubles the field B'], answer: 1 }
+  ]
+});
+modules.push({
+  id: 'linear_motor',
+  title: '6-7 Linear Motor',
+  controls: [
+    { id: 'V0_V', label: 'Supply voltage V₀ (V)', type: 'range', min: 5, max: 100, step: 5, value: 24 },
+    { id: 'B_T', label: 'Magnetic flux density B (T)', type: 'range', min: 0.2, max: 2.0, step: 0.1, value: 0.8 },
+    { id: 'rail_l_m', label: 'Rail spacing / bar length l (m)', type: 'range', min: 0.2, max: 1.5, step: 0.1, value: 0.5 },
+    { id: 'R_ohm', label: 'Loop resistance R (Ω)', type: 'range', min: 0.2, max: 5.0, step: 0.1, value: 1.0 },
+    { id: 'mass_kg', label: 'Bar mass m (kg)', type: 'range', min: 0.1, max: 2.0, step: 0.1, value: 0.4 },
+    { id: 'animate', label: 'Animate motion', type: 'check', value: true }
+  ],
+
+  build() {
+    const g = new THREE.Group();
+    content.add(g);
+
+    // Copper rails (along x), separated along z by l
+    const railMat = new THREE.MeshStandardMaterial({ color: 0xc47a3a, metalness: 0.9, roughness: 0.25, emissive: 0x3a1a08 });
+    const railGeo = new THREE.BoxGeometry(6, 0.06, 0.06);
+    this.railL = new THREE.Mesh(railGeo, railMat);
+    this.railR = new THREE.Mesh(railGeo, railMat);
+    this.railL.position.set(0, 0, 0);
+    this.railR.position.set(0, 0, 0);
+    g.add(this.railL, this.railR);
+
+    // DC source block at left end
+    const srcMat = new THREE.MeshStandardMaterial({ color: 0x2b6cb0, metalness: 0.6, roughness: 0.3, emissive: 0x0a2040 });
+    this.src = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.5, 0.5), srcMat);
+    this.src.position.set(-3.0, 0.25, 0);
+    g.add(this.src);
+
+    // Armature bar (along z, length l)
+    const barMat = new THREE.MeshStandardMaterial({ color: 0xd8e6f0, metalness: 1.0, roughness: 0.15, emissive: 0x223344 });
+    this.bar = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.12, 1), barMat);
+    g.add(this.bar);
+
+    // B-field arrows (vertical, between rails)
+    this.bArrows = addArrowField([], 0x7fd1ff);
+    // Current arrows around loop
+    this.iArrows = addArrowField([], 0xffb347);
+    // Force arrow
+    this.fArrow = addArrowField([], 0xff5a5a);
+
+    // Ground grid hint
+    const grid = new THREE.GridHelper(8, 16, 0x223344, 0x16202a);
+    grid.position.y = -0.35;
+    g.add(grid);
+
+    this.meshRefs = { g };
+  },
+
+  update() {
+    const st = this.state;
+    const V0 = st.V0_V, B = st.B_T, l = st.rail_l_m, R = st.R_ohm, m = st.mass_kg;
+
+    const vTerm = V0 / (B * l);
+    const tau = (m * R) / (B * B * l * l);
+    const I0 = V0 / R;
+    const F0 = I0 * l * B;
+
+    // Position rails
+    this.railL.position.z = -l / 2;
+    this.railR.position.z = l / 2;
+    this.bar.scale.z = l;
+    this.bar.position.z = 0;
+
+    // Animate bar position (wrap continuously)
+    const t = this._t || 0;
+    const x = ((vTerm * t) % 5.5) - 2.75;
+    this.bar.position.x = x;
+
+    // Current at current position (based on v = vTerm*(1-e^-t/tau))
+    const v = vTerm * (1 - Math.exp(-t / tau));
+    const I = (V0 - B * l * v) / R;
+    const F = I * l * B;
+
+    // B field arrows
+    const bVecs = [];
+    for (let i = -2; i <= 2; i++) {
+      for (let j = -1; j <= 1; j++) {
+        bVecs.push({
+          origin: new THREE.Vector3(i * 1.1, 0.05, j * l * 0.25),
+          dir: new THREE.Vector3(0, 1, 0),
+          len: 0.45
+        });
+      }
+    }
+    this.bArrows.setVectors(bVecs);
+
+    // Current arrows around loop (left rail, bar, right rail, source)
+    const iVecs = [];
+    const dirSign = I >= 0 ? 1 : -1;
+    const mag = Math.min(Math.abs(I) / Math.max(I0, 1e-6), 1.5);
+    const seg = (a, b, n) => {
+      for (let k = 0; k < n; k++) {
+        const p = a.clone().lerp(b, (k + 0.5) / n);
+        const d = b.clone().sub(a).normalize().multiplyScalar(dirSign);
+        iVecs.push({ origin: p, dir: d, len: 0.22 * mag });
+      }
+    };
+    seg(new THREE.Vector3(-3, 0.05, -l / 2), new THREE.Vector3(x, 0.05, -l / 2), 4);
+    seg(new THREE.Vector3(x, 0.05, -l / 2), new THREE.Vector3(x, 0.05, l / 2), 2);
+    seg(new THREE.Vector3(x, 0.05, l / 2), new THREE.Vector3(-3, 0.05, l / 2), 4);
+    this.iArrows.setVectors(iVecs);
+
+    // Force arrow on bar
+    const fLen = Math.min(Math.abs(F) / Math.max(F0, 1e-6), 1.2) * 0.9;
+    this.fArrow.setVectors([{
+      origin: new THREE.Vector3(x, 0.18, 0),
+      dir: new THREE.Vector3(dirSign, 0, 0),
+      len: fLen
+    }]);
+
+    // 2D chart
+    const W = chartEl.width, H = chartEl.height;
+    const ctx = chartEl.getContext('2d');
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = '#0b1220';
+    ctx.fillRect(0, 0, W, H);
+
+    const pad = 40;
+    const x0 = pad, y0 = H - pad, x1 = W - pad, y1 = pad;
+    ctx.strokeStyle = '#2a3a4a';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(x0, y0); ctx.lineTo(x1, y0);
+    ctx.moveTo(x0, y0); ctx.lineTo(x0, y1);
+    ctx.stroke();
+
+    // axes labels
+    ctx.fillStyle = '#9fb3c8';
+    ctx.font = '12px sans-serif';
+    ctx.fillText('t / τ_m', x1 - 50, y0 + 22);
+    ctx.fillText('normalized', x0 - 30, y1 - 8);
+
+    // grid
+    for (let k = 0; k <= 5; k++) {
+      const xx = x0 + (x1 - x0) * k / 5;
+      ctx.strokeStyle = '#1a2634';
+      ctx.beginPath(); ctx.moveTo(xx, y0); ctx.lineTo(xx, y1); ctx.stroke();
+      ctx.fillStyle = '#6b7f93';
+      ctx.fillText(k.toString(), xx - 4, y0 + 16);
+    }
+    for (let k = 0; k <= 4; k++) {
+      const yy = y0 - (y0 - y1) * k / 4;
+      ctx.strokeStyle = '#1a2634';
+      ctx.beginPath(); ctx.moveTo(x0, yy); ctx.lineTo(x1, yy); ctx.stroke();
+      ctx.fillStyle = '#6b7f93';
+      ctx.fillText((k / 4).toFixed(2), x0 - 34, yy + 4);
+    }
+
+    // velocity curve: v/vTerm = 1 - e^{-t/tau}
+    ctx.strokeStyle = '#7fd1ff';
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    for (let k = 0; k <= 100; k++) {
+      const tt = 5 * k / 100;
+      const val = 1 - Math.exp(-tt);
+      const px = x0 + (x1 - x0) * tt / 5;
+      const py = y0 - (y0 - y1) * val;
+      if (k === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+    }
+    ctx.stroke();
+
+    // current curve: I/I0 = 1 - (v/vTerm)
+    ctx.strokeStyle = '#ffb347';
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    for (let k = 0; k <= 100; k++) {
+      const tt = 5 * k / 100;
+      const val = Math.exp(-tt);
+      const px = x0 + (x1 - x0) * tt / 5;
+      const py = y0 - (y0 - y1) * val;
+      if (k === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+    }
+    ctx.stroke();
+
+    // legend
+    ctx.fillStyle = '#7fd1ff';
+    ctx.fillRect(x1 - 150, y1 + 8, 12, 12);
+    ctx.fillStyle = '#9fb3c8';
+    ctx.fillText('v / v_term', x1 - 132, y1 + 18);
+    ctx.fillStyle = '#ffb347';
+    ctx.fillRect(x1 - 150, y1 + 28, 12, 12);
+    ctx.fillStyle = '#9fb3c8';
+    ctx.fillText('I / I_0', x1 - 132, y1 + 38);
+
+    setHud(
+      'Linear Rail Motor & Back-EMF Dynamics',
+      'F(v) = \\frac{l B}{R}(V_0 - B l v),\\quad v_{\\mathrm{term}} = \\frac{V_0}{B l},\\quad \\tau_m = \\frac{m R}{B^2 l^2}',
+      [
+        { k: 'Terminal speed v_term', v: vTerm.toFixed(2) + ' m/s' },
+        { k: 'Start force F_0', v: F0.toFixed(2) + ' N' },
+        { k: 'Start current I_0', v: I0.toFixed(2) + ' A' },
+        { k: 'Time constant τ_m', v: tau.toFixed(3) + ' s' }
+      ]
+    );
+  },
+
+  tick(dt) {
+    if (this.state.animate) this._t = (this._t || 0) + dt;
+  },
+
+  lesson: `<p>A conducting bar of length <em>l</em> slides on rails in a vertical field <em>B</em>. The battery drives current <em>I = (V₀ − B l v)/R</em>; the Lorentz force <em>F = I l B</em> accelerates the bar. As speed rises, motional back-EMF <em>B l v</em> cancels the supply, so current and force fall exponentially with time constant <em>τ_m = mR/(B²l²)</em>, approaching terminal speed <em>v_term = V₀/(B l)</em>.</p>
+  <p>Mechanical power <em>P_mech = F v = V_emf I</em> and electrical input <em>P_elec = V₀ I</em>, so efficiency <em>η = v/v_term</em>. Efficiency approaches 100% only near no-load speed, where the transferred power itself tends to zero. Maximum power transfer occurs at <em>v = v_term/2</em>, where η = 50%.</p>`,
+
+  quiz: [
+    { q: 'What is the terminal speed of the bar?', options: ['V₀/(B l)', 'B l/V₀', 'V₀ R/(B l)', 'm R/(B² l²)'], answer: 0 },
+    { q: 'At what speed is maximum mechanical power delivered?', options: ['v = v_term', 'v = v_term/2', 'v = 2 v_term', 'v = 0'], answer: 1 },
+    { q: 'Why does the current decrease as the bar speeds up?', options: ['Resistance increases with speed', 'Back-EMF B l v opposes the supply voltage', 'The magnetic field weakens', 'The bar mass increases'], answer: 1 }
+  ]
+});
+modules.push({
+  id: 'hall_effect_generator',
+  title: '6-8 Hall-Effect Generator',
+  controls: [
+    { id: 'material', label: 'Material', type: 'select', options: ['n-Type Semiconductor (e-)', 'p-Type Semiconductor (h+)', 'Copper Metal (e-)'], value: 'n-Type Semiconductor (e-)' },
+    { id: 'Ix_mA', label: 'Current I_x (mA)', type: 'range', min: 1, max: 100, step: 1, value: 20 },
+    { id: 'B_T', label: 'Magnetic field B_z (T)', type: 'range', min: -1.5, max: 1.5, step: 0.05, value: 0.5 },
+    { id: 'thick_mm', label: 'Thickness t (mm)', type: 'range', min: 0.05, max: 1.0, step: 0.05, value: 0.2 }
+  ],
+
+  build() {
+    const g = new THREE.Group();
+    const L = 4.0, w = 1.6, t = 0.22;
+
+    // Hall bar slab
+    const slabMat = new THREE.MeshStandardMaterial({
+      color: 0x2b6fa8, emissive: 0x0a2a44, emissiveIntensity: 0.6,
+      transparent: true, opacity: 0.55, roughness: 0.35, metalness: 0.25,
+      side: THREE.DoubleSide
+    });
+    const slab = new THREE.Mesh(new THREE.BoxGeometry(L, w, t), slabMat);
+    g.add(slab);
+
+    // Edge wireframe
+    const edges = new THREE.LineSegments(
+      new THREE.EdgesGeometry(new THREE.BoxGeometry(L, w, t)),
+      new THREE.LineBasicMaterial({ color: 0x9fe8ff })
+    );
+    g.add(edges);
+
+    // Current lead wires
+    const leadMat = new THREE.MeshStandardMaterial({ color: 0xffb347, emissive: 0x552200, emissiveIntensity: 0.8 });
+    for (const s of [-1, 1]) {
+      const lead = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.9, 12), leadMat);
+      lead.rotation.z = Math.PI / 2;
+      lead.position.set(s * (L / 2 + 0.45), 0, 0);
+      g.add(lead);
+    }
+
+    // Surface charge strips (two thin plates on +/- y faces)
+    const stripGeo = new THREE.BoxGeometry(L * 0.92, 0.05, t * 1.05);
+    const stripPos = new THREE.MeshStandardMaterial({ color: 0xff4d6d, emissive: 0xff2244, emissiveIntensity: 1.2, transparent: true, opacity: 0.85 });
+    const stripNeg = new THREE.MeshStandardMaterial({ color: 0x4d9dff, emissive: 0x2266ff, emissiveIntensity: 1.2, transparent: true, opacity: 0.85 });
+    const stripA = new THREE.Mesh(stripGeo, stripPos);
+    const stripB = new THREE.Mesh(stripGeo, stripNeg);
+    stripA.position.set(0, w / 2 + 0.03, 0);
+    stripB.position.set(0, -w / 2 - 0.03, 0);
+    g.add(stripA, stripB);
+
+    // Voltmeter body
+    const vm = new THREE.Group();
+    const body = new THREE.Mesh(
+      new THREE.BoxGeometry(0.9, 0.55, 0.18),
+      new THREE.MeshStandardMaterial({ color: 0x1b1f27, emissive: 0x0a0d12, emissiveIntensity: 0.5, roughness: 0.5 })
+    );
+    vm.add(body);
+    const screen = new THREE.Mesh(
+      new THREE.PlaneGeometry(0.7, 0.32),
+      new THREE.MeshBasicMaterial({ color: 0x0b3d2e })
+    );
+    screen.position.set(0, 0.02, 0.095);
+    vm.add(screen);
+    vm.position.set(0, 0, 1.35);
+    g.add(vm);
+
+    // Probe wires from slab faces to voltmeter
+    const probeMat = new THREE.LineBasicMaterial({ color: 0xffd166 });
+    const probePts = [
+      new THREE.Vector3(0, w / 2 + 0.05, 0), new THREE.Vector3(0, w / 2 + 0.35, 0.9), new THREE.Vector3(-0.25, 0.15, 1.28),
+      new THREE.Vector3(0, -w / 2 - 0.05, 0), new THREE.Vector3(0, -w / 2 - 0.35, 0.9), new THREE.Vector3(0.25, -0.15, 1.28)
+    ];
+    for (let i = 0; i < 2; i++) {
+      const geo = new THREE.BufferGeometry().setFromPoints(probePts.slice(i * 3, i * 3 + 3));
+      g.add(new THREE.Line(geo, probeMat));
+    }
+
+    // Carrier spheres
+    const carriers = [];
+    const carrierGeo = new THREE.SphereGeometry(0.055, 12, 10);
+    const carrierMat = new THREE.MeshStandardMaterial({ color: 0xffe066, emissive: 0xffaa00, emissiveIntensity: 1.4 });
+    for (let i = 0; i < 14; i++) {
+      const c = new THREE.Mesh(carrierGeo, carrierMat);
+      c.userData.phase = Math.random() * Math.PI * 2;
+      c.userData.y0 = (Math.random() - 0.5) * w * 0.7;
+      carriers.push(c);
+      g.add(c);
+    }
+
+    // Arrow fields
+    const currentArrows = addArrowField([], 0xffb347);
+    const bArrows = addArrowField([], 0x7fd1ff);
+    const eArrows = addArrowField([], 0xff4d6d);
+    g.add(currentArrows, bArrows, eArrows);
+
+    content.add(g);
+    this.meshRefs = { g, slab, stripA, stripB, carriers, currentArrows, bArrows, eArrows, screen, vm };
+  },
+
+  update() {
+    const st = this.state;
+    const R = this.meshRefs;
+    const L = 4.0, w = 1.6, t = 0.22;
+
+    const mat = st.material;
+    const isN = mat.startsWith('n-Type');
+    const isP = mat.startsWith('p-Type');
+    const n = isN ? 1e21 : isP ? 1e21 : 8.5e28; // carrier density m^-3
+    const q = 1.602e-19;
+    const sign = isP ? 1 : -1; // sign of carrier charge
+    const RH = 1 / (n * q * sign); // m^3/C (sign follows carrier)
+    const Ix = st.Ix_mA * 1e-3;
+    const Bz = st.B_T;
+    const thick = st.thick_mm * 1e-3;
+    const wm = 1.6e-3; // physical width for drift speed calc
+
+    const vd = Ix / (n * Math.abs(q) * wm * thick);
+    const EH = vd * Bz;
+    const VH = RH * Ix * Bz / thick; // volts
+
+    // Charge strip polarity: for electrons (n-type), B_z>0 deflects electrons to +y? 
+    // F = q v x B; electrons v along +x, q<0, B +z => v x B = -y, q<0 => +y. So electrons accumulate +y.
+    // For holes v along +x, q>0 => -y.
+    const deflectSign = isP ? -1 : 1; // side where majority carriers accumulate (+y if +1)
+    const chargeOnPlusY = deflectSign * Math.sign(Bz || 1); // +1 means +y face is negative for electrons
+    // For electrons: +y face negative. For holes: +y face positive.
+    const plusYIsNegative = isN ? (Bz >= 0) : (Bz < 0);
+
+    R.stripA.material.color.set(plusYIsNegative ? 0x4d9dff : 0xff4d6d);
+    R.stripA.material.emissive.set(plusYIsNegative ? 0x2266ff : 0xff2244);
+    R.stripB.material.color.set(plusYIsNegative ? 0xff4d6d : 0x4d9dff);
+    R.stripB.material.emissive.set(plusYIsNegative ? 0xff2244 : 0x2266ff);
+
+    const stripOpacity = Math.min(0.95, 0.25 + Math.abs(VH) * 40);
+    R.stripA.material.opacity = stripOpacity;
+    R.stripB.material.opacity = stripOpacity;
+
+    // Current arrows along +x
+    const curVecs = [];
+    for (let i = 0; i < 5; i++) {
+      const y = (i - 2) * 0.28;
+      curVecs.push({ origin: new THREE.Vector3(-L / 2 - 0.35, y, 0), dir: new THREE.Vector3(1, 0, 0), len: 0.55 });
+    }
+    R.currentArrows.setVectors(curVecs);
+
+    // B field arrows along +z (or -z)
+    const bVecs = [];
+    for (let i = 0; i < 6; i++) {
+      const x = (i - 2.5) * 0.65;
+      bVecs.push({ origin: new THREE.Vector3(x, 0, 0.35), dir: new THREE.Vector3(0, 0, Math.sign(Bz || 1)), len: 0.55 });
+    }
+    R.bArrows.setVectors(bVecs);
+
+    // E_H arrows across width (from + charge face to - charge face)
+    const eVecs = [];
+    const eDir = plusYIsNegative ? new THREE.Vector3(0, 1, 0) : new THREE.Vector3(0, -1, 0);
+    for (let i = 0; i < 4; i++) {
+      const x = (i - 1.5) * 0.8;
+      eVecs.push({ origin: new THREE.Vector3(x, 0, 0.16), dir: eDir.clone(), len: 0.45 });
+    }
+    R.eArrows.setVectors(eVecs);
+
+    // Voltmeter screen color
+    R.screen.material.color.set(Math.abs(VH) > 1e-6 ? 0x0b3d2e : 0x1a1a1a);
+
+    // Chart
+    const ctx = chartEl.getContext('2d');
+    const W = chartEl.width, H = chartEl.height;
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = '#0b1018';
+    ctx.fillRect(0, 0, W, H);
+
+    const padL = 70, padR = 30, padT = 40, padB = 55;
+    const x0 = padL, x1 = W - padR, y0 = padT, y1 = H - padB;
+    const Bmin = -1.5, Bmax = 1.5;
+    const Vmax = Math.max(1e-9, Math.abs(RH * Ix * Bmax / thick) * 1000);
+    const Vlim = Math.max(Vmax * 1.15, 0.05);
+
+    // grid
+    ctx.strokeStyle = '#1e2a3a';
+    ctx.lineWidth = 1;
+    for (let i = 0; i <= 6; i++) {
+      const x = x0 + (x1 - x0) * i / 6;
+      ctx.beginPath(); ctx.moveTo(x, y0); ctx.lineTo(x, y1); ctx.stroke();
+    }
+    for (let i = 0; i <= 6; i++) {
+      const y = y0 + (y1 - y0) * i / 6;
+      ctx.beginPath(); ctx.moveTo(x0, y); ctx.lineTo(x1, y); ctx.stroke();
+    }
+
+    // axes
+    ctx.strokeStyle = '#7fd1ff';
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(x0, y1); ctx.lineTo(x1, y1); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x0, y1); ctx.stroke();
+
+    // zero line
+    const yZero = (y0 + y1) / 2;
+    ctx.strokeStyle = '#3a4a5e';
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(x0, yZero); ctx.lineTo(x1, yZero); ctx.stroke();
+
+    // labels
+    ctx.fillStyle = '#9fe8ff';
+    ctx.font = '14px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('B_z (T)', (x0 + x1) / 2, H - 18);
+    ctx.save();
+    ctx.translate(20, (y0 + y1) / 2);
+    ctx.rotate(-Math.PI / 2);
+    ctx.fillText('V_H (mV)', 0, 0);
+    ctx.restore();
+
+    for (let i = 0; i <= 6; i++) {
+      const b = Bmin + (Bmax - Bmin) * i / 6;
+      const x = x0 + (x1 - x0) * i / 6;
+      ctx.fillStyle = '#9fe8ff';
+      ctx.font = '12px sans-serif';
+      ctx.fillText(b.toFixed(1), x, y1 + 18);
+    }
+    for (let i = 0; i <= 6; i++) {
+      const v = -Vlim + 2 * Vlim * i / 6;
+      const y = y1 - (y1 - y0) * i / 6;
+      ctx.fillStyle = '#9fe8ff';
+      ctx.font = '12px sans-serif';
+      ctx.textAlign = 'right';
+      ctx.fillText(v.toFixed(2), x0 - 8, y + 4);
+    }
+
+    // line
+    const slope = RH * Ix / thick * 1000; // mV per T
+    ctx.strokeStyle = isP ? '#ff8a5c' : '#7fd1ff';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    for (let i = 0; i <= 100; i++) {
+      const b = Bmin + (Bmax - Bmin) * i / 100;
+      const v = slope * b;
+      const x = x0 + (x1 - x0) * (b - Bmin) / (Bmax - Bmin);
+      const y = yZero - (v / Vlim) * (y1 - y0) / 2;
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // marker
+    const mx = x0 + (x1 - x0) * (Bz - Bmin) / (Bmax - Bmin);
+    const my = yZero - (VH * 1000 / Vlim) * (y1 - y0) / 2;
+    ctx.fillStyle = '#ffe066';
+    ctx.beginPath(); ctx.arc(mx, my, 6, 0, Math.PI * 2); ctx.fill();
+
+    // legend
+    ctx.textAlign = 'left';
+    ctx.font = '13px sans-serif';
+    ctx.fillStyle = isP ? '#ff8a5c' : '#7fd1ff';
+    ctx.fillText(isP ? 'p-type: positive slope' : 'n-type: negative slope', x0 + 10, y0 + 18);
+
+    setHud(
+      'Hall-Effect Sensor & Carrier Polarity',
+      'V_H = \\frac{R_H I_x B_z}{t} = \\frac{I_x B_z}{n q t},\\quad R_H = \\frac{1}{n q}',
+      [
+        { k: 'Hall coefficient R_H', v: RH.toExponential(3) + ' m^3/C' },
+        { k: 'Drift speed v_d', v: vd.toExponential(3) + ' m/s' },
+        { k: 'Hall field E_H', v: EH.toExponential(3) + ' V/m' },
+        { k: 'Hall voltage V_H', v: (VH * 1000).toFixed(3) + ' mV' }
+      ]
+    );
+  },
+
+  tick(dt) {
+    const st = this.state;
+    const R = this.meshRefs;
+    const isP = st.material.startsWith('p-Type');
+    const Bz = st.B_T;
+    const t = 0.22;
+    const deflect = (isP ? -1 : 1) * Math.sign(Bz || 1);
+
+    for (const c of R.carriers) {
+      c.userData.phase += dt * 1.6;
+      const x = -1.8 + ((c.userData.phase * 0.9) % 3.6);
+      const y = c.userData.y0 + deflect * 0.35 * Math.sin(c.userData.phase * 0.7);
+      c.position.set(x, Math.max(-0.7, Math.min(0.7, y)), 0.14);
+    }
+  },
+
+  lesson: `<p>A Hall bar of width <em>w</em>, thickness <em>t</em>, and length <em>L</em> carries current <em>I<sub>x</sub></em> in a magnetic field <em>B<sub>z</sub></em>. Carriers drift with <em>v<sub>d</sub> = I<sub>x</sub>/(n q w t)</em> and feel the Lorentz force <em>F<sub>m</sub> = q v<sub>d</sub> × B<sub>z</sub></em>, which pushes them toward one side face. Charge accumulates there until the transverse Hall field <em>E<sub>H</sub> = v<sub>d</sub> B<sub>z</sub></em> cancels the magnetic force. Integrating across the width gives <em>V<sub>H</sub> = E<sub>H</sub> w = R<sub>H</sub> I<sub>x</sub> B<sub>z</sub>/t</em> with <em>R<sub>H</sub> = 1/(n q)</em>.</p>
+<p>The sign of <em>V<sub>H</sub></em> reveals the majority carrier: electrons (n-type) give a negative Hall coefficient and a negative slope versus <em>B<sub>z</sub></em>, while holes (p-type) give a positive slope. Note that <em>V<sub>H</sub></em> is independent of <em>w</em> for fixed current but scales as <em>1/t</em> and <em>1/n</em>; thin, lightly doped semiconductor wafers therefore produce millivolt-level signals, whereas dense copper yields nanovolt-level signals. This is the basis of Hall Gaussmeters and contactless current sensors.</p>`,
+
+  quiz: [
+    { q: 'For a fixed current I_x, how does the Hall voltage depend on the slab width w?', options: ['It is independent of w', 'It scales linearly with w', 'It scales as 1/w', 'It scales as w^2'], answer: 0 },
+    { q: 'A positive Hall voltage slope versus B_z indicates which majority carrier?', options: ['Holes (p-type)', 'Electrons (n-type)', 'Neutral atoms', 'Both equally'], answer: 0 },
+    { q: 'Why do thin semiconductor Hall sensors produce larger V_H than copper slabs?', options: ['Smaller thickness t and lower carrier density n increase V_H', 'Semiconductors have larger w', 'Copper has a larger Hall coefficient', 'B_z is stronger inside semiconductors'], answer: 0 }
+  ]
+});
+modules.push({
+  id: 'moving_conductor_bfield',
+  title: '6-9 Moving Conductor in a Static Magnetic Field',
+  controls: [
+    { id: 'v_ms', label: 'Conductor velocity v (m/s)', type: 'range', min: 0, max: 30, step: 1, value: 12 },
+    { id: 'B_T', label: 'Static magnetic field B (T)', type: 'range', min: 0.1, max: 2.0, step: 0.05, value: 0.75 },
+    { id: 'length_m', label: 'Conductor length l (m)', type: 'range', min: 0.2, max: 2.0, step: 0.1, value: 0.8 },
+    { id: 'angle_deg', label: 'Angle theta between v and rod (deg)', type: 'range', min: 0, max: 90, step: 5, value: 90 },
+    { id: 'R_ohm', label: 'Circuit resistance R (ohms)', type: 'range', min: 0.5, max: 10, step: 0.5, value: 2.0 },
+    { id: 'animate', label: 'Animate sliding rod', type: 'check', value: true }
+  ],
+
+  build() {
+    const g = new THREE.Group();
+    content.add(g);
+
+    // Static B field: vertical arrows over the whole track region
+    const bVecs = [];
+    for (let i = -2; i <= 2; i++) for (let j = -1; j <= 1; j++) {
+      bVecs.push({ origin: new THREE.Vector3(i * 0.9, -1.2, j * 0.9), dir: new THREE.Vector3(0, 1, 0), len: 0.55 });
+    }
+    this.bField = addArrowField(bVecs, 0x6fb7ff);
+
+    // U-shaped stationary track (two rails + back bar)
+    const railMat = new THREE.MeshStandardMaterial({ color: 0x9aa7b8, metalness: 0.8, roughness: 0.25, emissive: 0x223344 });
+    const railGeo = new THREE.BoxGeometry(0.06, 0.06, 4.2);
+    for (const x of [-1.0, 1.0]) {
+      const rail = new THREE.Mesh(railGeo, railMat);
+      rail.position.set(x, 0, 0);
+      g.add(rail);
+    }
+    const back = new THREE.Mesh(new THREE.BoxGeometry(2.06, 0.06, 0.06), railMat);
+    back.position.set(0, 0, -2.1);
+    g.add(back);
+
+    // Sliding rod (pivot group so angle can be set)
+    this.rodPivot = new THREE.Group();
+    g.add(this.rodPivot);
+    const rodMat = new THREE.MeshStandardMaterial({ color: 0xffb347, metalness: 0.6, roughness: 0.3, emissive: 0x552200 });
+    this.rod = new THREE.Mesh(new THREE.BoxGeometry(1, 0.07, 0.07), rodMat);
+    this.rod.position.x = 0.5;
+    this.rodPivot.add(this.rod);
+
+    // Charge separation markers at rod ends
+    const plusMat = new THREE.MeshStandardMaterial({ color: 0xff4d4d, emissive: 0x661111 });
+    const minusMat = new THREE.MeshStandardMaterial({ color: 0x4d7dff, emissive: 0x111166 });
+    this.plus = new THREE.Mesh(new THREE.SphereGeometry(0.09, 16, 12), plusMat);
+    this.minus = new THREE.Mesh(new THREE.SphereGeometry(0.09, 16, 12), minusMat);
+    this.rodPivot.add(this.plus, this.minus);
+
+    // Motional E-field arrows along rod
+    this.eField = addArrowField([], 0xffe066);
+
+    // Induced current arrows around loop
+    this.currentField = addArrowField([], 0x66ff99);
+
+    // Lenz braking force arrow
+    this.forceField = addArrowField([], 0xff5555);
+
+    // Velocity arrow
+    this.velField = addArrowField([], 0xffffff);
+
+    this.meshRefs = { g, rodPivot: this.rodPivot, rod: this.rod, plus: this.plus, minus: this.minus };
+  },
+
+  update() {
+    const st = this.state;
+    const v = st.v_ms, B = st.B_T, l = st.length_m;
+    const th = st.angle_deg * Math.PI / 180;
+    const R = st.R_ohm;
+
+    const Em = v * B;                       // |v x B| (v ⟂ B)
+    const emf = B * l * v * Math.sin(th);   // flux-cutting EMF
+    const I = emf / R;
+    const P = emf * emf / R;
+    const Fmag = I * l * B * Math.sin(th);
+
+    // Rod geometry: pivot at left rail, length l, angle th from x-axis
+    const pivotX = -1.0;
+    this.rodPivot.position.set(pivotX, 0.05, 0);
+    this.rodPivot.rotation.y = -th;
+    this.rod.scale.x = l;
+    this.rod.position.x = l / 2;
+
+    // End markers
+    this.plus.position.set(l, 0, 0);
+    this.minus.position.set(0, 0, 0);
+
+    // Motional E-field arrows along rod (v x B direction)
+    const eVecs = [];
+    const n = 5;
+    for (let i = 0; i < n; i++) {
+      const t = (i + 0.5) / n;
+      const p = new THREE.Vector3(pivotX + t * l * Math.cos(th), 0.12, -t * l * Math.sin(th));
+      eVecs.push({ origin: p, dir: new THREE.Vector3(0, 1, 0), len: 0.28 * Math.min(1, Em / 10 + 0.3) });
+    }
+    this.eField.setVectors(eVecs);
+
+    // Velocity arrow at rod midpoint
+    const mid = new THREE.Vector3(pivotX + (l / 2) * Math.cos(th), 0.18, -(l / 2) * Math.sin(th));
+    this.velField.setVectors([{ origin: mid, dir: new THREE.Vector3(0, 0, 1), len: 0.35 + v * 0.02 }]);
+
+    // Current arrows around loop (rod -> right rail -> back -> left rail)
+    const cVecs = [];
+    if (I > 0.01) {
+      const s = Math.min(1, I / 5 + 0.3);
+      cVecs.push({ origin: new THREE.Vector3(pivotX + l * Math.cos(th) * 0.5, 0.1, -l * Math.sin(th) * 0.5), dir: new THREE.Vector3(Math.cos(th), 0, -Math.sin(th)), len: 0.3 * s });
+      cVecs.push({ origin: new THREE.Vector3(1.0, 0.1, -1.0), dir: new THREE.Vector3(0, 0, -1), len: 0.3 * s });
+      cVecs.push({ origin: new THREE.Vector3(0, 0.1, -2.1), dir: new THREE.Vector3(-1, 0, 0), len: 0.3 * s });
+      cVecs.push({ origin: new THREE.Vector3(-1.0, 0.1, -1.0), dir: new THREE.Vector3(0, 0, 1), len: 0.3 * s });
+    }
+    this.currentField.setVectors(cVecs);
+
+    // Lenz braking force opposing v
+    this.forceField.setVectors([{ origin: mid.clone().add(new THREE.Vector3(0, 0.25, 0)), dir: new THREE.Vector3(0, 0, -1), len: 0.25 + Fmag * 0.08 }]);
+
+    // 2D chart
+    const ctx = chartEl.getContext('2d');
+    const W = chartEl.width, H = chartEl.height;
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = '#0b1220'; ctx.fillRect(0, 0, W, H);
+
+    const pad = 46, x0 = pad, x1 = W - pad, y0 = H - pad, y1 = pad;
+    const vmax = 30;
+    const emfMax = B * l * vmax * Math.sin(th) || 1;
+    const pMax = emfMax * emfMax / R || 1;
+
+    // axes
+    ctx.strokeStyle = '#334155'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y0); ctx.moveTo(x0, y0); ctx.lineTo(x0, y1); ctx.stroke();
+
+    // grid
+    ctx.strokeStyle = '#1e293b';
+    for (let i = 1; i <= 6; i++) {
+      const x = x0 + (x1 - x0) * i / 6;
+      ctx.beginPath(); ctx.moveTo(x, y0); ctx.lineTo(x, y1); ctx.stroke();
+    }
+    for (let i = 1; i <= 5; i++) {
+      const y = y0 - (y0 - y1) * i / 5;
+      ctx.beginPath(); ctx.moveTo(x0, y); ctx.lineTo(x1, y); ctx.stroke();
+    }
+
+    // EMF curve (linear)
+    ctx.strokeStyle = '#ffd166'; ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    for (let i = 0; i <= 100; i++) {
+      const vv = vmax * i / 100;
+      const e = B * l * vv * Math.sin(th);
+      const x = x0 + (x1 - x0) * vv / vmax;
+      const y = y0 - (y0 - y1) * e / emfMax;
+      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // Power curve (quadratic)
+    ctx.strokeStyle = '#66ff99'; ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    for (let i = 0; i <= 100; i++) {
+      const vv = vmax * i / 100;
+      const e = B * l * vv * Math.sin(th);
+      const p = e * e / R;
+      const x = x0 + (x1 - x0) * vv / vmax;
+      const y = y0 - (y0 - y1) * p / pMax;
+      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // current marker
+    const cx = x0 + (x1 - x0) * v / vmax;
+    const cyE = y0 - (y0 - y1) * emf / emfMax;
+    const cyP = y0 - (y0 - y1) * P / pMax;
+    ctx.fillStyle = '#ffd166'; ctx.beginPath(); ctx.arc(cx, cyE, 5, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#66ff99'; ctx.beginPath(); ctx.arc(cx, cyP, 5, 0, Math.PI * 2); ctx.fill();
+
+    // labels
+    ctx.fillStyle = '#cbd5e1'; ctx.font = '13px sans-serif';
+    ctx.fillText('v (m/s)', x1 - 60, y0 + 26);
+    ctx.fillText('EMF (V) / Power (W)', x0 + 6, y1 - 8);
+    ctx.fillStyle = '#ffd166'; ctx.fillText('EMF', x1 - 90, y1 + 18);
+    ctx.fillStyle = '#66ff99'; ctx.fillText('Power', x1 - 40, y1 + 18);
+
+    setHud(
+      'Motional EMF & Faraday Flux Equivalence',
+      '\\mathcal{E} = \\oint (\\mathbf{v}\\times\\mathbf{B})\\cdot d\\mathbf{l} = -\\frac{d\\Phi_m}{dt} = B l v \\sin\\theta',
+      [
+        { k: 'Motional field E_m', v: Em.toFixed(2) + ' V/m' },
+        { k: 'Induced EMF', v: emf.toFixed(2) + ' V' },
+        { k: 'Induced current I', v: I.toFixed(2) + ' A' },
+        { k: 'Power dissipated', v: P.toFixed(2) + ' W' }
+      ]
+    );
+  },
+
+  tick(dt) {
+    if (!this.state.animate) return;
+    // gentle visual pulse of charge markers
+    const t = performance.now() * 0.001;
+    const s = 1 + 0.15 * Math.sin(t * 3);
+    this.meshRefs.plus.scale.setScalar(s);
+    this.meshRefs.minus.scale.setScalar(s);
+  },
+
+  lesson: `<p>A conductor moving with velocity <b>v</b> through a static magnetic field <b>B</b> experiences a motional electric field <b>E<sub>m</sub> = v × B</b>. Charges inside the rod are pushed along it, producing an induced motional EMF <b>ℰ = ∫(v × B)·dl = B l v sin θ</b> for a straight rod of length <i>l</i> at angle θ to <b>v</b>.</p>
+  <p>This is exactly Faraday's flux rule: the rod sweeps area at rate <b>dA/dt = l v sin θ</b>, so <b>ℰ = −dΦ<sub>m</sub>/dt = −B dA/dt</b>. In an open circuit the charges separate and a static field builds up; no continuous current flows.</p>
+  <p>When the rod is connected to a resistance <i>R</i>, current <b>I = ℰ/R</b> flows. The magnetic force on this current, <b>F<sub>mag</sub> = I l B sin θ</b>, opposes the motion (Lenz's law). Mechanical input power <b>P<sub>mech</sub> = F<sub>mag</sub> v = ℰ²/R = P<sub>elec</sub></b>, so energy is conserved: mechanical work is converted into Joule heating.</p>`,
+
+  quiz: [
+    { q: 'For a rod moving perpendicular to B with v ⟂ rod, the motional EMF is:', options: ['B l v', 'B l / v', 'B v / l', 'B l v²'], answer: 0 },
+    { q: 'If the rod is open-circuited, what happens?', options: ['A steady current flows', 'Charges separate until the internal field cancels v × B', 'The rod heats up strongly', 'No EMF is induced'], answer: 1 },
+    { q: 'With a closed circuit of resistance R, the mechanical power needed to keep the rod moving equals:', options: ['I R', 'I² R / v', 'ℰ² / R', 'B l v R'], answer: 2 }
+  ]
+});
+modules.push({
+  id: 'magnetic_brake',
+  title: '6-10 The Magnetic Brake',
+
+  controls: [
+    { id: 'material', label: 'Disc material', type: 'select',
+      options: ['Copper (sigma = 5.96e7 S/m)', 'Aluminum (sigma = 3.77e7 S/m)', 'Brass (sigma = 1.50e7 S/m)'],
+      value: 'Copper (sigma = 5.96e7 S/m)' },
+    { id: 'B_T', label: 'Brake magnet field B (T)', type: 'range', min: 0.1, max: 1.5, step: 0.05, value: 0.6 },
+    { id: 'v0_ms', label: 'Initial speed v0 (m/s)', type: 'range', min: 5, max: 50, step: 1, value: 25 },
+    { id: 'thick_mm', label: 'Disc thickness d (mm)', type: 'range', min: 2, max: 15, step: 1, value: 6 },
+    { id: 'mass_kg', label: 'Effective moving mass m (kg)', type: 'range', min: 1, max: 20, step: 1, value: 5 },
+    { id: 'animate', label: 'Animate braking run', type: 'check', value: true }
+  ],
+
+  build() {
+    const g = new THREE.Group();
+    content.add(g);
+
+    // C-shaped electromagnet: two vertical limbs + top yoke
+    const magMat = new THREE.MeshStandardMaterial({ color: 0x3a4a63, metalness: 0.85, roughness: 0.35, emissive: 0x0a1420 });
+    const limbGeo = new THREE.BoxGeometry(0.55, 2.6, 0.55);
+    const yokeGeo = new THREE.BoxGeometry(2.9, 0.55, 0.55);
+    const leftLimb = new THREE.Mesh(limbGeo, magMat); leftLimb.position.set(-1.15, 1.3, 0);
+    const rightLimb = new THREE.Mesh(limbGeo, magMat); rightLimb.position.set(1.15, 1.3, 0);
+    const yoke = new THREE.Mesh(yokeGeo, magMat); yoke.position.set(0, 2.75, 0);
+    g.add(leftLimb, rightLimb, yoke);
+
+    // Pole faces (bright copper coils hint)
+    const poleMat = new THREE.MeshStandardMaterial({ color: 0xffb347, metalness: 0.6, roughness: 0.3, emissive: 0x552200 });
+    const poleGeo = new THREE.CylinderGeometry(0.42, 0.42, 0.22, 24);
+    const poleL = new THREE.Mesh(poleGeo, poleMat); poleL.position.set(-1.15, 0.11, 0);
+    const poleR = new THREE.Mesh(poleGeo, poleMat); poleR.position.set(1.15, 0.11, 0);
+    g.add(poleL, poleR);
+
+    // Metallic brake disc (thin cylinder, axis vertical)
+    const discMat = new THREE.MeshStandardMaterial({ color: 0xc8733a, metalness: 0.9, roughness: 0.25, emissive: 0x2a1206 });
+    const disc = new THREE.Mesh(new THREE.CylinderGeometry(1.55, 1.55, 0.12, 48), discMat);
+    disc.position.set(0, 0.06, 0);
+    g.add(disc);
+
+    // Eddy-current loops: two glowing rings on either side of pole footprint
+    const eddyMat = new THREE.MeshBasicMaterial({ color: 0x66e0ff, transparent: true, opacity: 0.85 });
+    const eddyL = new THREE.Mesh(new THREE.TorusGeometry(0.55, 0.045, 8, 32), eddyMat);
+    eddyL.rotation.x = Math.PI / 2; eddyL.position.set(-1.15, 0.14, 0);
+    const eddyR = new THREE.Mesh(new THREE.TorusGeometry(0.55, 0.045, 8, 32), eddyMat);
+    eddyR.rotation.x = Math.PI / 2; eddyR.position.set(1.15, 0.14, 0);
+    g.add(eddyL, eddyR);
+
+    // Vertical B-field arrows in the gap
+    this.bArrows = addArrowField([], 0x7fd1ff);
+    const bVecs = [];
+    for (let i = -1; i <= 1; i++) {
+      for (let j = -1; j <= 1; j++) {
+        bVecs.push({ origin: new THREE.Vector3(i * 0.55, 0.18, j * 0.55), dir: new THREE.Vector3(0, 1, 0), len: 0.55 });
+      }
+    }
+    this.bArrows.setVectors(bVecs);
+
+    // Drag force arrow (opposes motion, along -x)
+    this.dragArrow = addArrowField([], 0xff5a5a);
+    this.dragArrow.setVectors([{ origin: new THREE.Vector3(0, 0.35, 0), dir: new THREE.Vector3(-1, 0, 0), len: 1.0 }]);
+
+    // Ground rail / guide
+    const railMat = new THREE.MeshStandardMaterial({ color: 0x223344, metalness: 0.7, roughness: 0.5 });
+    const rail = new THREE.Mesh(new THREE.BoxGeometry(8, 0.08, 0.5), railMat);
+    rail.position.set(0, -0.05, 0);
+    g.add(rail);
+
+    this.meshRefs = { g, disc, eddyL, eddyR, dragArrow: this.dragArrow, bArrows: this.bArrows };
+    this.t = 0;
+  },
+
+  update() {
+    const st = this.state;
+    const sigMap = {
+      'Copper (sigma = 5.96e7 S/m)': 5.96e7,
+      'Aluminum (sigma = 3.77e7 S/m)': 3.77e7,
+      'Brass (sigma = 1.50e7 S/m)': 1.50e7
+    };
+    const sigma = sigMap[st.material];
+    const B = st.B_T;
+    const v0 = st.v0_ms;
+    const d = st.thick_mm * 1e-3;
+    const m = st.mass_kg;
+    const A = 0.35; // pole footprint area (m^2)
+
+    const kb = sigma * B * B * A * d;
+    const tau = m / kb;
+    const F0 = kb * v0;
+    const xstop = v0 * tau;
+
+    // 3D animation: disc translates along x, eddy loops pulse, drag arrow shrinks
+    const t = this.t;
+    const v = v0 * Math.exp(-t / tau);
+    const x = xstop * (1 - Math.exp(-t / tau));
+    const disc = this.meshRefs.disc;
+    disc.position.x = -x * 0.35; // scaled visual travel
+    disc.rotation.y = t * 2.0;
+
+    const pulse = 0.6 + 0.4 * Math.exp(-t / tau);
+    this.meshRefs.eddyL.scale.setScalar(pulse);
+    this.meshRefs.eddyR.scale.setScalar(pulse);
+    this.meshRefs.eddyL.material.opacity = 0.35 + 0.55 * Math.exp(-t / tau);
+    this.meshRefs.eddyR.material.opacity = 0.35 + 0.55 * Math.exp(-t / tau);
+
+    const dragLen = Math.max(0.05, 1.4 * (v / v0));
+    this.meshRefs.dragArrow.setVectors([{
+      origin: new THREE.Vector3(disc.position.x + 0.2, 0.35, 0),
+      dir: new THREE.Vector3(-1, 0, 0),
+      len: dragLen
+    }]);
+
+    // 2D chart
+    const W = chartEl.width, H = chartEl.height;
+    const ctx = chartEl.getContext('2d');
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = '#0b1220'; ctx.fillRect(0, 0, W, H);
+
+    const padL = 60, padR = 30, padT = 40, padB = 55;
+    const plotW = W - padL - padR, plotH = H - padT - padB;
+    const tMax = 4 * tau;
+
+    // axes
+    ctx.strokeStyle = '#2a3a55'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(padL, padT); ctx.lineTo(padL, padT + plotH); ctx.lineTo(padL + plotW, padT + plotH); ctx.stroke();
+
+    // grid
+    ctx.strokeStyle = '#1a2638';
+    for (let i = 0; i <= 4; i++) {
+      const xg = padL + (i / 4) * plotW;
+      ctx.beginPath(); ctx.moveTo(xg, padT); ctx.lineTo(xg, padT + plotH); ctx.stroke();
+      ctx.fillStyle = '#7f9bb8'; ctx.font = '12px sans-serif'; ctx.textAlign = 'center';
+      ctx.fillText((i * tau).toFixed(2) + ' s', xg, padT + plotH + 20);
+    }
+    for (let i = 0; i <= 4; i++) {
+      const yg = padT + plotH - (i / 4) * plotH;
+      ctx.beginPath(); ctx.moveTo(padL, yg); ctx.lineTo(padL + plotW, yg); ctx.stroke();
+      ctx.fillStyle = '#7f9bb8'; ctx.textAlign = 'right';
+      ctx.fillText((i / 4).toFixed(2), padL - 8, yg + 4);
+    }
+
+    // speed curve
+    ctx.strokeStyle = '#66e0ff'; ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    for (let i = 0; i <= 200; i++) {
+      const tt = (i / 200) * tMax;
+      const vv = Math.exp(-tt / tau);
+      const px = padL + (tt / tMax) * plotW;
+      const py = padT + plotH - vv * plotH;
+      if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+    }
+    ctx.stroke();
+
+    // power curve
+    ctx.strokeStyle = '#ff9a4d'; ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    for (let i = 0; i <= 200; i++) {
+      const tt = (i / 200) * tMax;
+      const pp = Math.exp(-2 * tt / tau);
+      const px = padL + (tt / tMax) * plotW;
+      const py = padT + plotH - pp * plotH;
+      if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+    }
+    ctx.stroke();
+
+    // labels
+    ctx.fillStyle = '#66e0ff'; ctx.font = 'bold 13px sans-serif'; ctx.textAlign = 'left';
+    ctx.fillText('v(t)/v0 = e^{-t/tau}', padL + 10, padT + 20);
+    ctx.fillStyle = '#ff9a4d';
+    ctx.fillText('P(t)/P0 = e^{-2t/tau}', padL + 10, padT + 40);
+    ctx.fillStyle = '#9fb6cc'; ctx.font = '12px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText('time t (s)', padL + plotW / 2, H - 12);
+
+    setHud(
+      'Eddy-Current Magnetic Brake',
+      'F_{\\mathrm{brake}} = (\\sigma B^2 A d)\\,v,\\quad v(t) = v_0 e^{-t/\\tau_b},\\quad \\tau_b = \\frac{m}{\\sigma B^2 A d}',
+      [
+        { k: 'Damping coeff k_b', v: kb.toFixed(2) + ' N*s/m' },
+        { k: 'Initial drag F0', v: F0.toFixed(1) + ' N' },
+        { k: 'Time constant tau_b', v: tau.toFixed(3) + ' s' },
+        { k: 'Stopping dist x_stop', v: xstop.toFixed(2) + ' m' }
+      ]
+    );
+  },
+
+  tick(dt) {
+    if (this.state.animate) this.t += dt;
+  },
+
+  lesson: `<p>Under a localized magnet pole, the moving metal disc experiences a motional EMF <b>E = v × B</b>. Because the pole footprint is small, the induced current must return through the surrounding metal, forming closed <b>eddy-current loops</b>. The current density is <b>J = σ(v × B)</b>, so the Joule heating per unit volume is <b>J²/σ = σ B² v²</b>. Multiplying by the pole-zone volume <b>A d</b> gives <b>P_brake = σ B² A d v²</b>, and dividing by v gives the drag force <b>F_brake = (σ B² A d) v = k_b v</b>.</p>
+<p>This is viscous magnetic damping: the force is proportional to <b>v</b> and to <b>B²</b>, not constant. Newton's law <b>m dv/dt = −k_b v</b> gives <b>v(t) = v_0 e^{−t/τ_b}</b> with <b>τ_b = m/(σ B² A d)</b>. The stopping distance is <b>x_stop = v_0 τ_b</b>. The initial kinetic energy <b>½ m v_0²</b> is entirely converted into Joule heat: <b>∫ P_brake dt = ½ m v_0²</b>.</p>
+<p>Because the force vanishes as <b>v → 0</b>, a magnetic brake is smooth, contact-free and wear-free, but it can never hold a vehicle at rest — a mechanical parking lock is required. Higher conductivity, thicker plate, stronger field, or larger pole area all shorten <b>τ_b</b> and the stopping distance.</p>`,
+
+  quiz: [
+    { q: 'Why does the eddy-current braking force scale as B² rather than B?', options: [
+      'The induced EMF is proportional to B, and the Joule power is proportional to EMF², so force ∝ B²',
+      'Because the magnetic field is squared by the Lorentz force directly',
+      'Because conductivity changes with B',
+      'Because the disc mass increases with B'
+    ], answer: 0 },
+    { q: 'What happens to the braking force as the disc speed approaches zero?', options: [
+      'It approaches zero, so the brake cannot hold the disc at rest without a mechanical lock',
+      'It remains constant and locks the disc',
+      'It grows without bound',
+      'It reverses direction and accelerates the disc'
+    ], answer: 0 },
+    { q: 'Where does the lost kinetic energy go?', options: [
+      'It is dissipated as Joule heat in the conducting disc',
+      'It is stored in the magnetic field permanently',
+      'It is radiated as light',
+      'It is converted into mechanical potential energy'
+    ], answer: 0 }
+  ]
+});
+modules.push({
+  id: 'ch6_electrodynamics_problems',
+  title: '6-11 Ch. 6 Electrodynamics Problems & Capstone Solver',
+  controls: [
+    { id: 'problem', label: 'Problem', type: 'select', options: ['Mass Spectrometer (Wien + B2)', 'CRT Combined E & B Deflection', 'Cyclotron Dee Accelerator'], value: 'Mass Spectrometer (Wien + B2)' },
+    { id: 'param1', label: 'A [u] / V_a [kV] / V_gap [kV]', type: 'range', min: 1, max: 20, step: 1, value: 12 },
+    { id: 'param2', label: 'B [T] / E_y [kV/m] / Dee B [T]', type: 'range', min: 0.1, max: 2.0, step: 0.05, value: 0.5 },
+    { id: 'param3', label: 'Selector E [kV/m] / Yoke B_z [mT] / R_max [cm]', type: 'range', min: 5, max: 50, step: 1, value: 20 }
+  ],
+
+  build() {
+    this.meshRefs = {};
+    const g = new THREE.Group();
+    content.add(g);
+    this.root = g;
+
+    // shared materials
+    const metal = new THREE.MeshStandardMaterial({ color: 0x9fb4c8, metalness: 0.8, roughness: 0.3, emissive: 0x223344 });
+    const plate = new THREE.MeshStandardMaterial({ color: 0x4a6fa5, metalness: 0.5, roughness: 0.4, emissive: 0x0a1a2a });
+    const glow = new THREE.MeshStandardMaterial({ color: 0x7fd1ff, emissive: 0x7fd1ff, emissiveIntensity: 1.2 });
+    const beamMat = new THREE.MeshStandardMaterial({ color: 0xffd166, emissive: 0xffd166, emissiveIntensity: 1.5 });
+    const screenMat = new THREE.MeshStandardMaterial({ color: 0x2b3a55, emissive: 0x112233 });
+
+    // ---- Mass spectrometer group ----
+    const ms = new THREE.Group();
+    // slit
+    const slit = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.6, 0.15), metal);
+    slit.position.set(-2.2, 0, 0);
+    ms.add(slit);
+    // Wien plates
+    for (let i = 0; i < 2; i++) {
+      const p = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.08, 0.7), plate);
+      p.position.set(-1.2, (i ? 0.35 : -0.35), 0);
+      ms.add(p);
+    }
+    // deflection chamber (semicircular ring)
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(1.0, 0.06, 12, 48, Math.PI), metal);
+    ring.rotation.z = Math.PI;
+    ring.position.set(0.6, 0, 0);
+    ms.add(ring);
+    // detector plate
+    const det = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.8, 0.8), screenMat);
+    det.position.set(1.6, 0, 0);
+    ms.add(det);
+    // beam path (line)
+    const beamGeo = new THREE.BufferGeometry();
+    const beamPts = new Float32Array(3 * 40);
+    beamGeo.setAttribute('position', new THREE.BufferAttribute(beamPts, 3));
+    const beamLine = new THREE.Line(beamGeo, new THREE.LineBasicMaterial({ color: 0xffd166 }));
+    ms.add(beamLine);
+    // impact spot
+    const spot = new THREE.Mesh(new THREE.SphereGeometry(0.07, 12, 12), glow);
+    ms.add(spot);
+    this.meshRefs.ms = { group: ms, beamLine, spot, det };
+
+    // ---- CRT group ----
+    const crt = new THREE.Group();
+    const gun = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.18, 0.6, 16), metal);
+    gun.rotation.z = Math.PI / 2;
+    gun.position.set(-2.2, 0, 0);
+    crt.add(gun);
+    // deflection plates
+    for (let i = 0; i < 2; i++) {
+      const p = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.06, 0.8), plate);
+      p.position.set(-0.8, (i ? 0.4 : -0.4), 0);
+      crt.add(p);
+    }
+    // screen
+    const scr = new THREE.Mesh(new THREE.BoxGeometry(0.08, 1.6, 1.6), screenMat);
+    scr.position.set(1.8, 0, 0);
+    crt.add(scr);
+    const crtBeamGeo = new THREE.BufferGeometry();
+    const crtPts = new Float32Array(3 * 40);
+    crtBeamGeo.setAttribute('position', new THREE.BufferAttribute(crtPts, 3));
+    const crtBeam = new THREE.Line(crtBeamGeo, new THREE.LineBasicMaterial({ color: 0x7fd1ff }));
+    crt.add(crtBeam);
+    const crtSpot = new THREE.Mesh(new THREE.SphereGeometry(0.08, 12, 12), glow);
+    crt.add(crtSpot);
+    this.meshRefs.crt = { group: crt, beam: crtBeam, spot: crtSpot };
+
+    // ---- Cyclotron group ----
+    const cyc = new THREE.Group();
+    for (let i = 0; i < 2; i++) {
+      const dee = new THREE.Mesh(new THREE.CylinderGeometry(1.2, 1.2, 0.25, 32, 1, false, 0, Math.PI), metal);
+      dee.rotation.x = Math.PI / 2;
+      dee.rotation.z = i ? Math.PI : 0;
+      dee.position.set(0, 0, i ? 0.15 : -0.15);
+      cyc.add(dee);
+    }
+    const cycBeamGeo = new THREE.BufferGeometry();
+    const cycPts = new Float32Array(3 * 200);
+    cycBeamGeo.setAttribute('position', new THREE.BufferAttribute(cycPts, 3));
+    const cycBeam = new THREE.Line(cycBeamGeo, new THREE.LineBasicMaterial({ color: 0xffd166 }));
+    cyc.add(cycBeam);
+    const cycSpot = new THREE.Mesh(new THREE.SphereGeometry(0.09, 12, 12), glow);
+    cyc.add(cycSpot);
+    this.meshRefs.cyc = { group: cyc, beam: cycBeam, spot: cycSpot };
+
+    // arrow fields
+    this.msArrows = addArrowField([], 0x7fd1ff);
+    this.crtArrows = addArrowField([], 0x7fd1ff);
+    this.cycArrows = addArrowField([], 0x7fd1ff);
+
+    // add all groups
+    g.add(ms, crt, cyc);
+    this.meshRefs.all = { ms, crt, cyc };
+  },
+
+  update() {
+    const st = this.state;
+    const prob = st.problem;
+    const p1 = st.param1, p2 = st.param2, p3 = st.param3;
+    const e = 1.602176634e-19, u = 1.66053906660e-27, me = 9.1093837015e-31, mp = 1.67262192369e-27;
+
+    // hide/show groups
+    this.meshRefs.ms.group.visible = prob.startsWith('Mass');
+    this.meshRefs.crt.group.visible = prob.startsWith('CRT');
+    this.meshRefs.cyc.group.visible = prob.startsWith('Cyclotron');
+
+    let rows = [], latex = 'R = \\frac{m v}{|q|B},\\quad f_c = \\frac{|q|B}{2\\pi m},\\quad K_{\\max} = \\frac{q^2 B^2 R_{\\max}^2}{2m}';
+
+    if (prob.startsWith('Mass')) {
+      const A = p1, B1 = p2, Esel = p3 * 1000; // kV/m -> V/m
+      const m = A * u;
+      const v = Esel / B1;
+      const B2 = B1; // use same B for deflection chamber
+      const R = (m * v) / (e * B2);
+      const D = 2 * R;
+      // beam path: straight through Wien then semicircle
+      const pts = this.meshRefs.ms.beamLine.geometry.attributes.position.array;
+      const N = 40;
+      for (let i = 0; i < N; i++) {
+        const t = i / (N - 1);
+        if (t < 0.35) {
+          const x = -2.2 + t * 2.8;
+          pts[3*i] = x; pts[3*i+1] = 0; pts[3*i+2] = 0;
+        } else {
+          const ang = (t - 0.35) / 0.65 * Math.PI;
+          const cx = 0.6, cy = 0;
+          const rr = Math.min(R, 1.0);
+          pts[3*i] = cx + rr * Math.cos(Math.PI - ang);
+          pts[3*i+1] = rr * Math.sin(Math.PI - ang);
+          pts[3*i+2] = 0;
+        }
+      }
+      this.meshRefs.ms.beamLine.geometry.attributes.position.needsUpdate = true;
+      // spot at detector
+      const spot = this.meshRefs.ms.spot;
+      spot.position.set(1.6, Math.min(D * 0.5, 0.7), 0);
+      spot.scale.setScalar(0.8 + 0.4 * Math.min(D, 2));
+      // arrows: E in Wien (vertical), B out of page
+      this.msArrows.setVectors([
+        { origin: new THREE.Vector3(-1.2, -0.35, 0), dir: new THREE.Vector3(0, 1, 0), len: 0.5 },
+        { origin: new THREE.Vector3(-1.2, 0.35, 0), dir: new THREE.Vector3(0, -1, 0), len: 0.5 },
+        { origin: new THREE.Vector3(-1.2, 0, 0.4), dir: new THREE.Vector3(0, 0, 1), len: 0.5 }
+      ]);
+      rows = [
+        { k: 'Ion mass', v: (A * u).toExponential(3) + ' kg' },
+        { k: 'Selected velocity v = E/B1', v: v.toFixed(0) + ' m/s' },
+        { k: 'Radius R = m v /(e B2)', v: (R * 100).toFixed(2) + ' cm' },
+        { k: 'Impact diameter D = 2R', v: (D * 100).toFixed(2) + ' cm' }
+      ];
+      // chart: D vs A
+      const W = chartEl.width, H = chartEl.height;
+      const ctx = chartEl.getContext('2d');
+      ctx.clearRect(0, 0, W, H);
+      ctx.fillStyle = '#0b1220'; ctx.fillRect(0, 0, W, H);
+      ctx.strokeStyle = '#2a4a6a'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(50, H - 40); ctx.lineTo(W - 20, H - 40); ctx.moveTo(50, 20); ctx.lineTo(50, H - 40); ctx.stroke();
+      ctx.fillStyle = '#9fc7e8'; ctx.font = '12px sans-serif';
+      ctx.fillText('D (cm) vs A (u)', 60, 30);
+      ctx.beginPath();
+      for (let A2 = 1; A2 <= 24; A2++) {
+        const m2 = A2 * u, v2 = Esel / B1, R2 = (m2 * v2) / (e * B1), D2 = 2 * R2 * 100;
+        const x = 50 + (A2 - 1) / 23 * (W - 70);
+        const y = H - 40 - Math.min(D2 / 60, 1) * (H - 70);
+        if (A2 === 1) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      }
+      ctx.strokeStyle = '#7fd1ff'; ctx.lineWidth = 2; ctx.stroke();
+      ctx.fillStyle = '#ffd166';
+      const xc = 50 + (A - 1) / 23 * (W - 70);
+      const yc = H - 40 - Math.min(D * 100 / 60, 1) * (H - 70);
+      ctx.beginPath(); ctx.arc(xc, yc, 4, 0, 2 * Math.PI); ctx.fill();
+    } else if (prob.startsWith('CRT')) {
+      const Va = p1 * 1000; // kV -> V
+      const Ey = p2 * 1000; // kV/m -> V/m
+      const Bz = p3 * 1e-3; // mT -> T
+      const l = 0.15, L = 0.5;
+      const v0 = Math.sqrt(2 * e * Va / me);
+      const De = (L * l / (2 * Va)) * Ey;
+      const Dm = (L * l / (2 * Va)) * Bz * v0;
+      const Dnet = De - Dm;
+      // beam path
+      const pts = this.meshRefs.crt.beam.geometry.attributes.position.array;
+      const N = 40;
+      for (let i = 0; i < N; i++) {
+        const t = i / (N - 1);
+        const x = -2.2 + t * 4.0;
+        let y = 0;
+        if (x > -1.5 && x < -0.1) {
+          const s = (x + 1.5) / 1.4;
+          y = 0.5 * (De - Dm) * s * s * 4;
+        } else if (x >= -0.1) {
+          y = (De - Dm) * (1 + (x + 0.1) / 2.0);
+        }
+        pts[3*i] = x; pts[3*i+1] = y * 2; pts[3*i+2] = 0;
+      }
+      this.meshRefs.crt.beam.geometry.attributes.position.needsUpdate = true;
+      this.meshRefs.crt.spot.position.set(1.8, (De - Dm) * 2, 0);
+      this.crtArrows.setVectors([
+        { origin: new THREE.Vector3(-0.8, -0.4, 0), dir: new THREE.Vector3(0, 1, 0), len: 0.4 },
+        { origin: new THREE.Vector3(-0.8, 0.4, 0), dir: new THREE.Vector3(0, -1, 0), len: 0.4 },
+        { origin: new THREE.Vector3(-0.8, 0, 0.5), dir: new THREE.Vector3(0, 0, 1), len: 0.4 }
+      ]);
+      rows = [
+        { k: 'Anode voltage V_a', v: (Va / 1000).toFixed(1) + ' kV' },
+        { k: 'Electron speed v0', v: (v0 / 1e6).toFixed(2) + ' Mm/s' },
+        { k: 'Net deflection D_net', v: (Dnet * 1000).toFixed(2) + ' mm' },
+        { k: 'Balance B_z (D=0)', v: (Ey / v0 * 1000).toFixed(2) + ' mT' }
+      ];
+      // chart: Dnet vs Bz
+      const W = chartEl.width, H = chartEl.height;
+      const ctx = chartEl.getContext('2d');
+      ctx.clearRect(0, 0, W, H);
+      ctx.fillStyle = '#0b1220'; ctx.fillRect(0, 0, W, H);
+      ctx.strokeStyle = '#2a4a6a'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(50, H - 40); ctx.lineTo(W - 20, H - 40); ctx.moveTo(50, 20); ctx.lineTo(50, H - 40); ctx.stroke();
+      ctx.fillStyle = '#9fc7e8'; ctx.font = '12px sans-serif';
+      ctx.fillText('D_net (mm) vs B_z (mT)', 60, 30);
+      ctx.beginPath();
+      for (let b = 0; b <= 50; b += 1) {
+        const B = b * 1e-3;
+        const D = (L * l / (2 * Va)) * (Ey - B * v0);
+        const x = 50 + b / 50 * (W - 70);
+        const y = H - 40 - (D * 1000 / 20) * (H - 70);
+        if (b === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      }
+      ctx.strokeStyle = '#7fd1ff'; ctx.lineWidth = 2; ctx.stroke();
+      // zero line
+      const y0 = H - 40 - 0;
+      ctx.strokeStyle = '#ff6b6b'; ctx.setLineDash([4, 4]);
+      ctx.beginPath(); ctx.moveTo(50, y0); ctx.lineTo(W - 20, y0); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = '#ffd166';
+      const xc = 50 + (Bz * 1000) / 50 * (W - 70);
+      const yc = H - 40 - (Dnet * 1000 / 20) * (H - 70);
+      ctx.beginPath(); ctx.arc(xc, yc, 4, 0, 2 * Math.PI); ctx.fill();
+    } else {
+      const Vgap = p1 * 1000; // kV -> V
+      const B = p2;
+      const Rmax = p3 / 100; // cm -> m
+      const fc = (e * B) / (2 * Math.PI * mp);
+      const Kmax = (e * e * B * B * Rmax * Rmax) / (2 * mp);
+      const dK = 2 * e * Vgap;
+      const Nturns = Kmax / dK;
+      // spiral trajectory
+      const pts = this.meshRefs.cyc.beam.geometry.attributes.position.array;
+      const N = 200;
+      for (let i = 0; i < N; i++) {
+        const t = i / (N - 1);
+        const turns = t * Nturns;
+        const r = Rmax * Math.sqrt(t);
+        const ang = turns * 2 * Math.PI;
+        pts[3*i] = r * Math.cos(ang);
+        pts[3*i+1] = r * Math.sin(ang);
+        pts[3*i+2] = 0;
+      }
+      this.meshRefs.cyc.beam.geometry.attributes.position.needsUpdate = true;
+      this.meshRefs.cyc.spot.position.set(Rmax * Math.cos(Nturns * 2 * Math.PI), Rmax * Math.sin(Nturns * 2 * Math.PI), 0);
+      this.cycArrows.setVectors([
+        { origin: new THREE.Vector3(0, 0, 0.3), dir: new THREE.Vector3(0, 0, 1), len: 0.6 },
+        { origin: new THREE.Vector3(0, 0, -0.3), dir: new THREE.Vector3(0, 0, -1), len: 0.6 }
+      ]);
+      rows = [
+        { k: 'Cyclotron frequency f_c', v: (fc / 1e6).toFixed(2) + ' MHz' },
+        { k: 'Energy gain per turn', v: (dK / 1e6).toFixed(3) + ' MeV' },
+        { k: 'Turns to extraction', v: Nturns.toFixed(1) },
+        { k: 'Final K_max', v: (Kmax / 1e6).toFixed(2) + ' MeV' }
+      ];
+      // chart: K vs turn
+      const W = chartEl.width, H = chartEl.height;
+      const ctx = chartEl.getContext('2d');
+      ctx.clearRect(0, 0, W, H);
+      ctx.fillStyle = '#0b1220'; ctx.fillRect(0, 0, W, H);
+      ctx.strokeStyle = '#2a4a6a'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(50, H - 40); ctx.lineTo(W - 20, H - 40); ctx.moveTo(50, 20); ctx.lineTo(50, H - 40); ctx.stroke();
+      ctx.fillStyle = '#9fc7e8'; ctx.font = '12px sans-serif';
+      ctx.fillText('K (MeV) vs turn N', 60, 30);
+      ctx.beginPath();
+      const maxN = Math.max(Nturns, 1);
+      for (let n = 0; n <= maxN; n += Math.max(1, Math.floor(maxN / 50))) {
+        const K = n * dK;
+        const x = 50 + n / maxN * (W - 70);
+        const y = H - 40 - (K / Kmax) * (H - 70);
+        if (n === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      }
+      ctx.strokeStyle = '#7fd1ff'; ctx.lineWidth = 2; ctx.stroke();
+      ctx.fillStyle = '#ffd166';
+      const xc = 50 + Nturns / maxN * (W - 70);
+      const yc = H - 40 - (Kmax / Kmax) * (H - 70);
+      ctx.beginPath(); ctx.arc(xc, yc, 4, 0, 2 * Math.PI); ctx.fill();
+    }
+
+    setHud('Ch. 6 Capstone Problem Solver', latex, rows);
+  },
+
+  tick(dt) {
+    // gentle rotation of apparatus for visual interest
+    if (this.root) this.root.rotation.y += dt * 0.05;
+  },
+
+  lesson: `<p>Chapter 6 unifies the Lorentz force <b>F = q(E + v × B)</b> with energy methods. In a Wien velocity selector, crossed E and B give a straight-through condition v = E/B, so the mass spectrometer's deflection radius R = m v /(q B₂) and impact diameter D = 2R = 2mE/(q B₁B₂) identify ion mass. In a CRT, overlapped E_y and B_z fields produce opposing deflections; the net screen displacement D_net = (Ll/2V_a)(E_y − B_z√(2eV_a/m_e)) vanishes at the velocity-selection balance B_z = E_y/v₀. A cyclotron accelerates protons across the gap twice per revolution at f_c = qB/(2πm), gaining ΔK = 2qV_gap per turn; the extraction energy is K_max = q²B²R_max²/(2m). These problems illustrate resonance, velocity selection, and electromechanical energy conversion.</p>`,
+
+  quiz: [
+    { q: 'In a Wien velocity selector, the selected speed is:', options: ['v = B/E', 'v = E/B', 'v = EB', 'v = √(E/B)'], answer: 1 },
+    { q: 'The cyclotron frequency of a particle of charge q and mass m in field B is:', options: ['f = qB/(2πm)', 'f = 2πm/(qB)', 'f = qB/m', 'f = m/(qB)'], answer: 0 },
+    { q: 'For a CRT with crossed E_y and B_z, zero net deflection occurs when:', options: ['E_y = 0', 'B_z = 0', 'B_z = E_y/v₀', 'E_y = B_z v₀²'], answer: 2 }
+  ]
+});
 /* === UI CONTROLLER === */
 
       let activeIdx = 0;
