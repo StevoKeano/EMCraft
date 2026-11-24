@@ -487,8 +487,15 @@
   },
 
   tick(dt) {
-    if (this.state.animate_wave) this.t += dt;
-    this.update();
+    if (!this.state.animate_wave || !this.meshRefs) return;
+    this.t += dt;
+    const f = this.state.freq_GHz, fc = this.state.fc_GHz;
+    const ratio = f / fc;
+    if (ratio <= 1.0) return;
+    const s = Math.sqrt(1 - 1 / (ratio * ratio));
+    const { phasePlane, packet, L } = this.meshRefs;
+    phasePlane.position.z = -L / 2 + ((this.t * 0.6) % 1) * L;
+    packet.position.z = -L / 2 + ((this.t * 0.6 * s) % 1) * L;
   },
 
   lesson: `<p>In a hollow conducting waveguide the field is confined to the interior, so energy no longer spreads as 1/r². The axial dependence is <em>e^{jωt − γz}</em> with γ = α + jβ. Above the cutoff frequency f_c the guide is lossless (α = 0) and β = (ω/c)√(1 − (f_c/f)²).</p>
@@ -3253,13 +3260,32 @@ modules.push({
       });
     }
 
+    function disposeNode(node) {
+      if (!node) return;
+      if (node.children) {
+        while (node.children.length > 0) {
+          const child = node.children[0];
+          disposeNode(child);
+          node.remove(child);
+        }
+      }
+      if (node.geometry && typeof node.geometry.dispose === 'function') {
+        node.geometry.dispose();
+      }
+      if (node.material) {
+        const mats = Array.isArray(node.material) ? node.material : [node.material];
+        mats.forEach((m) => {
+          if (m && typeof m.dispose === 'function') m.dispose();
+        });
+      }
+    }
+
     function loadModule(idx) {
       if (!modules.length) return;
       const mod = modules[Math.max(0, Math.min(modules.length - 1, idx))];
       activeMod = mod;
-      while (content.children.length > 0) {
-        content.remove(content.children[0]);
-      }
+      disposeNode(content);
+      renderer.renderLists.dispose();
       mod.state = {};
       (mod.controls || []).forEach((c) => { mod.state[c.id] = c.value; });
 
