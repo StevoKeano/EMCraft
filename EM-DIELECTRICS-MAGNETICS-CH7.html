@@ -414,7 +414,7 @@
     // gentle pulse of the D arrows to emphasize the response
     const t = performance.now() * 0.001;
     if (this.meshRefs && this.meshRefs.dField) {
-      this.meshRefs.dField.position.z = 0.02 * Math.sin(t * 1.6);
+      if (this.meshRefs.dField.group) this.meshRefs.dField.group.position.z = 0.02 * Math.sin(t * 1.6);
     }
   },
 
@@ -1360,6 +1360,286 @@ modules.push({
     { q: 'Which material class has μ_r slightly less than 1?', options: ['Ferromagnetic', 'Paramagnetic', 'Diamagnetic', 'Non-magnetic'], answer: 2 }
   ]
 });
+modules.push({
+  id: 'magnetization_rod_solenoid',
+  title: '7-14 to 7-15 Magnetization M, Magnetized Rod & Equivalent Solenoid',
+  controls: [
+    { id: 'M_kAm', label: 'Magnetization M (kA/m)', type: 'range', min: 0, max: 500, step: 10, value: 200 },
+    { id: 'mu_r', label: 'Relative permeability mu_r', type: 'range', min: 1, max: 500, step: 5, value: 100 },
+    { id: 'rod_len_cm', label: 'Rod length L (cm)', type: 'range', min: 5, max: 30, step: 1, value: 16 }
+  ],
+  build() {
+    const MU0 = 4 * Math.PI * 1e-7;
+    this.MU0 = MU0;
+    this.meshRefs = {};
+
+    // Rod (magnetized core)
+    const rodGeo = new THREE.CylinderGeometry(0.55, 0.55, 1, 48, 1, false);
+    const rodMat = new THREE.MeshStandardMaterial({
+      color: 0x2a4a7a, emissive: 0x1b3a66, emissiveIntensity: 0.6,
+      metalness: 0.5, roughness: 0.35
+    });
+    const rod = new THREE.Mesh(rodGeo, rodMat);
+    rod.rotation.z = Math.PI / 2; // axis along x
+    content.add(rod);
+    this.meshRefs.rod = rod;
+
+    // End caps (poles) - bright
+    const capGeo = new THREE.CylinderGeometry(0.56, 0.56, 0.06, 48);
+    const capMatN = new THREE.MeshStandardMaterial({ color: 0xff5a5a, emissive: 0xff2a2a, emissiveIntensity: 0.9 });
+    const capMatS = new THREE.MeshStandardMaterial({ color: 0x5a8aff, emissive: 0x2a5aff, emissiveIntensity: 0.9 });
+    const capN = new THREE.Mesh(capGeo, capMatN);
+    const capS = new THREE.Mesh(capGeo, capMatS);
+    capN.rotation.z = Math.PI / 2;
+    capS.rotation.z = Math.PI / 2;
+    content.add(capN, capS);
+    this.meshRefs.capN = capN;
+    this.meshRefs.capS = capS;
+
+    // Surface current loops (circumferential) - rings around rod
+    const ringGroup = new THREE.Group();
+    const ringGeo = new THREE.TorusGeometry(0.58, 0.022, 8, 40);
+    const ringMat = new THREE.MeshStandardMaterial({ color: 0xffd166, emissive: 0xffb020, emissiveIntensity: 1.0 });
+    const N_RINGS = 12;
+    this.rings = [];
+    for (let i = 0; i < N_RINGS; i++) {
+      const r = new THREE.Mesh(ringGeo, ringMat);
+      r.rotation.y = Math.PI / 2; // torus plane perpendicular to x-axis
+      ringGroup.add(r);
+      this.rings.push(r);
+    }
+    content.add(ringGroup);
+    this.meshRefs.rings = ringGroup;
+
+    // Axial arrow fields: M (inside) and B (inside + outside)
+    this.mArrows = addArrowField([], 0xff7a3d);
+    this.bArrows = addArrowField([], 0x7fd1ff);
+
+    // Axis guide line
+    const axisGeo = new THREE.BufferGeometry().setFromPoints([
+      new THREE.Vector3(-3.2, 0, 0), new THREE.Vector3(3.2, 0, 0)
+    ]);
+    const axisLine = new THREE.Line(axisGeo, new THREE.LineBasicMaterial({ color: 0x445566 }));
+    content.add(axisLine);
+
+    // Ground grid hint
+    const grid = new THREE.GridHelper(6, 12, 0x223344, 0x1a2530);
+    grid.position.y = -1.2;
+    content.add(grid);
+  },
+
+  update() {
+    const st = this.state;
+    const MU0 = this.MU0;
+    const M = st.M_kAm * 1e3;          // A/m
+    const mu_r = st.mu_r;
+    const L = st.rod_len_cm / 100;     // m
+
+    // For a uniformly magnetized rod treated as equivalent solenoid:
+    // H inside (long solenoid approximation) = -M + N I / L ... but for the
+    // equivalent air-core solenoid with sheet current K = M, H_in = M (in the
+    // solenoid's own field convention) -> B = mu0(H + M).
+    // We use the standard linear-medium relation: M = chi_m H, chi_m = mu_r - 1
+    // => H = M / (mu_r - 1) for mu_r > 1, and B = mu0 mu_r H = mu0 (H + M).
+    const chi = mu_r - 1;
+    const H = chi > 0 ? M / chi : 0;   // A/m
+    const B = MU0 * (H + M);           // T
+    const Kb = M;                      // A/m sheet bound current
+
+    // Scale rod length in scene: 1 unit = 10 cm -> L_scene = L*10
+    const Lscene = Math.max(0.6, st.rod_len_cm / 10);
+    const rod = this.meshRefs.rod;
+    rod.scale.set(Lscene, 1, 1);
+
+    // Caps at ends
+    const half = Lscene / 2;
+    this.meshRefs.capN.position.set(half + 0.03, 0, 0);
+    this.meshRefs.capS.position.set(-half - 0.03, 0, 0);
+
+    // Rings distributed along rod
+    const nR = this.rings.length;
+    for (let i = 0; i < nR; i++) {
+      const t = (i + 0.5) / nR;
+      this.rings[i].position.set(-half + t * Lscene, 0, 0);
+      // ring brightness scales with M
+      const s = 0.6 + 0.6 * (M / 5e5);
+      this.rings[i].scale.setScalar(s);
+    }
+
+    // M arrows inside rod (axial, pointing +x)
+    const mVecs = [];
+    const nAx = 5;
+    const mScale = 0.35 + 0.55 * (M / 5e5);
+    for (let i = 0; i < nAx; i++) {
+      const x = -half + (i + 0.5) * (Lscene / nAx);
+      mVecs.push({
+        origin: new THREE.Vector3(x, 0, 0),
+        dir: new THREE.Vector3(1, 0, 0),
+        len: mScale
+      });
+    }
+    this.mArrows.setVectors(mVecs);
+
+    // B arrows: inside (axial) and outside return path (curved-ish, simplified)
+    const bVecs = [];
+    const bScale = 0.35 + 0.55 * Math.min(1, B / 0.05);
+    for (let i = 0; i < nAx; i++) {
+      const x = -half + (i + 0.5) * (Lscene / nAx);
+      bVecs.push({
+        origin: new THREE.Vector3(x, 0.0, 0),
+        dir: new THREE.Vector3(1, 0, 0),
+        len: bScale
+      });
+    }
+    // Outside return arrows (opposite direction, offset radially)
+    for (let i = 0; i < 4; i++) {
+      const x = -half + (i + 0.5) * (Lscene / 4);
+      bVecs.push({
+        origin: new THREE.Vector3(x, 0.95, 0),
+        dir: new THREE.Vector3(-1, 0, 0),
+        len: bScale * 0.7
+      });
+      bVecs.push({
+        origin: new THREE.Vector3(x, -0.95, 0),
+        dir: new THREE.Vector3(-1, 0, 0),
+        len: bScale * 0.7
+      });
+    }
+    this.bArrows.setVectors(bVecs);
+
+    // ---- 2D chart: axial profile of B and H across rod ----
+    const W = chartEl.width, Hc = chartEl.height;
+    const ctx = chartEl.getContext('2d');
+    ctx.clearRect(0, 0, W, Hc);
+
+    // background
+    ctx.fillStyle = '#0b1220';
+    ctx.fillRect(0, 0, W, Hc);
+
+    const padL = 60, padR = 20, padT = 30, padB = 45;
+    const plotW = W - padL - padR;
+    const plotH = Hc - padT - padB;
+
+    // axes
+    ctx.strokeStyle = '#334455';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(padL, padT);
+    ctx.lineTo(padL, padT + plotH);
+    ctx.lineTo(padL + plotW, padT + plotH);
+    ctx.stroke();
+
+    // x range: -L/2 .. L/2 in cm, plus margin
+    const xMin = -st.rod_len_cm / 2 - 4;
+    const xMax = st.rod_len_cm / 2 + 4;
+    const xToPx = (x) => padL + (x - xMin) / (xMax - xMin) * plotW;
+
+    // y scale: normalize to max of |B| (mT) and |H| (kA/m) separately
+    const BmT = B * 1e3;
+    const HkA = H / 1e3;
+    const yMaxB = Math.max(1, BmT * 1.15);
+    const yMaxH = Math.max(1, Math.abs(HkA) * 1.15);
+
+    const yToPxB = (v) => padT + plotH - (v / yMaxB) * plotH;
+    const yToPxH = (v) => padT + plotH - (v / yMaxH) * plotH;
+
+    // grid lines
+    ctx.strokeStyle = '#1c2a3a';
+    for (let i = 0; i <= 4; i++) {
+      const y = padT + (i / 4) * plotH;
+      ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(padL + plotW, y); ctx.stroke();
+    }
+
+    // rod region shading
+    ctx.fillStyle = 'rgba(60,120,200,0.12)';
+    ctx.fillRect(xToPx(-st.rod_len_cm / 2), padT, xToPx(st.rod_len_cm / 2) - xToPx(-st.rod_len_cm / 2), plotH);
+
+    // B profile: inside rod constant BmT, outside decays (dipole-like ~ 1/r^3)
+    ctx.strokeStyle = '#7fd1ff';
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    const N = 200;
+    for (let i = 0; i <= N; i++) {
+      const x = xMin + (i / N) * (xMax - xMin);
+      const inside = Math.abs(x) <= st.rod_len_cm / 2;
+      let bVal;
+      if (inside) {
+        bVal = BmT;
+      } else {
+        const d = Math.abs(x) - st.rod_len_cm / 2;
+        bVal = BmT * Math.pow(1 / (1 + d / 2), 3) * 0.6;
+      }
+      const px = xToPx(x), py = yToPxB(bVal);
+      if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+    }
+    ctx.stroke();
+
+    // H profile: inside HkA (may be negative if mu_r<1 impossible; here positive), outside small
+    ctx.strokeStyle = '#ff9a4d';
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    for (let i = 0; i <= N; i++) {
+      const x = xMin + (i / N) * (xMax - xMin);
+      const inside = Math.abs(x) <= st.rod_len_cm / 2;
+      let hVal;
+      if (inside) {
+        hVal = HkA;
+      } else {
+        const d = Math.abs(x) - st.rod_len_cm / 2;
+        hVal = HkA * Math.pow(1 / (1 + d / 2), 3) * 0.5;
+      }
+      const px = xToPx(x), py = yToPxH(hVal);
+      if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+    }
+    ctx.stroke();
+
+    // labels
+    ctx.fillStyle = '#9fb3c8';
+    ctx.font = '12px sans-serif';
+    ctx.fillText('B (mT)', padL + 4, padT - 8);
+    ctx.fillStyle = '#ff9a4d';
+    ctx.fillText('H (kA/m)', padL + 70, padT - 8);
+    ctx.fillStyle = '#9fb3c8';
+    ctx.fillText('axial position x (cm)', padL + plotW / 2 - 60, padT + plotH + 30);
+
+    // tick labels
+    ctx.fillStyle = '#6b8299';
+    ctx.font = '10px sans-serif';
+    for (let i = 0; i <= 4; i++) {
+      const xv = xMin + (i / 4) * (xMax - xMin);
+      ctx.fillText(xv.toFixed(1), xToPx(xv) - 12, padT + plotH + 16);
+    }
+
+    // ---- HUD ----
+    setHud(
+      'Magnetization M & Equivalent Solenoid',
+      '\\mathbf{B} = \\mu_0(\\mathbf{H} + \\mathbf{M}),\\quad \\mathbf{K}_b = \\mathbf{M}\\times\\hat{\\mathbf{n}}',
+      [
+        { k: '|M|', v: (M / 1e3).toFixed(1) + ' kA/m' },
+        { k: '|H|', v: (H / 1e3).toFixed(2) + ' kA/m' },
+        { k: '|B|', v: (B * 1e3).toFixed(2) + ' mT' },
+        { k: 'Sheet K_b', v: (Kb / 1e3).toFixed(1) + ' kA/m' }
+      ]
+    );
+  },
+
+  tick(dt) {
+    // gentle rotation of rings to suggest circulating bound current
+    const t = performance.now() * 0.001;
+    for (let i = 0; i < this.rings.length; i++) {
+      this.rings[i].rotation.x = t * 0.6 + i * 0.3;
+    }
+  },
+
+  lesson: `<p><strong>Magnetization</strong> is the magnetic dipole moment per unit volume: <em>M</em> = lim<sub>&Delta;V&rarr;0</sub> (&sum; m<sub>i</sub>)/&Delta;V, in A/m. For a linear medium <em>M</em> = &chi;<sub>m</sub><em>H</em> = (&mu;<sub>r</sub>&minus;1)<em>H</em>, and the flux density is <em>B</em> = &mu;<sub>0</sub>(<em>H</em>+<em>M</em>) = &mu;<sub>0</sub>&mu;<sub>r</sub><em>H</em>.</p>
+<p>A uniformly magnetized rod of length <em>L</em> carries a bound surface current density <em>K</em><sub>b</sub> = <em>M</em>&times;&#x005E;<em>n</em> on its lateral surface. This is exactly the sheet current of an air-core solenoid with <em>K</em> = <em>N I</em>/<em>L</em> = <em>M</em>, so the magnetized rod is equivalent to a solenoid carrying the same surface current. Inside, the field is essentially uniform; outside it falls off like a dipole field.</p>
+<p>Limiting cases: if &mu;<sub>r</sub>&rarr;1 (no magnetic material), <em>H</em>&rarr;<em>M</em>/(&mu;<sub>r</sub>&minus;1) diverges for fixed <em>M</em>, so the relation must be read as <em>M</em> = &chi;<sub>m</sub><em>H</em>; for a permanent magnet <em>M</em> is fixed and <em>H</em> is set by geometry. As <em>M</em>&rarr;0 the bound current and all fields vanish.</p>`,
+  quiz: [
+    { q: 'What is the SI unit of magnetization M?', options: ['A/m', 'A&middot;m<sup>2</sup>', 'T', 'H/m'], answer: 0 },
+    { q: 'For a uniformly magnetized rod, the bound surface current density K_b equals:', options: ['M&times;n&#x0302;', 'M&middot;n&#x0302;', '&mu;<sub>0</sub>M', 'M/L'], answer: 0 },
+    { q: 'The relation between B, H and M in a linear medium is:', options: ['B = &mu;<sub>0</sub>(H + M)', 'B = &mu;<sub>0</sub>H &minus; M', 'B = M &minus; &mu;<sub>0</sub>H', 'B = &mu;<sub>0</sub>M only'], answer: 0 }
+  ]
+});
 /* === UI CONTROLLER === */
     const modSelect = document.getElementById('modSelect');
     const controlsHost = document.getElementById('controlsHost');
@@ -1478,7 +1758,7 @@ modules.push({
       const dt = Math.min((now - prevT) / 1000, 0.05);
       prevT = now;
       controls.update();
-      if (activeMod && typeof activeMod.tick === 'function') activeMod.tick(dt);
+      if (activeMod && typeof activeMod.tick === 'function') { try { activeMod.tick(dt); } catch (e) { console.warn('tick error:', e); activeMod.tick = null; } }
       renderer.render(scene, camera);
     }
     if (modules.length > 0) loadModule(0);
