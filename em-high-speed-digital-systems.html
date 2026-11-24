@@ -299,7 +299,7 @@ modules.push({
     // HUD
     setHud(
       'Reset Signal Response',
-      String.raw`$v_L(t)=V_0\left(1-e^{-t/\tau}\right)$`,
+      String.raw$v_L(t)=V_0\left(1-e^{-t/\tau}\right)$,
       [
         { k: 'tau', v: (tau * 1e9).toFixed(2) + ' ns' },
         { k: 'Z0', v: Z0.toFixed(1) + ' ohm' },
@@ -612,7 +612,7 @@ modules.push({
     // HUD
     setHud(
       'EMI Coupling',
-      String.raw`$E=\frac{\mu_0 I A \omega^2}{4\pi c r}$`,
+      String.raw$E=\frac{\mu_0 I A \omega^2}{4\pi c r}$,
       [
         { k: 'Field E', v: E.toExponential(2) + ' V/m' },
         { k: 'Threshold', v: threshold.toExponential(1) + ' V/m' },
@@ -844,7 +844,7 @@ modules.push({
     // ---- HUD ----
     setHud(
       'Lumped vs Distributed',
-      String.raw`$\ell = \frac{L}{v_p t_r}$`,
+      String.raw$\ell = \frac{L}{v_p t_r}$,
       [
         { k: 'Electrical length', v: '-' },
         { k: 'Verdict', v: '-' },
@@ -874,7 +874,7 @@ modules.push({
     const verdict = ell > 1 / 6 ? 'Distributed (wave matters)' : 'Lumped (circuit OK)';
     setHud(
       'Lumped vs Distributed',
-      String.raw`$\ell = \frac{L}{v_p t_r}$`,
+      String.raw$\ell = \frac{L}{v_p t_r}$,
       [
         { k: 'Electrical length ℓ', v: ell.toFixed(3) },
         { k: 'Verdict', v: verdict },
@@ -1163,7 +1163,7 @@ modules.push({
 
     setHud(
       'Signal Speed & Distance',
-      String.raw`$v_p=\frac{c}{\sqrt{\varepsilon_{r,\mathrm{eff}}}}\qquad d=v_p\,t_r$`,
+      String.raw$v_p=\frac{c}{\sqrt{\varepsilon_{r,\mathrm{eff}}}}\qquad d=v_p\,t_r$,
       [
         { k: 'vp', v: (vp / 1e8).toFixed(3) + ' × 10^8 m/s' },
         { k: 'd = vp·tr', v: (d * 100).toFixed(2) + ' cm' },
@@ -1551,7 +1551,7 @@ modules.push({
     // ---- HUD ----
     setHud(
       'Critical Length',
-      String.raw`$L_c=\frac{v_p t_r}{6}$`,
+      String.raw$L_c=\frac{v_p t_r}{6}$,
       [
         { k: 'v_p', v: (st.vp * 2.998e8).toExponential(2) + ' m/s' },
         { k: 't_r', v: st.tr.toFixed(2) + ' ns' },
@@ -1676,7 +1676,7 @@ modules.push({
     // ---- HUD --------------------------------------------------------------
     setHud(
       'Knee Frequency',
-      String.raw`$f_{\mathrm{knee}}\approx\frac{0.35}{t_r}$`,
+      String.raw$f_{\mathrm{knee}}\approx\frac{0.35}{t_r}$,
       [
         { k: 'Rise time', v: '1.0 ns' },
         { k: 'f_knee', v: '350 MHz' },
@@ -1862,7 +1862,7 @@ modules.push({
     // ---- HUD -------------------------------------------------------------
     setHud(
       'Knee Frequency',
-      String.raw`$f_{\mathrm{knee}}\approx\frac{0.35}{t_r}$`,
+      String.raw$f_{\mathrm{knee}}\approx\frac{0.35}{t_r}$,
       [
         { k: 'Rise time', v: tr.toFixed(2) + ' ns' },
         { k: 'f_knee', v: fkneeMHz.toFixed(1) + ' MHz' },
