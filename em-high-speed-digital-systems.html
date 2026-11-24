@@ -299,7 +299,7 @@ modules.push({
     // HUD
     setHud(
       'Reset Signal Response',
-      String.raw$v_L(t)=V_0\left(1-e^{-t/\tau}\right)$,
+      String.raw`$v_L(t)=V_0\left(1-e^{-t/\tau}\right)$`,
       [
         { k: 'tau', v: (tau * 1e9).toFixed(2) + ' ns' },
         { k: 'Z0', v: Z0.toFixed(1) + ' ohm' },
@@ -612,7 +612,7 @@ modules.push({
     // HUD
     setHud(
       'EMI Coupling',
-      String.raw$E=\frac{\mu_0 I A \omega^2}{4\pi c r}$,
+      String.raw`$E=\frac{\mu_0 I A \omega^2}{4\pi c r}$`,
       [
         { k: 'Field E', v: E.toExponential(2) + ' V/m' },
         { k: 'Threshold', v: threshold.toExponential(1) + ' V/m' },
@@ -844,7 +844,7 @@ modules.push({
     // ---- HUD ----
     setHud(
       'Lumped vs Distributed',
-      String.raw$\ell = \frac{L}{v_p t_r}$,
+      String.raw`$\ell = \frac{L}{v_p t_r}$`,
       [
         { k: 'Electrical length', v: '-' },
         { k: 'Verdict', v: '-' },
@@ -874,7 +874,7 @@ modules.push({
     const verdict = ell > 1 / 6 ? 'Distributed (wave matters)' : 'Lumped (circuit OK)';
     setHud(
       'Lumped vs Distributed',
-      String.raw$\ell = \frac{L}{v_p t_r}$,
+      String.raw`$\ell = \frac{L}{v_p t_r}$`,
       [
         { k: 'Electrical length ℓ', v: ell.toFixed(3) },
         { k: 'Verdict', v: verdict },
@@ -1163,7 +1163,7 @@ modules.push({
 
     setHud(
       'Signal Speed & Distance',
-      String.raw$v_p=\frac{c}{\sqrt{\varepsilon_{r,\mathrm{eff}}}}\qquad d=v_p\,t_r$,
+      String.raw`$v_p=\frac{c}{\sqrt{\varepsilon_{r,\mathrm{eff}}}}\qquad d=v_p\,t_r$`,
       [
         { k: 'vp', v: (vp / 1e8).toFixed(3) + ' × 10^8 m/s' },
         { k: 'd = vp·tr', v: (d * 100).toFixed(2) + ' cm' },
@@ -1551,7 +1551,7 @@ modules.push({
     // ---- HUD ----
     setHud(
       'Critical Length',
-      String.raw$L_c=\frac{v_p t_r}{6}$,
+      String.raw`$L_c=\frac{v_p t_r}{6}$`,
       [
         { k: 'v_p', v: (st.vp * 2.998e8).toExponential(2) + ' m/s' },
         { k: 't_r', v: st.tr.toFixed(2) + ' ns' },
@@ -1676,7 +1676,7 @@ modules.push({
     // ---- HUD --------------------------------------------------------------
     setHud(
       'Knee Frequency',
-      String.raw$f_{\mathrm{knee}}\approx\frac{0.35}{t_r}$,
+      String.raw`$f_{\mathrm{knee}}\approx\frac{0.35}{t_r}$`,
       [
         { k: 'Rise time', v: '1.0 ns' },
         { k: 'f_knee', v: '350 MHz' },
@@ -1862,7 +1862,7 @@ modules.push({
     // ---- HUD -------------------------------------------------------------
     setHud(
       'Knee Frequency',
-      String.raw$f_{\mathrm{knee}}\approx\frac{0.35}{t_r}$,
+      String.raw`$f_{\mathrm{knee}}\approx\frac{0.35}{t_r}$`,
       [
         { k: 'Rise time', v: tr.toFixed(2) + ' ns' },
         { k: 'f_knee', v: fkneeMHz.toFixed(1) + ' MHz' },
@@ -1909,6 +1909,271 @@ A probe or measurement bandwidth should be compared with $f_{\mathrm{knee}}$: if
         'It remains flat',
         'As f^2'
       ],
+      answer: 1
+    }
+  ]
+});
+modules.push({
+  id: 'transmission_line_review',
+  title: '7. Review of Transmission Line Theory',
+  controls: [
+    { type: 'range', id: 'z0', label: 'Z0 (ohm)', min: 20, max: 150, step: 1, value: 50 },
+    { type: 'range', id: 'zl', label: 'ZL (ohm)', min: 10, max: 300, step: 1, value: 100 },
+    { type: 'range', id: 'len', label: 'Length (wavelengths)', min: 0.1, max: 2, step: 0.01, value: 1.0 }
+  ],
+
+  build() {
+    const st = this.state;
+    Object.assign(st, { z0: 50, zl: 100, len: 1.0 });
+
+    // ---- 3D transmission line ----
+    const lineGroup = new THREE.Group();
+    content.add(lineGroup);
+
+    const L = 6;                       // physical length of drawn line
+    const y0 = 0;
+
+    // conductor rails
+    const railMat = new THREE.MeshStandardMaterial({ color: 0x9fb6cc, metalness: 0.7, roughness: 0.35 });
+    const railGeo = new THREE.CylinderGeometry(0.055, 0.055, L, 12);
+    for (const dy of [-0.35, 0.35]) {
+      const rail = new THREE.Mesh(railGeo, railMat);
+      rail.rotation.z = Math.PI / 2;
+      rail.position.set(0, y0 + dy, 0);
+      lineGroup.add(rail);
+    }
+
+    // dielectric slab between rails
+    const slab = new THREE.Mesh(
+      new THREE.BoxGeometry(L, 0.62, 0.16),
+      new THREE.MeshStandardMaterial({ color: 0x2b4a63, transparent: true, opacity: 0.45, roughness: 0.6 })
+    );
+    slab.position.set(0, y0, 0);
+    lineGroup.add(slab);
+
+    // load resistor at the right end
+    const loadMat = new THREE.MeshStandardMaterial({ color: 0xffb347, metalness: 0.5, roughness: 0.4 });
+    const load = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.9, 0.28), loadMat);
+    load.position.set(L / 2 + 0.16, y0, 0);
+    lineGroup.add(load);
+
+    // source at the left end
+    const src = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.22, 0.22, 0.3, 20),
+      new THREE.MeshStandardMaterial({ color: 0x7fd1ff, metalness: 0.6, roughness: 0.3 })
+    );
+    src.rotation.z = Math.PI / 2;
+    src.position.set(-L / 2 - 0.18, y0, 0);
+    lineGroup.add(src);
+
+    // ---- wave curves (incident + reflected) ----
+    const N = 220;
+    const incGeo = new THREE.BufferGeometry();
+    const refGeo = new THREE.BufferGeometry();
+    const totGeo = new THREE.BufferGeometry();
+    const incPos = new Float32Array(N * 3);
+    const refPos = new Float32Array(N * 3);
+    const totPos = new Float32Array(N * 3);
+    incGeo.setAttribute('position', new THREE.BufferAttribute(incPos, 3));
+    refGeo.setAttribute('position', new THREE.BufferAttribute(refPos, 3));
+    totGeo.setAttribute('position', new THREE.BufferAttribute(totPos, 3));
+
+    const incLine = new THREE.Line(incGeo, new THREE.LineBasicMaterial({ color: 0x7fd1ff }));
+    const refLine = new THREE.Line(refGeo, new THREE.LineBasicMaterial({ color: 0xff7f9f }));
+    const totLine = new THREE.Line(totGeo, new THREE.LineBasicMaterial({ color: 0xffe066, linewidth: 2 }));
+    lineGroup.add(incLine, refLine, totLine);
+
+    // standing-wave envelope (dashed-ish, drawn as two lines)
+    const envGeo = new THREE.BufferGeometry();
+    const envPos = new Float32Array(N * 3);
+    envGeo.setAttribute('position', new THREE.BufferAttribute(envPos, 3));
+    const envLine = new THREE.Line(envGeo, new THREE.LineBasicMaterial({ color: 0x9be7a0, transparent: true, opacity: 0.85 }));
+    lineGroup.add(envLine);
+
+    // store geometry refs on state for update
+    st._geo = { N, L, incPos, refPos, totPos, envPos, incGeo, refGeo, totGeo, envGeo };
+
+    // ---- 2D chart ----
+    st._chart = { phase: 0 };
+  },
+
+  update() {
+    const st = this.state;
+    const z0 = st.z0, zl = st.zl, lenW = st.len;
+
+    const gamma = (zl - z0) / (zl + z0);
+    const absG = Math.abs(gamma);
+    const vswr = (1 + absG) / (1 - absG);
+    const rl = absG > 1e-6 ? -20 * Math.log10(absG) : Infinity;
+
+    const g = st._geo;
+    const { N, L } = g;
+    const k = 2 * Math.PI * lenW;   // total electrical length in radians
+    const t = st._chart.phase;
+
+    for (let i = 0; i < N; i++) {
+      const u = i / (N - 1);            // 0 at source, 1 at load
+      const x = -L / 2 + u * L;
+      const ph = k * u;                 // electrical phase from source
+      const inc = Math.sin(ph - t);
+      const ref = absG * Math.sin(ph + t + Math.atan2(gamma.imag || 0, gamma.real || 1));
+      const tot = inc + ref;
+      const env = Math.sqrt(1 + absG * absG + 2 * absG * Math.cos(2 * ph));
+
+      g.incPos[i * 3] = x; g.incPos[i * 3 + 1] = 0.55 + 0.30 * inc; g.incPos[i * 3 + 2] = 0;
+      g.refPos[i * 3] = x; g.refPos[i * 3 + 1] = 0.55 + 0.30 * ref; g.refPos[i * 3 + 2] = 0;
+      g.totPos[i * 3] = x; g.totPos[i * 3 + 1] = 0.55 + 0.30 * tot; g.totPos[i * 3 + 2] = 0;
+      g.envPos[i * 3] = x; g.envPos[i * 3 + 1] = 0.55 + 0.30 * env; g.envPos[i * 3 + 2] = 0;
+    }
+    g.incGeo.attributes.position.needsUpdate = true;
+    g.refGeo.attributes.position.needsUpdate = true;
+    g.totGeo.attributes.position.needsUpdate = true;
+    g.envGeo.attributes.position.needsUpdate = true;
+
+    // ---- HUD ----
+    setHud(
+      'Transmission Line',
+      String.raw`$\Gamma=\frac{Z_L-Z_0}{Z_L+Z_0}$`,
+      [
+        { k: 'Z0', v: z0.toFixed(1) + ' ohm' },
+        { k: 'ZL', v: zl.toFixed(1) + ' ohm' },
+        { k: 'Gamma', v: gamma.toFixed(3) },
+        { k: '|Gamma|', v: absG.toFixed(3) },
+        { k: 'VSWR', v: vswr.toFixed(3) },
+        { k: 'Return loss', v: isFinite(rl) ? rl.toFixed(2) + ' dB' : 'inf dB' }
+      ]
+    );
+
+    // ---- 2D chart ----
+    const ctx = chartEl.getContext('2d');
+    const W = chartEl.width, H = chartEl.height;
+    ctx.clearRect(0, 0, W, H);
+
+    // left panel: |Gamma| vs ZL/Z0
+    const pad = 40;
+    const lw = W * 0.5 - pad;
+    const lh = H - 2 * pad;
+    const x0 = pad, y0 = pad;
+
+    ctx.strokeStyle = '#2c3e50';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(x0, y0, lw, lh);
+
+    // axes labels
+    ctx.fillStyle = '#c9d6e3';
+    ctx.font = '12px sans-serif';
+    ctx.fillText('|Gamma| vs ZL/Z0', x0, y0 - 12);
+    ctx.fillText('ZL/Z0', x0 + lw - 40, y0 + lh + 20);
+    ctx.fillText('|Gamma|', x0 - 30, y0 + 12);
+
+    // curve: |Gamma| = |r-1|/(r+1), r in [0.05, 6]
+    ctx.beginPath();
+    ctx.strokeStyle = '#7fd1ff';
+    ctx.lineWidth = 2;
+    const rMin = 0.05, rMax = 6;
+    for (let i = 0; i <= 200; i++) {
+      const r = rMin + (rMax - rMin) * i / 200;
+      const gm = Math.abs((r - 1) / (r + 1));
+      const px = x0 + (r - rMin) / (rMax - rMin) * lw;
+      const py = y0 + lh - gm * lh;
+      if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+    }
+    ctx.stroke();
+
+    // current point
+    const rNow = zl / z0;
+    const gmNow = Math.abs((rNow - 1) / (rNow + 1));
+    const pxNow = x0 + Math.min(1, Math.max(0, (rNow - rMin) / (rMax - rMin))) * lw;
+    const pyNow = y0 + lh - gmNow * lh;
+    ctx.fillStyle = '#ffe066';
+    ctx.beginPath();
+    ctx.arc(pxNow, pyNow, 5, 0, Math.PI * 2);
+    ctx.fill();
+
+    // right panel: standing-wave envelope along line
+    const rx0 = W * 0.5 + pad * 0.5;
+    const rw = W * 0.5 - pad * 1.5;
+    const rh = H - 2 * pad;
+    ctx.strokeStyle = '#2c3e50';
+    ctx.strokeRect(rx0, y0, rw, rh);
+    ctx.fillStyle = '#c9d6e3';
+    ctx.fillText('Standing-wave envelope', rx0, y0 - 12);
+    ctx.fillText('position (wavelengths)', rx0 + rw - 130, y0 + rh + 20);
+
+    // envelope curve
+    ctx.beginPath();
+    ctx.strokeStyle = '#9be7a0';
+    ctx.lineWidth = 2;
+    for (let i = 0; i <= 200; i++) {
+      const u = i / 200;
+      const ph = 2 * Math.PI * lenW * u;
+      const env = Math.sqrt(1 + absG * absG + 2 * absG * Math.cos(2 * ph));
+      const px = rx0 + u * rw;
+      const py = y0 + rh - (env / (1 + absG)) * rh;
+      if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+    }
+    ctx.stroke();
+
+    // baseline
+    ctx.strokeStyle = '#3a4a5a';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(rx0, y0 + rh);
+    ctx.lineTo(rx0 + rw, y0 + rh);
+    ctx.stroke();
+  },
+
+  tick(dt) {
+    this.state._chart.phase += dt * 2.0;
+    this.update();
+  },
+
+  lesson: String.raw`
+### Transmission Line Theory
+
+A transmission line is described by the **telegrapher's equations**:
+
+$$ \frac{\partial V}{\partial z} = -L^\prime \frac{\partial I}{\partial t}, \qquad
+   \frac{\partial I}{\partial z} = -C^\prime \frac{\partial V}{\partial t} $$
+
+For a lossless line the characteristic impedance and propagation constant are
+
+$$ Z_0 = \sqrt{\frac{L^\prime}{C^\prime}}, \qquad \beta = \omega\sqrt{L^\prime C^\prime} = \frac{2\pi}{\lambda} $$
+
+The **reflection coefficient** at the load is
+
+$$ \Gamma = \frac{Z_L - Z_0}{Z_L + Z_0} $$
+
+Three important cases:
+
+- **Matched load** ($Z_L = Z_0$): $\Gamma = 0$, no reflection, VSWR $= 1$, return loss $= \infty$.
+- **Open circuit** ($Z_L \to \infty$): $\Gamma = +1$, full reflection, VSWR $\to \infty$.
+- **Short circuit** ($Z_L = 0$): $\Gamma = -1$, full reflection with a phase inversion.
+
+The **voltage standing-wave ratio** is
+
+$$ \mathrm{VSWR} = \frac{1 + |\Gamma|}{1 - |\Gamma|} $$
+
+and the **return loss** in dB is
+
+$$ \mathrm{RL} = -20\log_{10}|\Gamma| $$
+
+Along the line the incident and reflected waves superpose, producing a standing-wave envelope with maxima $1+|\Gamma|$ and minima $1-|\Gamma|$ spaced by $\lambda/2$. The input impedance seen at distance $d$ from the load is
+
+$$ Z_{\mathrm{in}}(d) = Z_0 \frac{Z_L + Z_0 \tan(\beta d)}{Z_0 + Z_L \tan(\beta d)} $$
+
+which repeats every half wavelength.
+`,
+
+  quiz: [
+    {
+      q: 'A 50 ohm line is terminated by a 50 ohm load. What is the reflection coefficient?',
+      options: ['0', '1', '-1', '0.5'],
+      answer: 0
+    },
+    {
+      q: 'For a load with |Gamma| = 0.5, what is the VSWR?',
+      options: ['1.5', '3', '2', '0.5'],
       answer: 1
     }
   ]
