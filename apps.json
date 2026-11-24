@@ -51,13 +51,13 @@
     "file": "EM-ELECTRODYNAMICS-CH6.html",
     "title": "EM-ELECTRODYNAMICS-CH6",
     "category": "Simulation",
-    "description": "Chapter 5 explores the physics of electromagnetic radiation and antenna engineering, covering fundamental radiation parameters, wire and aperture antenna architectures, and phased-array beam steering.",
+    "description": "Chapter 6 of Kraus and Fleisch's Electromagnetics with Applications covers time-varying electromagnetic fields, Maxwell's equations, and plane-wave propagation, polarization, reflection, and power flow (the Poynting vector) across free space, dielectrics, and conductors.",
   },
   {
     "file": "EM-DIELECTRICS-MAGNETICS-CH7.html",
     "title": "EM-DIELECTRICS-MAGNETICS-CH7",
     "category": "Simulation",
-    "description": "Chapter 5 explores the physics of electromagnetic radiation and antenna engineering, covering fundamental radiation parameters, wire and aperture antenna architectures, and phased-array beam steering.",
+    "description": "Chapter 7 of Kraus and Fleisch's Electromagnetics with Applications examines how dielectric and magnetic materials respond to electric and magnetic fields—covering polarization, permittivity, dielectric breakdown, magnetic dipole moments, magnetization, hysteresis, boundary conditions, and stored field energy.",
   },
   {
     "file": "EM-WAVEGUIDES-RESONATORS-FIBER-CH8.html",
