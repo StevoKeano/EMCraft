@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Electromagnetics &amp; Applications — Ch. 7: Dielectric and Magnetic Materials</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css" />
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/"
+      }
+    }
+  </script>
+  <style>
+    :root {
+      --bg: #0b1018;
+      --panel: #121a26;
+      --panel-2: #182232;
+      --text: #e6edf7;
+      --muted: #93a4bc;
+      --accent: #49b6ff;
+      --accent-2: #34d399;
+      --border: #253449;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      display: grid;
+      grid-template-columns: 330px 1fr;
+      grid-template-rows: 54px 1fr;
+      height: 100vh;
+      overflow: hidden;
+    }
+    header {
+      grid-column: 1 / -1;
+      background: var(--panel);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 16px;
+      gap: 12px;
+    }
+    header h1 {
+      font-size: 15px;
+      margin: 0;
+      font-weight: 600;
+      letter-spacing: 0.2px;
+    }
+    header .meta {
+      font-size: 12px;
+      color: var(--muted);
+    }
+    aside {
+      background: var(--panel);
+      border-right: 1px solid var(--border);
+      overflow-y: auto;
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    select, input[type="range"] {
+      width: 100%;
+    }
+    .box {
+      background: var(--panel-2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px;
+    }
+    .box h2 {
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      color: var(--muted);
+      margin: 0 0 8px 0;
+    }
+    .ctrl { margin-bottom: 10px; }
+    .ctrl:last-child { margin-bottom: 0; }
+    .ctrl label {
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+      margin-bottom: 4px;
+    }
+    main {
+      display: grid;
+      grid-template-columns: 1.35fr 1fr;
+      grid-template-rows: 1fr 250px;
+      gap: 10px;
+      padding: 10px;
+      overflow: hidden;
+    }
+    #sceneWrap {
+      grid-row: 1 / -1;
+      position: relative;
+      background: #070b11;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    #hud {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      background: rgba(12, 18, 28, 0.86);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 12px;
+      min-width: 250px;
+      max-width: 390px;
+      pointer-events: none;
+    }
+    #hudTitle { font-size: 13px; font-weight: 600; color: var(--accent); margin-bottom: 6px; }
+    #hudEq { font-size: 13px; margin-bottom: 8px; overflow-x: auto; }
+    .hudRow { display: flex; justify-content: space-between; font-size: 12px; padding: 2px 0; border-top: 1px solid rgba(255,255,255,0.05); }
+    .hudRow span:first-child { color: var(--muted); }
+    #chartWrap {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px;
+      display: flex;
+      flex-direction: column;
+    }
+    #chartEl { width: 100%; height: 100%; flex: 1; background: #090e16; border-radius: 6px; }
+    #infoWrap {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px;
+      overflow-y: auto;
+      font-size: 13px;
+      line-height: 1.45;
+    }
+    .quizOpt { display: block; margin: 4px 0; font-size: 12px; cursor: pointer; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Kraus &amp; Fleisch — Electromagnetics &amp; Applications · Ch. 7: Dielectric &amp; Magnetic Materials</h1>
+    <div class="meta">3D WebGL + 2D Analytical Plot + Interactive Lab</div>
+  </header>
+  <aside>
+    <div class="box">
+      <h2>Section Module</h2>
+      <select id="modSelect"></select>
+    </div>
+    <div class="box">
+      <h2>Parameters</h2>
+      <div id="controlsHost"></div>
+    </div>
+    <div class="box">
+      <h2>Quick Check</h2>
+      <div id="quizHost"></div>
+    </div>
+  </aside>
+  <main>
+    <div id="sceneWrap">
+      <div id="hud">
+        <div id="hudTitle">Ready</div>
+        <div id="hudEq"></div>
+        <div id="hudRows"></div>
+      </div>
+    </div>
+    <div id="infoWrap"><div id="lessonHost"></div></div>
+    <div id="chartWrap"><canvas id="chartEl" width="600" height="210"></canvas></div>
+  </main>
+
+  <script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+    const sceneWrap = document.getElementById('sceneWrap');
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    renderer.setSize(sceneWrap.clientWidth || 800, sceneWrap.clientHeight || 600);
+    sceneWrap.appendChild(renderer.domElement);
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x070b11);
+    const camera = new THREE.PerspectiveCamera(45, (sceneWrap.clientWidth || 800) / (sceneWrap.clientHeight || 600), 0.1, 200);
+    camera.position.set(5, 4, 7);
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+
+    scene.add(new THREE.AmbientLight(0xffffff, 0.75));
+    const dirLight = new THREE.DirectionalLight(0xffffff, 1.1);
+    dirLight.position.set(6, 10, 8);
+    scene.add(dirLight);
+    scene.add(new THREE.GridHelper(12, 12, 0x26354d, 0x131c2a));
+
+    const content = new THREE.Group();
+    scene.add(content);
+
+    const chartEl = document.getElementById('chartEl');
+
+    function addArrowField(vectors, color = 0x7fd1ff) {
+      const group = new THREE.Group();
+      const arrowObjs = (vectors || []).map((v) => {
+        const origin = v.origin ? v.origin.clone() : new THREE.Vector3();
+        const dir = v.dir ? v.dir.clone().normalize() : new THREE.Vector3(0, 1, 0);
+        const len = v.len ?? 1.0;
+        const arr = new THREE.ArrowHelper(dir, origin, Math.max(len, 0.05), color, Math.min(0.28, len * 0.3), Math.min(0.16, len * 0.18));
+        group.add(arr);
+        return arr;
+      });
+      content.add(group);
+      return {
+        group,
+        setVectors(nextVecs) {
+          (nextVecs || []).forEach((v, i) => {
+            if (!arrowObjs[i]) return;
+            if (v.origin) arrowObjs[i].position.copy(v.origin);
+            if (v.dir) arrowObjs[i].setDirection(v.dir.clone().normalize());
+            if (typeof v.len === 'number') {
+              const l = Math.max(v.len, 0.05);
+              arrowObjs[i].setLength(l, Math.min(0.28, l * 0.3), Math.min(0.16, l * 0.18));
+            }
+          });
+        }
+      };
+    }
+
+    function setHud(titleStr, latexEqStr, rows) {
+      document.getElementById('hudTitle').textContent = titleStr || '';
+      const eqEl = document.getElementById('hudEq');
+      if (window.katex && latexEqStr) {
+        try { window.katex.render(latexEqStr, eqEl, { throwOnError: false }); }
+        catch (_) { eqEl.textContent = latexEqStr; }
+      } else {
+        eqEl.textContent = latexEqStr || '';
+      }
+      const rowsEl = document.getElementById('hudRows');
+      rowsEl.innerHTML = (rows || []).map((r) => `<div class="hudRow"><span>${r.k}</span><span>${r.v}</span></div>`).join('');
+    }
+
+    const modules = [];
+
+    modules.push({
+  id: 'intro_homogeneity_permittivity',
+  title: '7-1 to 7-3 Introduction, Linearity/Isotropy & Permittivities',
+
+  controls: [
+    { id: 'medium', label: 'Medium', type: 'select', options: ['Vacuum (1.0)', 'Polystyrene (2.55)', 'Mica (5.4)', 'Alumina (9.8)', 'Water (80.0)'], value: 'Mica (5.4)' },
+    { id: 'E_kVm', label: 'E field (kV/m)', type: 'range', min: 1, max: 100, step: 1, value: 40 },
+    { id: 'anisotropy', label: 'Anisotropic tilt', type: 'range', min: 0, max: 0.5, step: 0.05, value: 0.0 }
+  ],
+
+  build() {
+    const eps0 = 8.8541878e-12;
+    this.eps0 = eps0;
+    this.materials = [
+      { name: 'Vacuum', er: 1.0, color: 0x2b3a55 },
+      { name: 'Air', er: 1.0006, color: 0x33465f },
+      { name: 'Polyethylene', er: 2.25, color: 0x3d6b8a },
+      { name: 'Transformer Oil', er: 2.2, color: 0x3a6480 },
+      { name: 'Polystyrene', er: 2.55, color: 0x4a7fa0 },
+      { name: 'Quartz/SiO2', er: 3.8, color: 0x5b9bb8 },
+      { name: 'Mica', er: 5.4, color: 0x6fb6c9 },
+      { name: 'Alumina', er: 9.8, color: 0x8fd0d8 },
+      { name: 'Distilled Water', er: 80.0, color: 0xa8e6e0 },
+      { name: 'BaTiO3', er: 1200, color: 0xd8f5e8 }
+    ];
+
+    // Dielectric slab
+    const slabGeo = new THREE.BoxGeometry(3.2, 2.2, 0.7);
+    const slabMat = new THREE.MeshStandardMaterial({
+      color: 0x6fb6c9, emissive: 0x123a44, emissiveIntensity: 0.6,
+      roughness: 0.35, metalness: 0.15, transparent: true, opacity: 0.85
+    });
+    this.slab = new THREE.Mesh(slabGeo, slabMat);
+    this.slab.position.set(0, 0, 0);
+    content.add(this.slab);
+
+    // Wireframe edges of slab
+    const edges = new THREE.LineSegments(
+      new THREE.EdgesGeometry(slabGeo),
+      new THREE.LineBasicMaterial({ color: 0xbfe9f2 })
+    );
+    edges.position.copy(this.slab.position);
+    content.add(edges);
+    this.edges = edges;
+
+    // Grid of E arrows (blue) and D arrows (amber) on the front face
+    const origins = [];
+    for (let i = -1; i <= 1; i++) {
+      for (let j = -1; j <= 1; j++) {
+        origins.push(new THREE.Vector3(i * 0.95, j * 0.65, 0.36));
+      }
+    }
+    this.origins = origins;
+
+    this.eField = addArrowField(origins.map(o => ({ origin: o.clone(), dir: new THREE.Vector3(0, 0, 1), len: 1 })), 0x7fd1ff);
+    this.dField = addArrowField(origins.map(o => ({ origin: o.clone(), dir: new THREE.Vector3(0, 0, 1), len: 1 })), 0xffc46b);
+
+    // Axis hint: E direction reference line
+    const axisGeo = new THREE.BufferGeometry().setFromPoints([
+      new THREE.Vector3(0, -1.35, 0.36), new THREE.Vector3(0, -1.35, 1.9)
+    ]);
+    content.add(new THREE.Line(axisGeo, new THREE.LineBasicMaterial({ color: 0x7fd1ff })));
+
+    // Lights
+    const l1 = new THREE.DirectionalLight(0xffffff, 1.1); l1.position.set(4, 6, 8); content.add(l1);
+    const l2 = new THREE.DirectionalLight(0x88bbff, 0.6); l2.position.set(-5, -3, 4); content.add(l2);
+
+    this.meshRefs = { slab: this.slab, edges: this.edges, eField: this.eField, dField: this.dField };
+  },
+
+  update() {
+    const st = this.state;
+    const eps0 = this.eps0;
+    const er = parseFloat(st.medium.split('(')[1]);
+    const E = st.E_kVm * 1000;              // V/m
+    const D = eps0 * er * E;                // C/m^2
+    const eps = eps0 * er;                  // F/m
+    const tilt = st.anisotropy;
+
+    // Slab color reflects permittivity
+    const mat = this.materials.find(m => Math.abs(m.er - er) < 1e-6) || this.materials[6];
+    this.slab.material.color.setHex(mat.color);
+    this.slab.material.emissive.setHex(mat.color).multiplyScalar(0.25);
+
+    // Arrow lengths: E fixed reference, D scales with er (log-compressed for display)
+    const eLen = 0.55 + 0.35 * (st.E_kVm / 100);
+    const dLen = 0.35 + 0.85 * Math.min(1, Math.log10(er + 1) / Math.log10(1201));
+
+    const eDir = new THREE.Vector3(0, 0, 1);
+    const dDir = new THREE.Vector3(Math.sin(tilt), 0, Math.cos(tilt)).normalize();
+
+    this.eField.setVectors(this.origins.map(o => ({ origin: o.clone(), dir: eDir.clone(), len: eLen })));
+    this.dField.setVectors(this.origins.map(o => ({ origin: o.clone(), dir: dDir.clone(), len: dLen })));
+
+    // ---- 2D chart: bar plot of epsilon_r across materials ----
+    const W = chartEl.width, H = chartEl.height;
+    const ctx = chartEl.getContext('2d');
+    ctx.clearRect(0, 0, W, H);
+
+    // background
+    const bg = ctx.createLinearGradient(0, 0, 0, H);
+    bg.addColorStop(0, '#0b1420'); bg.addColorStop(1, '#060a12');
+    ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
+
+    const padL = 70, padR = 30, padT = 40, padB = 70;
+    const plotW = W - padL - padR, plotH = H - padT - padB;
+
+    // log scale for epsilon_r (1 .. 1200)
+    const logMin = 0, logMax = Math.log10(1200);
+    const xOf = i => padL + (i + 0.5) * plotW / this.materials.length;
+    const yOf = v => padT + plotH * (1 - (Math.log10(Math.max(v, 1)) - logMin) / (logMax - logMin));
+
+    // grid lines
+    ctx.strokeStyle = 'rgba(120,180,220,0.18)';
+    ctx.lineWidth = 1;
+    const ticks = [1, 2, 5, 10, 20, 50, 100, 200, 500, 1000];
+    ctx.font = '12px monospace';
+    ctx.fillStyle = '#8fb8d8';
+    for (const t of ticks) {
+      const y = yOf(t);
+      ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(padL + plotW, y); ctx.stroke();
+      ctx.fillText(t.toString(), 8, y + 4);
+    }
+
+    // bars
+    const barW = plotW / this.materials.length * 0.62;
+    this.materials.forEach((m, i) => {
+      const x = xOf(i);
+      const y = yOf(m.er);
+      const active = Math.abs(m.er - er) < 1e-6;
+      ctx.fillStyle = active ? '#ffc46b' : 'rgba(127,209,255,0.55)';
+      ctx.fillRect(x - barW / 2, y, barW, padT + plotH - y);
+      if (active) {
+        ctx.strokeStyle = '#ffe6a8'; ctx.lineWidth = 2;
+        ctx.strokeRect(x - barW / 2, y, barW, padT + plotH - y);
+      }
+      // labels
+      ctx.save();
+      ctx.translate(x, padT + plotH + 12);
+      ctx.rotate(-Math.PI / 5);
+      ctx.fillStyle = active ? '#ffe6a8' : '#9fc6e0';
+      ctx.font = '11px monospace';
+      ctx.fillText(m.name, 0, 0);
+      ctx.restore();
+    });
+
+    // axis titles
+    ctx.fillStyle = '#cfe6f5';
+    ctx.font = 'bold 14px monospace';
+    ctx.fillText('Relative permittivity ε_r (log scale)', padL, 24);
+    ctx.fillText('ε_r', 10, padT - 8);
+
+    // ---- HUD ----
+    setHud(
+      'Permittivity, Linearity & Isotropy',
+      '\\mathbf{D} = \\varepsilon_0 \\varepsilon_r \\mathbf{E}',
+      [
+        { k: 'ε_r', v: er.toFixed(er >= 100 ? 0 : 2) },
+        { k: '|E|', v: st.E_kVm.toFixed(0) + ' kV/m' },
+        { k: '|D|', v: (D * 1e6).toFixed(2) + ' µC/m²' },
+        { k: 'ε', v: (eps * 1e12).toFixed(2) + ' pF/m' }
+      ]
+    );
+  },
+
+  tick(dt) {
+    // gentle pulse of the D arrows to emphasize the response
+    const t = performance.now() * 0.001;
+    if (this.meshRefs && this.meshRefs.dField) {
+      this.meshRefs.dField.position.z = 0.02 * Math.sin(t * 1.6);
+    }
+  },
+
+  lesson: `<p><b>Constitutive relation.</b> In a dielectric, the electric displacement is <b>D</b> = ε₀ ε_r <b>E</b>, with ε₀ = 8.8541878×10⁻¹² F/m. The relative permittivity ε_r is a dimensionless material constant.</p>
+<p><b>Homogeneity, linearity, isotropy.</b> A <i>homogeneous</i> medium has ε_r constant in space; a <i>linear</i> medium has D proportional to E (no saturation); an <i>isotropic</i> medium has a scalar ε_r so that <b>D</b> is parallel to <b>E</b>. In an anisotropic crystal ε_r becomes a tensor and <b>D</b> generally tilts away from <b>E</b> — the anisotropy slider models that tilt.</p>
+<p><b>Typical values.</b> Vacuum 1.0, air ≈1.0006, polyethylene 2.25, polystyrene 2.55, transformer oil 2.2, quartz/SiO₂ 3.8, mica 5.4, alumina 9.8, distilled water 80, BaTiO₃ ≈1200. Larger ε_r means more charge stored per unit field: |D| = ε₀ ε_r |E|.</p>
+<p><b>Limits.</b> With ε_r = 1 (vacuum) D reduces to ε₀E; with anisotropy = 0 the medium is isotropic and <b>D</b> ∥ <b>E</b>.</p>`,
+
+  quiz: [
+    { q: 'For an isotropic, linear dielectric, which relation holds?', options: ['D = ε₀E only', 'D = ε₀ ε_r E with scalar ε_r', 'D is always perpendicular to E', 'D = E/ε_r'], answer: 1 },
+    { q: 'A homogeneous medium means that ε_r is:', options: ['constant in space', 'constant in time only', 'a tensor', 'always equal to 1'], answer: 0 },
+    { q: 'If E = 40 kV/m in mica (ε_r = 5.4), the magnitude of D is approximately:', options: ['1.9 µC/m²', '0.35 µC/m²', '19 µC/m²', '3.5 µC/m²'], answer: 0 }
+  ]
+});
+/* === UI CONTROLLER === */
+    const modSelect = document.getElementById('modSelect');
+    const controlsHost = document.getElementById('controlsHost');
+    const lessonHost = document.getElementById('lessonHost');
+    const quizHost = document.getElementById('quizHost');
+    let activeMod = null;
+
+    function renderQuiz(mod) {
+      const items = mod.quiz || [];
+      quizHost.innerHTML = items.map((qItem, qi) => `
+        <div style="margin-bottom:8px;">
+          <div style="font-size:12px;font-weight:600;margin-bottom:3px;">${qi + 1}. ${qItem.q}</div>
+          ${(qItem.options || []).map((opt, oi) => `
+            <label class="quizOpt"><input type="radio" name="q_${mod.id}_${qi}" data-qi="${qi}" data-oi="${oi}" /> ${opt}</label>
+          `).join('')}
+          <div id="qfb_${mod.id}_${qi}" style="font-size:11px;color:var(--accent-2);margin-top:2px;"></div>
+        </div>
+      `).join('');
+      quizHost.querySelectorAll('input[type="radio"]').forEach((inp) => {
+        inp.addEventListener('change', () => {
+          const qi = Number(inp.dataset.qi);
+          const oi = Number(inp.dataset.oi);
+          const ans = items[qi].answer;
+          const fb = document.getElementById(`qfb_${mod.id}_${qi}`);
+          fb.textContent = oi === ans ? 'Correct.' : `Not quite — answer: ${items[qi].options[ans]}`;
+        });
+      });
+    }
+
+    function loadModule(idx) {
+      if (!modules.length) return;
+      const mod = modules[Math.max(0, Math.min(modules.length - 1, idx))];
+      activeMod = mod;
+      while (content.children.length > 0) {
+        content.remove(content.children[0]);
+      }
+      mod.state = {};
+      (mod.controls || []).forEach((c) => { mod.state[c.id] = c.value; });
+
+      controlsHost.innerHTML = '';
+      (mod.controls || []).forEach((c) => {
+        const wrap = document.createElement('div');
+        wrap.className = 'ctrl';
+        if (c.type === 'range') {
+          const lbl = document.createElement('label');
+          const valSpan = document.createElement('span');
+          valSpan.textContent = String(mod.state[c.id]);
+          lbl.innerHTML = `<span>${c.label}</span>`;
+          lbl.appendChild(valSpan);
+          const inp = document.createElement('input');
+          inp.type = 'range';
+          inp.min = c.min; inp.max = c.max; inp.step = c.step; inp.value = mod.state[c.id];
+          inp.addEventListener('input', () => {
+            mod.state[c.id] = Number(inp.value);
+            valSpan.textContent = String(mod.state[c.id]);
+            if (typeof mod.update === 'function') mod.update();
+          });
+          wrap.appendChild(lbl);
+          wrap.appendChild(inp);
+        } else if (c.type === 'select') {
+          const lbl = document.createElement('label');
+          lbl.textContent = c.label;
+          const sel = document.createElement('select');
+          (c.options || []).forEach((o) => {
+            const opt = document.createElement('option');
+            if (typeof o === 'string') { opt.value = o; opt.textContent = o; }
+            else { opt.value = o.value; opt.textContent = o.label; }
+            if (opt.value === mod.state[c.id]) opt.selected = true;
+            sel.appendChild(opt);
+          });
+          sel.addEventListener('change', () => {
+            mod.state[c.id] = sel.value;
+            if (typeof mod.update === 'function') mod.update();
+          });
+          wrap.appendChild(lbl);
+          wrap.appendChild(sel);
+        } else if (c.type === 'check') {
+          const lbl = document.createElement('label');
+          const chk = document.createElement('input');
+          chk.type = 'checkbox';
+          chk.checked = Boolean(mod.state[c.id]);
+          chk.addEventListener('change', () => {
+            mod.state[c.id] = chk.checked;
+            if (typeof mod.update === 'function') mod.update();
+          });
+          lbl.appendChild(chk);
+          const sp = document.createElement('span');
+          sp.style.marginLeft = '6px';
+          sp.textContent = c.label;
+          lbl.appendChild(sp);
+          wrap.appendChild(lbl);
+        }
+        controlsHost.appendChild(wrap);
+      });
+
+      lessonHost.innerHTML = mod.lesson || '';
+      renderQuiz(mod);
+      if (typeof mod.build === 'function') mod.build();
+      if (typeof mod.update === 'function') mod.update();
+    }
+
+    modSelect.innerHTML = modules.map((m, i) => `<option value="${i}">${m.title || m.id}</option>`).join('');
+    modSelect.addEventListener('change', () => loadModule(Number(modSelect.value)));
+
+    window.addEventListener('resize', () => {
+      const w = sceneWrap.clientWidth || 800;
+      const h = sceneWrap.clientHeight || 600;
+      camera.aspect = w / h;
+      camera.updateProjectionMatrix();
+      renderer.setSize(w, h);
+    });
+
+    let prevT = performance.now();
+    function animate(now) {
+      requestAnimationFrame(animate);
+      const dt = Math.min((now - prevT) / 1000, 0.05);
+      prevT = now;
+      controls.update();
+      if (activeMod && typeof activeMod.tick === 'function') activeMod.tick(dt);
+      renderer.render(scene, camera);
+    }
+    if (modules.length > 0) loadModule(0);
+    requestAnimationFrame(animate);
+  </script>
+</body>
+</html>
