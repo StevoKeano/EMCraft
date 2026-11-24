@@ -1,0 +1,2055 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="icon" href="data:," />
+<title>Chapter 10 — Electromagnetic Effects in High-Speed Digital Systems</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" />
+<script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+<script type="importmap">
+{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" } }
+</script>
+<style>
+  :root { --bg:#0b1020; --panel:#121a2e; --ink:#e8eefc; --accent:#7fd1ff; --muted:#8fa3c8; }
+  * { box-sizing: border-box; }
+  html, body { margin:0; height:100%; background:var(--bg); color:var(--ink);
+    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  #app { display:grid; grid-template-columns: 340px 1fr; height:100vh; }
+  #sidebar { background:var(--panel); border-right:1px solid #1e2a44; padding:14px; overflow-y:auto; }
+  #sidebar h1 { font-size:16px; margin:0 0 4px; }
+  #sidebar h2 { font-size:12px; font-weight:500; color:var(--muted); margin:0 0 14px; }
+  #moduleList { list-style:none; padding:0; margin:0 0 16px; }
+  #moduleList li { padding:8px 10px; border-radius:8px; cursor:pointer; font-size:13px;
+    color:var(--muted); border:1px solid transparent; }
+  #moduleList li:hover { background:#18233c; color:var(--ink); }
+  #moduleList li.active { background:#1d2b4a; color:var(--accent); border-color:#2b3f66; }
+  #controls { display:flex; flex-direction:column; gap:10px; margin-bottom:16px; }
+  .ctrl { display:flex; flex-direction:column; gap:4px; font-size:12px; }
+  .ctrl label { color:var(--muted); }
+  .ctrl input[type=range] { width:100%; accent-color:var(--accent); }
+  .ctrl select { background:#0e1626; color:var(--ink); border:1px solid #2b3f66; border-radius:6px; padding:6px; }
+  .ctrl input[type=checkbox] { accent-color:var(--accent); }
+  #hud { background:#0e1626; border:1px solid #2b3f66; border-radius:10px; padding:10px; margin-bottom:16px; }
+  #hudTitle { font-size:13px; font-weight:600; color:var(--accent); margin-bottom:6px; }
+  #hudEq { font-size:13px; margin-bottom:8px; }
+  #hudRows { display:grid; grid-template-columns:1fr 1fr; gap:4px 10px; font-size:12px; }
+  #hudRows .k { color:var(--muted); }
+  #hudRows .v { color:var(--ink); font-variant-numeric: tabular-nums; }
+  #lesson { font-size:13px; line-height:1.55; color:#c9d6ee; margin-bottom:16px; }
+  #lesson p { margin:0 0 10px; }
+  #quiz { font-size:13px; }
+  #quiz .q { margin-bottom:12px; }
+  #quiz .q p { margin:0 0 6px; color:var(--ink); }
+  #quiz .opt { display:block; padding:6px 8px; border-radius:6px; cursor:pointer;
+    border:1px solid #2b3f66; margin-bottom:4px; color:var(--muted); }
+  #quiz .opt:hover { background:#18233c; }
+  #quiz .opt.right { border-color:#3ddc97; color:#3ddc97; }
+  #quiz .opt.wrong { border-color:#ff6b6b; color:#ff6b6b; }
+  #stage { position:relative; }
+  #viewport { width:100%; height:100%; display:block; }
+  #chartWrap { position:absolute; right:16px; bottom:16px; background:#0e1626cc;
+    border:1px solid #2b3f66; border-radius:10px; padding:8px; }
+  #chartEl { display:block; width:320px; height:200px; }
+  #chartLabel { font-size:11px; color:var(--muted); margin-top:4px; }
+</style>
+</head>
+<body>
+<div id="app">
+  <aside id="sidebar">
+    <h1>Chapter 10 — Electromagnetic Effects in High-Speed Digital Systems</h1>
+    <h2>Kraus / Fleisch — Electromagnetics and Applications</h2>
+    <ul id="moduleList"></ul>
+    <div id="controls"></div>
+    <div id="hud">
+      <div id="hudTitle">—</div>
+      <div id="hudEq"></div>
+      <div id="hudRows"></div>
+    </div>
+    <div id="lesson"></div>
+    <div id="quiz"></div>
+  </aside>
+  <main id="stage">
+    <canvas id="viewport"></canvas>
+    <div id="chartWrap">
+      <canvas id="chartEl" width="320" height="200"></canvas>
+      <div id="chartLabel">analytical view</div>
+    </div>
+  </main>
+</div>
+
+<script type="module">
+import * as THREE from 'three';
+
+const viewport = document.getElementById('viewport');
+const chartEl  = document.getElementById('chartEl');
+const chartCtx = chartEl.getContext('2d');
+
+const renderer = new THREE.WebGLRenderer({ canvas: viewport, antialias: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setSize(viewport.clientWidth, viewport.clientHeight);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0b1020);
+
+const camera = new THREE.PerspectiveCamera(45, viewport.clientWidth / viewport.clientHeight, 0.1, 200);
+camera.position.set(6, 5, 9);
+camera.lookAt(0, 0, 0);
+
+scene.add(new THREE.AmbientLight(0xffffff, 0.55));
+const key = new THREE.DirectionalLight(0xffffff, 1.1);
+key.position.set(6, 10, 8);
+scene.add(key);
+const rim = new THREE.DirectionalLight(0x7fd1ff, 0.6);
+rim.position.set(-8, 4, -6);
+scene.add(rim);
+
+const grid = new THREE.GridHelper(20, 20, 0x2b3f66, 0x1a2540);
+grid.position.y = -0.01;
+scene.add(grid);
+
+const content = new THREE.Group();
+scene.add(content);
+
+/* ---------- arrow field helper (with setVectors) ---------- */
+function addArrowField(vectors, color = 0x7fd1ff) {
+  const group = new THREE.Group();
+  const mat = new THREE.MeshBasicMaterial({ color });
+  const shaftGeo = new THREE.CylinderGeometry(0.035, 0.035, 1, 8);
+  const headGeo  = new THREE.ConeGeometry(0.09, 0.22, 10);
+
+  function buildOne(v) {
+    const dir = v.dir.clone().normalize();
+    const len = v.len ?? 1;
+    const shaft = new THREE.Mesh(shaftGeo, mat);
+    shaft.scale.y = len;
+    shaft.position.copy(v.origin).addScaledVector(dir, len / 2);
+    shaft.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
+    const head = new THREE.Mesh(headGeo, mat);
+    head.position.copy(v.origin).addScaledVector(dir, len);
+    head.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
+    group.add(shaft, head);
+  }
+
+  vectors.forEach(buildOne);
+
+  group.setVectors = function (nextVecs) {
+    while (group.children.length) {
+      const c = group.children.pop();
+      if (c.geometry) c.geometry.dispose();
+    }
+    nextVecs.forEach(buildOne);
+  };
+  return group;
+}
+
+/* ---------- HUD ---------- */
+const hudTitle = document.getElementById('hudTitle');
+const hudEq    = document.getElementById('hudEq');
+const hudRows  = document.getElementById('hudRows');
+
+function setHud(titleStr, latexEqStr, rowsArray) {
+  hudTitle.textContent = titleStr;
+  hudEq.innerHTML = latexEqStr;
+  if (window.renderMathInElement) {
+    renderMathInElement(hudEq, { throwOnError: false, strict: false });
+  }
+  hudRows.innerHTML = '';
+  (rowsArray || []).forEach(r => {
+    const k = document.createElement('div'); k.className = 'k'; k.textContent = r.k;
+    const v = document.createElement('div'); v.className = 'v'; v.textContent = r.v;
+    hudRows.appendChild(k); hudRows.appendChild(v);
+  });
+}
+
+/* ---------- module registry ---------- */
+const modules = [];
+
+modules.push({
+  id: 'intro_reset_signal',
+  title: '1. Scene I: A Strangely Behaving Reset Signal on a PC Card',
+
+  controls: [
+    { type: 'range', id: 'Rs', label: 'Source resistance Rs (ohm)', min: 10, max: 200, step: 1, value: 50 },
+    { type: 'range', id: 'RL', label: 'Load resistance RL (ohm)', min: 10, max: 200, step: 1, value: 100 },
+    { type: 'range', id: 'L', label: 'Trace length L (m)', min: 0.05, max: 0.5, step: 0.01, value: 0.25 },
+    { type: 'range', id: 'Cp', label: "Distributed capacitance C' (pF/m)", min: 50, max: 200, step: 5, value: 100 },
+    { type: 'range', id: 'Lp', label: "Distributed inductance L' (nH/m)", min: 200, max: 600, step: 10, value: 400 },
+    { type: 'select', id: 'mode', label: 'Model', options: ['lumped', 'distributed'], value: 'distributed' }
+  ],
+
+  build() {
+    const st = this.state;
+
+    // ---------- PCB card ----------
+    const board = new THREE.Mesh(
+      new THREE.BoxGeometry(3.4, 0.06, 1.9),
+      new THREE.MeshStandardMaterial({ color: 0x1d4a2e, roughness: 0.75, metalness: 0.15 })
+    );
+    board.position.set(0, -0.03, 0);
+    content.add(board);
+
+    // copper return plane (thin, slightly above board)
+    const plane = new THREE.Mesh(
+      new THREE.BoxGeometry(3.2, 0.012, 1.7),
+      new THREE.MeshStandardMaterial({ color: 0xb98a3a, roughness: 0.35, metalness: 0.85 })
+    );
+    plane.position.set(0, 0.012, 0);
+    content.add(plane);
+
+    // ---------- trace ----------
+    const traceMat = new THREE.MeshStandardMaterial({ color: 0xd9b25a, roughness: 0.3, metalness: 0.9 });
+    const trace = new THREE.Mesh(new THREE.BoxGeometry(1, 0.035, 0.09), traceMat);
+    trace.position.set(0, 0.055, 0);
+    content.add(trace);
+
+    // ---------- driver & load ----------
+    const driver = new THREE.Mesh(
+      new THREE.BoxGeometry(0.34, 0.34, 0.34),
+      new THREE.MeshStandardMaterial({ color: 0x4f7fd6, roughness: 0.4, metalness: 0.5 })
+    );
+    driver.position.set(-1.55, 0.18, 0);
+    content.add(driver);
+
+    const load = new THREE.Mesh(
+      new THREE.BoxGeometry(0.34, 0.34, 0.34),
+      new THREE.MeshStandardMaterial({ color: 0xd65a4f, roughness: 0.4, metalness: 0.5 })
+    );
+    load.position.set(1.55, 0.18, 0);
+    content.add(load);
+
+    // labels via small emissive markers
+    const driverGlow = new THREE.Mesh(
+      new THREE.SphereGeometry(0.05, 12, 12),
+      new THREE.MeshBasicMaterial({ color: 0x9fc4ff })
+    );
+    driverGlow.position.set(-1.55, 0.38, 0);
+    content.add(driverGlow);
+
+    const loadGlow = new THREE.Mesh(
+      new THREE.SphereGeometry(0.05, 12, 12),
+      new THREE.MeshBasicMaterial({ color: 0xffb0a0 })
+    );
+    loadGlow.position.set(1.55, 0.38, 0);
+    content.add(loadGlow);
+
+    // ---------- E-field arrows (trace -> return plane) ----------
+    const arrows = [];
+    for (let i = 0; i < 9; i++) {
+      const x = -1.2 + i * 0.3;
+      arrows.push({
+        origin: new THREE.Vector3(x, 0.055, 0),
+        dir: new THREE.Vector3(0, -1, 0),
+        len: 0.045
+      });
+    }
+    addArrowField(arrows, 0x7fd1ff);
+
+    // ---------- chart ----------
+    this.chartCtx = chartEl.getContext('2d');
+    this.chartW = chartEl.width;
+    this.chartH = chartEl.height;
+
+    // ---------- state ----------
+    Object.assign(st, {
+      Rs: 50, RL: 100, L: 0.25, Cp: 100, Lp: 400, mode: 'distributed',
+      tMax: 8e-9
+    });
+
+    // geometry update helper
+    this.updateGeometry = () => {
+      const Lm = st.L;
+      const half = Lm / 2;
+      // scale trace to length (board is 3.4 wide, so map L to visual width)
+      const visLen = 0.6 + (Lm / 0.5) * 2.2;
+      trace.scale.x = visLen;
+      trace.position.x = 0;
+      driver.position.x = -visLen / 2 - 0.22;
+      load.position.x = visLen / 2 + 0.22;
+      driverGlow.position.x = driver.position.x;
+      loadGlow.position.x = load.position.x;
+    };
+    this.updateGeometry();
+  },
+
+  update() {
+    const st = this.state;
+    const Rs = st.Rs, RL = st.RL, L = st.L;
+    const Cp = st.Cp * 1e-12;   // F/m
+    const Lp = st.Lp * 1e-9;    // H/m
+
+    // lumped RC
+    const C = Cp * L;
+    const tau = (Rs + RL) * C;  // seconds
+    // distributed line
+    const Z0 = Math.sqrt(Lp / Cp);
+    const v = 1 / Math.sqrt(Lp * Cp); // m/s
+    const tFlight = L / v;
+    const GammaS = (Rs - Z0) / (Rs + Z0);
+    const GammaL = (RL - Z0) / (RL + Z0);
+    const rho = GammaS * GammaL;
+
+    // rise time estimate (10-90%) for lumped
+    const tr = 2.2 * tau;
+
+    // overshoot estimate for distributed (first reflection)
+    const overshoot = Math.abs(GammaL) * 100;
+
+    // HUD
+    setHud(
+      'Reset Signal Response',
+      String.raw`$v_L(t)=V_0\left(1-e^{-t/\tau}\right)$`,
+      [
+        { k: 'tau', v: (tau * 1e9).toFixed(2) + ' ns' },
+        { k: 'Z0', v: Z0.toFixed(1) + ' ohm' },
+        { k: 't_r', v: (tr * 1e9).toFixed(2) + ' ns' },
+        { k: 'overshoot', v: overshoot.toFixed(1) + ' %' }
+      ]
+    );
+
+    // ---------- chart ----------
+    const ctx = this.chartCtx;
+    const W = this.chartW, H = this.chartH;
+    ctx.clearRect(0, 0, W, H);
+
+    // background
+    ctx.fillStyle = '#0b1220';
+    ctx.fillRect(0, 0, W, H);
+
+    // axes
+    const padL = 55, padR = 20, padT = 30, padB = 45;
+    const x0 = padL, x1 = W - padR;
+    const y0 = H - padB, y1 = padT;
+
+    ctx.strokeStyle = '#2a3a55';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(x0, y0); ctx.lineTo(x1, y0);
+    ctx.moveTo(x0, y0); ctx.lineTo(x0, y1);
+    ctx.stroke();
+
+    // grid
+    ctx.strokeStyle = '#16233a';
+    for (let i = 0; i <= 5; i++) {
+      const yy = y0 - (i / 5) * (y0 - y1);
+      ctx.beginPath(); ctx.moveTo(x0, yy); ctx.lineTo(x1, yy); ctx.stroke();
+    }
+
+    // time axis range
+    const tMax = Math.max(6 * tau, 4 * tFlight, 1e-9);
+    const tMin = 0;
+
+    const mapX = (t) => x0 + (t - tMin) / (tMax - tMin) * (x1 - x0);
+    const mapY = (val) => y0 - (val / 1.6) * (y0 - y1); // y range 0..1.6
+
+    // lumped RC curve
+    ctx.strokeStyle = '#7fd1ff';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    const N = 400;
+    for (let i = 0; i <= N; i++) {
+      const t = tMin + (i / N) * (tMax - tMin);
+      const val = 1 - Math.exp(-t / tau);
+      const px = mapX(t), py = mapY(val);
+      if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+    }
+    ctx.stroke();
+
+    // distributed curve (simple lossless line with reflections)
+    ctx.strokeStyle = '#ff9a76';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    for (let i = 0; i <= N; i++) {
+      const t = tMin + (i / N) * (tMax - tMin);
+      let val = 0;
+      if (t < tFlight) {
+        val = 0;
+      } else {
+        // sum of reflections
+        let sum = 0;
+        for (let k = 0; k < 8; k++) {
+          const tk = tFlight + 2 * k * tFlight;
+          if (t >= tk) {
+            sum += Math.pow(rho, k) * (1 + GammaL);
+          }
+        }
+        val = sum;
+      }
+      const px = mapX(t), py = mapY(val);
+      if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+    }
+    ctx.stroke();
+
+    // overshoot marker
+    if (overshoot > 0.5) {
+      ctx.fillStyle = '#ff9a76';
+      ctx.font = '12px monospace';
+      ctx.fillText('overshoot ' + overshoot.toFixed(1) + '%', x0 + 10, y1 + 18);
+    }
+
+    // labels
+    ctx.fillStyle = '#9fb3d1';
+    ctx.font = '12px monospace';
+    ctx.fillText('t (ns)', x1 - 50, y0 + 28);
+    ctx.fillText('v_L / V0', x0 - 45, y1 + 12);
+
+    // legend
+    ctx.fillStyle = '#7fd1ff';
+    ctx.fillRect(x1 - 150, y1 + 8, 12, 4);
+    ctx.fillStyle = '#9fb3d1';
+    ctx.fillText('lumped RC', x1 - 132, y1 + 14);
+
+    ctx.fillStyle = '#ff9a76';
+    ctx.fillRect(x1 - 150, y1 + 24, 12, 4);
+    ctx.fillStyle = '#9fb3d1';
+    ctx.fillText('distributed', x1 - 132, y1 + 30);
+
+    // update geometry
+    this.updateGeometry();
+  },
+
+  tick(dt) {
+    // gentle pulse animation on the driver glow
+    const t = performance.now() * 0.001;
+    const st = this.state;
+    const pulse = 0.5 + 0.5 * Math.sin(t * 3);
+    // no direct access to glow meshes here; keep static
+  },
+
+  lesson: String.raw`
+A reset line on a PC card looks like a simple DC connection: a driver with source resistance $R_s$ drives a load $R_L$ through a trace of length $L$. At low speed, the whole trace can be treated as a single lumped capacitor $C = C' L$, giving the familiar first-order step response
+
+$$v_L(t)=V_0\left(1-e^{-t/\tau}\right),\qquad \tau=(R_s+R_L)C.$$
+
+This lumped model is valid only when the trace is electrically short: $L \ll c\,t_r$, where $t_r$ is the signal rise time. When the board is fast, the trace becomes a distributed transmission line with per-unit-length inductance $L'$ and capacitance $C'$. Its characteristic impedance is
+
+$$Z_0=\sqrt{\frac{L'}{C'}},$$
+
+and signals propagate at $v=1/\sqrt{L'C'}$. Reflections occur at the driver and load whenever $R_s \ne Z_0$ or $R_L \ne Z_0$, with reflection coefficients
+
+$$\Gamma_s=\frac{R_s-Z_0}{R_s+Z_0},\qquad \Gamma_L=\frac{R_L-Z_0}{R_L+Z_0}.$$
+
+The product $\rho=\Gamma_s\Gamma_L$ controls the ringing: a reset edge that is clean at DC can overshoot and ring at high speed because the lumped RC assumption ignores propagation delay and impedance mismatch. The fix is to match $R_s$ and $R_L$ to $Z_0$, shorten the trace, or slow the edge.
+`,
+
+  quiz: [
+    {
+      q: 'When is the lumped RC model of a trace valid?',
+      options: [
+        'When the trace length is much shorter than the signal rise-time distance',
+        'When the trace length is much longer than the signal rise-time distance',
+        'When the load resistance equals the source resistance',
+        'When the trace capacitance is zero'
+      ],
+      answer: 0
+    },
+    {
+      q: 'What causes overshoot and ringing on a fast reset line?',
+      options: [
+        'Impedance mismatch at the driver and load producing reflections',
+        'The DC resistance of the trace being too low',
+        'The load capacitance being too small',
+        'The driver voltage being too high'
+      ],
+      answer: 0
+    }
+  ]
+});
+modules.push({
+  id: 'intro_cd_airplane',
+  title: '2. Scene II: CD Player on Airplane Interferes with Navigation',
+  controls: [
+    { type: 'range', id: 'I', label: 'Loop current I (A)', min: 0.01, max: 1, step: 0.01, value: 0.2 },
+    { type: 'range', id: 'A', label: 'Loop area A (m^2)', min: 1e-4, max: 1e-2, step: 1e-4, value: 2e-3 },
+    { type: 'range', id: 'f', label: 'Frequency f (MHz)', min: 1, max: 100, step: 1, value: 30 },
+    { type: 'range', id: 'r', label: 'Separation r (m)', min: 1, max: 20, step: 0.5, value: 6 },
+    { type: 'select', id: 'mode', label: 'Field regime', options: ['near', 'far'], value: 'far' }
+  ],
+
+  build() {
+    const st = this.state;
+    Object.assign(st, { I: 0.2, A: 2e-3, f: 30, r: 6, mode: 'far' });
+
+    // ---- aircraft fuselage outline (wireframe-ish tube) ----
+    const fuselage = new THREE.Group();
+    const bodyGeo = new THREE.CylinderGeometry(1.6, 1.6, 14, 24, 1, true);
+    bodyGeo.rotateZ(Math.PI / 2);
+    const bodyMat = new THREE.MeshStandardMaterial({
+      color: 0x9fb6cc, metalness: 0.55, roughness: 0.45,
+      side: THREE.DoubleSide, transparent: true, opacity: 0.35
+    });
+    const body = new THREE.Mesh(bodyGeo, bodyMat);
+    fuselage.add(body);
+
+    const noseGeo = new THREE.SphereGeometry(1.6, 20, 14, 0, Math.PI * 2, 0, Math.PI / 2);
+    noseGeo.rotateZ(-Math.PI / 2);
+    const nose = new THREE.Mesh(noseGeo, bodyMat);
+    nose.position.x = 7;
+    fuselage.add(nose);
+
+    const tailGeo = new THREE.ConeGeometry(1.6, 3.2, 20, 1, true);
+    tailGeo.rotateZ(Math.PI / 2);
+    const tail = new THREE.Mesh(tailGeo, bodyMat);
+    tail.position.x = -8.6;
+    fuselage.add(tail);
+
+    // wings
+    const wingMat = new THREE.MeshStandardMaterial({
+      color: 0x8fa8c0, metalness: 0.5, roughness: 0.5,
+      transparent: true, opacity: 0.4, side: THREE.DoubleSide
+    });
+    const wingGeo = new THREE.BoxGeometry(3.2, 0.18, 9);
+    const wingL = new THREE.Mesh(wingGeo, wingMat);
+    wingL.position.set(1.5, 0, 5.2);
+    fuselage.add(wingL);
+    const wingR = new THREE.Mesh(wingGeo, wingMat);
+    wingR.position.set(1.5, 0, -5.2);
+    fuselage.add(wingR);
+
+    // fuselage edge lines
+    const edgePts = [];
+    for (let i = 0; i <= 24; i++) {
+      const a = (i / 24) * Math.PI * 2;
+      edgePts.push(new THREE.Vector3(-7, 1.6 * Math.sin(a), 1.6 * Math.cos(a)));
+      edgePts.push(new THREE.Vector3(7, 1.6 * Math.sin(a), 1.6 * Math.cos(a)));
+    }
+    const edgeGeo = new THREE.BufferGeometry().setFromPoints(edgePts);
+    fuselage.add(new THREE.LineSegments(edgeGeo, new THREE.LineBasicMaterial({ color: 0x6f8ea8 })));
+
+    content.add(fuselage);
+
+    // ---- CD player box with radiating loop ----
+    const cdGroup = new THREE.Group();
+    cdGroup.position.set(2.5, -0.9, 0.9);
+
+    const box = new THREE.Mesh(
+      new THREE.BoxGeometry(1.1, 0.28, 1.1),
+      new THREE.MeshStandardMaterial({ color: 0x2b3440, metalness: 0.7, roughness: 0.35 })
+    );
+    cdGroup.add(box);
+
+    const loopMat = new THREE.MeshStandardMaterial({
+      color: 0xffb347, emissive: 0xff8a1f, emissiveIntensity: 0.9,
+      metalness: 0.6, roughness: 0.3
+    });
+    const loop = new THREE.Mesh(new THREE.TorusGeometry(0.42, 0.035, 10, 40), loopMat);
+    loop.rotation.x = Math.PI / 2;
+    loop.position.y = 0.16;
+    cdGroup.add(loop);
+
+    // little "disc" hint
+    const disc = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.34, 0.34, 0.02, 32),
+      new THREE.MeshStandardMaterial({ color: 0xbfd8ee, metalness: 0.9, roughness: 0.15 })
+    );
+    disc.position.y = 0.15;
+    cdGroup.add(disc);
+
+    content.add(cdGroup);
+
+    // ---- navigation receiver antenna ----
+    const navGroup = new THREE.Group();
+    navGroup.position.set(-5.5, 1.55, 0);
+
+    const mast = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.05, 0.05, 1.1, 10),
+      new THREE.MeshStandardMaterial({ color: 0xd7e3ee, metalness: 0.8, roughness: 0.25 })
+    );
+    mast.position.y = 0.55;
+    navGroup.add(mast);
+
+    const navTip = new THREE.Mesh(
+      new THREE.SphereGeometry(0.11, 14, 10),
+      new THREE.MeshStandardMaterial({ color: 0x7fd1ff, emissive: 0x2f7fb8, emissiveIntensity: 1.2 })
+    );
+    navTip.position.y = 1.15;
+    navGroup.add(navTip);
+
+    content.add(navGroup);
+
+    // ---- radiated E arrow field ----
+    this._arrows = [];
+    const N = 26;
+    for (let i = 0; i < N; i++) {
+      const phi = (i / N) * Math.PI * 2;
+      const theta = 0.35 + (i % 3) * 0.55;
+      const dir = new THREE.Vector3(
+        Math.cos(phi) * Math.sin(theta),
+        Math.cos(theta),
+        Math.sin(phi) * Math.sin(theta)
+      );
+      this._arrows.push({
+        origin: new THREE.Vector3(2.5, -0.75, 0.9),
+        dir: dir.clone(),
+        len: 1
+      });
+    }
+    addArrowField(this._arrows, 0x7fd1ff);
+
+    // ---- chart ----
+    this._ctx = chartEl.getContext('2d');
+    this._chartW = chartEl.width;
+    this._chartH = chartEl.height;
+  },
+
+  update() {
+    const st = this.state;
+    const I = st.I, A = st.A, fHz = st.f * 1e6, r = st.r;
+    const mu0 = 4 * Math.PI * 1e-7;
+    const c = 3e8;
+    const omega = 2 * Math.PI * fHz;
+
+    // far-field E
+    const Efar = (mu0 * I * A * omega * omega) / (4 * Math.PI * c * r);
+    // near-field (electric dipole-ish, quasi-static) E ~ mu0 I A omega^2 / (4 pi c r) * (c/(omega r)) scaling
+    const Enear = (mu0 * I * A * omega * omega) / (4 * Math.PI * c * r) * (c / (omega * r));
+    const E = st.mode === 'near' ? Enear : Efar;
+
+    const threshold = 1e-4; // V/m receiver sensitivity
+    const margin = E / threshold;
+
+    // HUD
+    setHud(
+      'EMI Coupling',
+      String.raw`$E=\frac{\mu_0 I A \omega^2}{4\pi c r}$`,
+      [
+        { k: 'Field E', v: E.toExponential(2) + ' V/m' },
+        { k: 'Threshold', v: threshold.toExponential(1) + ' V/m' },
+        { k: 'Margin', v: margin.toFixed(2) + 'x' },
+        { k: 'Regime', v: st.mode }
+      ]
+    );
+
+    // scale arrows by field strength (log-ish)
+    const scale = Math.min(2.2, Math.max(0.25, Math.log10(E / 1e-8) * 0.35));
+    for (const a of this._arrows) {
+      a.len = scale;
+    }
+
+    // ---- chart: E vs f (log-log) ----
+    const ctx = this._ctx;
+    const W = this._chartW, H = this._chartH;
+    ctx.clearRect(0, 0, W, H);
+
+    const padL = 62, padR = 18, padT = 26, padB = 44;
+    const x0 = padL, x1 = W - padR, y0 = padT, y1 = H - padB;
+
+    // background
+    ctx.fillStyle = '#0b1220';
+    ctx.fillRect(0, 0, W, H);
+
+    const fMin = 1e6, fMax = 1e8;
+    const eMin = 1e-9, eMax = 1e1;
+    const lx = (f) => x0 + (Math.log10(f) - Math.log10(fMin)) / (Math.log10(fMax) - Math.log10(fMin)) * (x1 - x0);
+    const ly = (e) => y1 - (Math.log10(e) - Math.log10(eMin)) / (Math.log10(eMax) - Math.log10(eMin)) * (y1 - y0);
+
+    // grid
+    ctx.strokeStyle = '#1c2a3d';
+    ctx.lineWidth = 1;
+    for (let d = 6; d <= 8; d++) {
+      const x = lx(Math.pow(10, d));
+      ctx.beginPath(); ctx.moveTo(x, y0); ctx.lineTo(x, y1); ctx.stroke();
+      ctx.fillStyle = '#7f93a8';
+      ctx.font = '11px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText('10^' + d, x, y1 + 16);
+    }
+    for (let d = -9; d <= 1; d += 2) {
+      const y = ly(Math.pow(10, d));
+      ctx.beginPath(); ctx.moveTo(x0, y); ctx.lineTo(x1, y); ctx.stroke();
+      ctx.fillStyle = '#7f93a8';
+      ctx.textAlign = 'right';
+      ctx.fillText('10^' + d, x0 - 6, y + 4);
+    }
+
+    // axes
+    ctx.strokeStyle = '#4a6a88';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x0, y1); ctx.lineTo(x1, y1); ctx.stroke();
+
+    // threshold line
+    const yT = ly(threshold);
+    ctx.strokeStyle = '#ff6b6b';
+    ctx.setLineDash([6, 5]);
+    ctx.lineWidth = 1.6;
+    ctx.beginPath(); ctx.moveTo(x0, yT); ctx.lineTo(x1, yT); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#ff9b9b';
+    ctx.textAlign = 'left';
+    ctx.font = '11px monospace';
+    ctx.fillText('receiver threshold', x0 + 8, yT - 6);
+
+    // curve
+    const curve = [];
+    for (let i = 0; i <= 200; i++) {
+      const f = fMin * Math.pow(fMax / fMin, i / 200);
+      const w = 2 * Math.PI * f;
+      const Ef = (mu0 * I * A * w * w) / (4 * Math.PI * c * r);
+      const En = Ef * (c / (w * r));
+      const val = st.mode === 'near' ? En : Ef;
+      curve.push([lx(f), ly(Math.max(eMin, Math.min(eMax, val)))]);
+    }
+    ctx.strokeStyle = '#7fd1ff';
+    ctx.lineWidth = 2.2;
+    ctx.beginPath();
+    curve.forEach((p, i) => (i === 0 ? ctx.moveTo(p[0], p[1]) : ctx.lineTo(p[0], p[1])));
+    ctx.stroke();
+
+    // marker at current f
+    const mx = lx(fHz);
+    const my = ly(Math.max(eMin, Math.min(eMax, E)));
+    ctx.fillStyle = '#ffd166';
+    ctx.beginPath(); ctx.arc(mx, my, 5, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = '#ffd166';
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(mx, y0); ctx.lineTo(mx, y1); ctx.stroke();
+
+    // labels
+    ctx.fillStyle = '#cfe3f5';
+    ctx.font = '12px monospace';
+    ctx.textAlign = 'left';
+    ctx.fillText('E (V/m) vs f (Hz)', x0 + 4, y0 - 8);
+  },
+
+  tick(dt) {
+    // gentle pulse of the radiating loop
+    const t = performance.now() * 0.001;
+    const st = this.state;
+    const omega = 2 * Math.PI * st.f * 1e6;
+    const pulse = 0.75 + 0.25 * Math.sin(t * Math.min(omega * 0.02, 8));
+    content.traverse((o) => {
+      if (o.material && o.material.emissive && o.material.emissiveIntensity !== undefined) {
+        if (o.geometry && o.geometry.type === 'TorusGeometry') {
+          o.material.emissiveIntensity = 0.5 + 0.8 * pulse;
+        }
+      }
+    });
+  },
+
+  lesson: String.raw`
+  <h3>Scene II: CD Player on Airplane Interferes with Navigation</h3>
+  <p>A portable CD player contains a small loop (motor, PCB traces, clock lines) carrying a
+  broadband current $I$. The loop area $A$ and the angular frequency $\omega = 2\pi f$ set the
+  radiated field. In the <b>far field</b> ($r \gg \lambda/2\pi$) the electric field of a small
+  magnetic dipole is</p>
+  $$E_{\text{far}}=\frac{\mu_0 I A \omega^2}{4\pi c\, r}.$$
+  <p>Notice the scalings: $E \propto I$, $E \propto A$, $E \propto f^2$, and $E \propto 1/r$.
+  The $f^2$ dependence is why <b>digital clocks and fast edges</b> are dangerous: a 30 MHz
+  clock edge radiates far more than a 1 MHz one, even with the same loop current.</p>
+  <p>In the <b>near field</b> ($r \ll \lambda/2\pi$) the field falls off faster with distance,
+  roughly as $1/r^2$ for the electric part of a magnetic dipole, so the near-field estimate is
+  $E_{\text{near}} \approx E_{\text{far}}\cdot \frac{c}{\omega r}$. Shielding and separation
+  therefore matter most in the near field, while the far-field $1/r$ decay is the fundamental
+  limit for a given source strength.</p>
+  <p><b>Mitigation:</b> reduce loop area (twisted pairs, short return paths), lower the clock
+  frequency or slow the edges, add shielding around the CD player, and increase separation
+  from the navigation antenna. The receiver threshold shown in the chart is the sensitivity
+  floor; when the margin exceeds 1, interference is plausible.</p>
+  `,
+
+  quiz: [
+    {
+      q: 'In the far field, how does the radiated electric field scale with frequency?',
+      options: ['Proportional to f', 'Proportional to f^2', 'Proportional to 1/f', 'Independent of f'],
+      answer: 1
+    },
+    {
+      q: 'Which mitigation most directly reduces the far-field coupling from a CD player loop?',
+      options: [
+        'Increasing the loop area to spread the field',
+        'Reducing loop area and increasing separation from the receiver',
+        'Raising the clock frequency to move energy out of band',
+        'Removing the receiver threshold'
+      ],
+      answer: 1
+    }
+  ]
+});
+modules.push({
+  id: 'two_viewpoints',
+  title: '3. Two Viewpoints: Lumped or Distributed',
+  controls: [
+    { type: 'range', id: 'L', label: 'Line length L (m)', min: 0.01, max: 1, step: 0.01, value: 0.30 },
+    { type: 'range', id: 'tr', label: 'Rise time t_r (ns)', min: 0.1, max: 10, step: 0.1, value: 1.0 },
+    { type: 'range', id: 'vp', label: 'Propagation speed v_p (c)', min: 0.5, max: 0.9, step: 0.01, value: 0.7 },
+    { type: 'select', id: 'mode', label: 'Viewpoint', options: ['lumped', 'distributed'], value: 'distributed' }
+  ],
+
+  build() {
+    const st = this.state;
+    const C = 2.998e8;
+
+    // ---- 3D: transmission line trace ----
+    this.lineGroup = new THREE.Group();
+    content.add(this.lineGroup);
+
+    // ground plane / reference rail
+    const railGeo = new THREE.BoxGeometry(1.0, 0.02, 0.06);
+    const railMat = new THREE.MeshStandardMaterial({ color: 0x2a3a4a, metalness: 0.4, roughness: 0.6 });
+    const rail = new THREE.Mesh(railGeo, railMat);
+    rail.position.set(0, -0.18, 0);
+    this.lineGroup.add(rail);
+
+    // conductor trace (thin box)
+    const traceGeo = new THREE.BoxGeometry(1.0, 0.035, 0.035);
+    const traceMat = new THREE.MeshStandardMaterial({ color: 0x9fd8ff, metalness: 0.7, roughness: 0.25, emissive: 0x123044 });
+    this.trace = new THREE.Mesh(traceGeo, traceMat);
+    this.trace.position.set(0, 0.0, 0);
+    this.lineGroup.add(this.trace);
+
+    // lumped node (single capacitor symbol-ish sphere)
+    const nodeGeo = new THREE.SphereGeometry(0.055, 20, 16);
+    const nodeMat = new THREE.MeshStandardMaterial({ color: 0xffb347, emissive: 0x552200, metalness: 0.3, roughness: 0.4 });
+    this.node = new THREE.Mesh(nodeGeo, nodeMat);
+    this.node.position.set(0, 0.0, 0);
+    this.lineGroup.add(this.node);
+
+    // wavefront marker (traveling pulse)
+    const frontGeo = new THREE.SphereGeometry(0.045, 16, 12);
+    const frontMat = new THREE.MeshStandardMaterial({ color: 0xff5f7a, emissive: 0x661122, metalness: 0.2, roughness: 0.5 });
+    this.front = new THREE.Mesh(frontGeo, frontMat);
+    this.front.position.set(-0.5, 0.0, 0);
+    this.lineGroup.add(this.front);
+
+    // source marker at left end
+    const srcGeo = new THREE.CylinderGeometry(0.05, 0.05, 0.12, 16);
+    const srcMat = new THREE.MeshStandardMaterial({ color: 0x7fd1ff, emissive: 0x0a2233 });
+    this.src = new THREE.Mesh(srcGeo, srcMat);
+    this.src.position.set(-0.52, 0.0, 0);
+    this.src.rotation.z = Math.PI / 2;
+    this.lineGroup.add(this.src);
+
+    // load marker at right end
+    const loadGeo = new THREE.BoxGeometry(0.06, 0.14, 0.14);
+    const loadMat = new THREE.MeshStandardMaterial({ color: 0x8be28b, emissive: 0x0a3310 });
+    this.load = new THREE.Mesh(loadGeo, loadMat);
+    this.load.position.set(0.52, 0.0, 0);
+    this.lineGroup.add(this.load);
+
+    // ---- 2D chart ----
+    this.ctx = chartEl.getContext('2d');
+    this.chartW = chartEl.width;
+    this.chartH = chartEl.height;
+
+    // ---- state init ----
+    Object.assign(st, {
+      L: 0.30,
+      tr: 1.0,
+      vp: 0.7,
+      mode: 'distributed',
+      phase: 0.0
+    });
+
+    // ---- HUD ----
+    setHud(
+      'Lumped vs Distributed',
+      String.raw`$\ell = \frac{L}{v_p t_r}$`,
+      [
+        { k: 'Electrical length', v: '-' },
+        { k: 'Verdict', v: '-' },
+        { k: 'Viewpoint', v: '-' }
+      ]
+    );
+  },
+
+  update() {
+    const st = this.state;
+    const C = 2.998e8;
+    const vp = st.vp * C;
+    const tr = st.tr * 1e-9;
+    const ell = st.L / (vp * tr);
+
+    // scale the 3D line to a fixed visual length (1 unit)
+    const scale = 1.0;
+    this.lineGroup.scale.set(scale, 1, 1);
+
+    // mode visibility
+    const lumped = st.mode === 'lumped';
+    this.node.visible = lumped;
+    this.front.visible = !lumped;
+    this.trace.material.color.set(lumped ? 0x9fd8ff : 0x9fd8ff);
+
+    // HUD
+    const verdict = ell > 1 / 6 ? 'Distributed (wave matters)' : 'Lumped (circuit OK)';
+    setHud(
+      'Lumped vs Distributed',
+      String.raw`$\ell = \frac{L}{v_p t_r}$`,
+      [
+        { k: 'Electrical length ℓ', v: ell.toFixed(3) },
+        { k: 'Verdict', v: verdict },
+        { k: 'Viewpoint', v: lumped ? 'Lumped (V=IR, Q=CV)' : 'Distributed (telegrapher)' }
+      ]
+    );
+
+    // draw 2D snapshot
+    this.drawChart(ell, lumped);
+  },
+
+  drawChart(ell, lumped) {
+    const ctx = this.ctx;
+    const W = this.chartW, H = this.chartH;
+    ctx.clearRect(0, 0, W, H);
+
+    // background
+    ctx.fillStyle = '#0b1220';
+    ctx.fillRect(0, 0, W, H);
+
+    // axes
+    const padL = 60, padR = 30, padT = 30, padB = 50;
+    const x0 = padL, x1 = W - padR;
+    const y0 = H - padB, y1 = padT;
+
+    ctx.strokeStyle = '#2a3a4a';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(x0, y0);
+    ctx.lineTo(x1, y0);
+    ctx.moveTo(x0, y0);
+    ctx.lineTo(x0, y1);
+    ctx.stroke();
+
+    // labels
+    ctx.fillStyle = '#9fb3c8';
+    ctx.font = '12px sans-serif';
+    ctx.fillText('position along line (x/L)', (x0 + x1) / 2 - 70, H - 12);
+    ctx.save();
+    ctx.translate(16, (y0 + y1) / 2 + 30);
+    ctx.rotate(-Math.PI / 2);
+    ctx.fillText('voltage V(x)', 0, 0);
+    ctx.restore();
+
+    // grid
+    ctx.strokeStyle = '#1a2634';
+    for (let i = 0; i <= 5; i++) {
+      const x = x0 + (x1 - x0) * i / 5;
+      ctx.beginPath();
+      ctx.moveTo(x, y0);
+      ctx.lineTo(x, y1);
+      ctx.stroke();
+    }
+    for (let j = 0; j <= 4; j++) {
+      const y = y0 - (y0 - y1) * j / 4;
+      ctx.beginPath();
+      ctx.moveTo(x0, y);
+      ctx.lineTo(x1, y);
+      ctx.stroke();
+    }
+
+    // voltage profile
+    const N = 200;
+    const amp = 1.0;
+    ctx.lineWidth = 2.5;
+    ctx.strokeStyle = lumped ? '#ffb347' : '#7fd1ff';
+    ctx.beginPath();
+    for (let i = 0; i <= N; i++) {
+      const u = i / N; // 0..1
+      let v;
+      if (lumped) {
+        v = amp; // flat
+      } else {
+        // traveling wavefront: smooth step at u = phase
+        const p = this.state.phase;
+        const k = 12;
+        v = amp / (1 + Math.exp(-k * (u - p)));
+        // slight ringing for realism
+        v += 0.06 * Math.sin(2 * Math.PI * 4 * (u - p)) * Math.exp(-3 * Math.abs(u - p));
+      }
+      const x = x0 + (x1 - x0) * u;
+      const y = y0 - (y0 - y1) * (v / 1.2);
+      if (i === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // fill under curve
+    ctx.lineTo(x1, y0);
+    ctx.lineTo(x0, y0);
+    ctx.closePath();
+    ctx.fillStyle = lumped ? 'rgba(255,179,71,0.12)' : 'rgba(127,209,255,0.12)';
+    ctx.fill();
+
+    // annotation
+    ctx.fillStyle = '#cfe3f5';
+    ctx.font = '13px sans-serif';
+    ctx.fillText(lumped ? 'Lumped: single node, V uniform' : 'Distributed: wavefront travels at v_p', x0 + 8, y1 + 18);
+
+    // electrical length bar
+    const barW = 160, barH = 8;
+    const bx = x1 - barW, by = y1 + 8;
+    ctx.fillStyle = '#1a2634';
+    ctx.fillRect(bx, by, barW, barH);
+    const frac = Math.min(1, ell / 1.0);
+    ctx.fillStyle = ell > 1 / 6 ? '#ff5f7a' : '#8be28b';
+    ctx.fillRect(bx, by, barW * frac, barH);
+    ctx.fillStyle = '#9fb3c8';
+    ctx.font = '11px sans-serif';
+    ctx.fillText('ℓ = ' + ell.toFixed(2), bx, by - 4);
+  },
+
+  tick(dt) {
+    const st = this.state;
+    const C = 2.998e8;
+    const vp = st.vp * C;
+    const tr = st.tr * 1e-9;
+    const ell = st.L / (vp * tr);
+
+    // wavefront phase: travel time across line = L / vp
+    const travel = st.L / vp;
+    const speed = 1.0 / Math.max(travel, 1e-12);
+    st.phase += dt * speed * 0.35;
+    if (st.phase > 1.15) st.phase = -0.15;
+
+    // 3D wavefront position
+    const u = Math.max(0, Math.min(1, st.phase));
+    this.front.position.x = -0.5 + u * 1.0;
+    this.front.position.y = 0.0;
+
+    // pulse glow
+    const glow = 0.6 + 0.4 * Math.sin(performance.now() * 0.004);
+    this.front.material.emissiveIntensity = glow;
+
+    // lumped node pulse
+    this.node.scale.setScalar(1.0 + 0.08 * Math.sin(performance.now() * 0.003));
+
+    // update chart
+    this.drawChart(ell, st.mode === 'lumped');
+  },
+
+  lesson: String.raw`
+## Two viewpoints: lumped or distributed
+
+A wire is not "just a wire". Whether you may treat it as a lumped element (a single node with $V = IR$ and $Q = CV$) or as a distributed transmission line (telegrapher's equations) depends on how the line's length compares with the distance a signal travels during its rise time.
+
+Define the **electrical length**
+
+$$\ell = \frac{L}{v_p\, t_r}$$
+
+where $L$ is the physical length, $v_p$ the propagation speed (typically $0.5c$ to $0.9c$ for PCB traces), and $t_r$ the rise time of the signal.
+
+- If $\ell \ll 1$, the signal's edge is much longer than the line: the line charges almost uniformly and the lumped model ($V=IR$, $Q=CV$) is adequate.
+- If $\ell \gtrsim 1$, the line is electrically long: the wavefront travels along the line and reflections, delay, and ringing appear. You need the distributed view.
+
+**Rule of thumb:** treat the interconnect as distributed when
+
+$$L > \frac{v_p\, t_r}{6}$$
+
+i.e. when $\ell > 1/6$. The factor $1/6$ comes from requiring the rise time to be at least about six times the one-way delay for the lumped approximation to hold within a few percent.
+
+In the distributed picture the voltage and current obey
+
+$$\frac{\partial V}{\partial x} = -L' \frac{\partial I}{\partial t}, \qquad
+\frac{\partial I}{\partial x} = -C' \frac{\partial V}{\partial t}$$
+
+with $L'$, $C'$ per-unit-length values, and $v_p = 1/\sqrt{L'C'}$. A step launched at $x=0$ arrives at $x=L$ after a delay $L/v_p$; the wavefront is visible as a traveling edge in the voltage-vs-position snapshot.
+
+The lumped view is a *low-frequency / long-rise-time limit* of the distributed view: when $t_r \gg L/v_p$, the distributed line behaves like a single capacitor to ground plus a series resistance.
+`,
+
+  quiz: [
+    {
+      q: 'A trace is 0.30 m long, v_p = 0.7c, and the driver rise time is 1.0 ns. Is the distributed model needed?',
+      options: [
+        'No, because ℓ ≈ 0.14 < 1/6',
+        'Yes, because ℓ ≈ 1.43 > 1/6',
+        'No, because the line is shorter than a wavelength',
+        'Yes, because the rise time is longer than the delay'
+      ],
+      answer: 1
+    },
+    {
+      q: 'Which criterion is the standard rule of thumb for switching from lumped to distributed analysis?',
+      options: [
+        'L > v_p t_r / 6',
+        'L < v_p t_r / 6',
+        't_r > 6 L / v_p',
+        'v_p > 6 L / t_r'
+      ],
+      answer: 0
+    }
+  ]
+});
+modules.push({
+  id: 'distributed_speed_distance',
+  title: '4. Speed and Distance',
+  controls: [
+    { type: 'range', id: 'er', label: 'Effective dielectric constant εr,eff', min: 1, max: 6, step: 0.05, value: 3.5 },
+    { type: 'range', id: 'tr', label: 'Rise time tr (ns)', min: 0.1, max: 10, step: 0.1, value: 2.0 },
+    { type: 'range', id: 'L', label: 'Trace length L (m)', min: 0.01, max: 1, step: 0.01, value: 0.30 }
+  ],
+
+  build() {
+    const st = this.state;
+    Object.assign(st, { er: 3.5, tr: 2.0, L: 0.30 });
+
+    // ---- 3D: trace (a long thin slab) with a moving wavefront ----
+    const traceGroup = new THREE.Group();
+    traceGroup.position.set(0, 0, 0);
+    content.add(traceGroup);
+
+    const traceLen = 3.0;          // visual length in scene units
+    const traceW = 0.35;
+
+    const traceMat = new THREE.MeshStandardMaterial({
+      color: 0x2a4a63, metalness: 0.55, roughness: 0.35
+    });
+    const trace = new THREE.Mesh(new THREE.BoxGeometry(traceLen, 0.06, traceW), traceMat);
+    trace.position.set(0, 0, 0);
+    traceGroup.add(trace);
+
+    // ground plane under the trace (dielectric substrate)
+    const subMat = new THREE.MeshStandardMaterial({
+      color: 0x1b2b3a, metalness: 0.1, roughness: 0.9
+    });
+    const sub = new THREE.Mesh(new THREE.BoxGeometry(traceLen + 0.3, 0.16, traceW + 0.5), subMat);
+    sub.position.set(0, -0.11, 0);
+    traceGroup.add(sub);
+
+    // wavefront: a glowing bar that slides along the trace
+    const frontMat = new THREE.MeshStandardMaterial({
+      color: 0x7fd1ff, emissive: 0x7fd1ff, emissiveIntensity: 1.6, metalness: 0.2, roughness: 0.3
+    });
+    const front = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.14, traceW + 0.16), frontMat);
+    front.position.set(-traceLen / 2, 0.05, 0);
+    traceGroup.add(front);
+
+    // distance marker: a thin line from the start to the wavefront
+    const markerGeo = new THREE.BufferGeometry().setFromPoints([
+      new THREE.Vector3(-traceLen / 2, 0.16, traceW / 2 + 0.12),
+      new THREE.Vector3(-traceLen / 2, 0.16, traceW / 2 + 0.12)
+    ]);
+    const marker = new THREE.Line(markerGeo, new THREE.LineBasicMaterial({ color: 0xffd166 }));
+    traceGroup.add(marker);
+
+    // small tick at the start
+    const startTick = new THREE.Mesh(
+      new THREE.BoxGeometry(0.03, 0.22, 0.03),
+      new THREE.MeshStandardMaterial({ color: 0xffd166, emissive: 0x553300 })
+    );
+    startTick.position.set(-traceLen / 2, 0.14, traceW / 2 + 0.12);
+    traceGroup.add(startTick);
+
+    // end tick
+    const endTick = startTick.clone();
+    endTick.position.set(traceLen / 2, 0.14, traceW / 2 + 0.12);
+    traceGroup.add(endTick);
+
+    // arrow field hinting at propagation direction
+    addArrowField([
+      { origin: new THREE.Vector3(-traceLen / 2 + 0.15, 0.30, 0), dir: new THREE.Vector3(1, 0, 0), len: 0.55 },
+      { origin: new THREE.Vector3(-traceLen / 2 + 0.85, 0.30, 0), dir: new THREE.Vector3(1, 0, 0), len: 0.55 },
+      { origin: new THREE.Vector3(-traceLen / 2 + 1.55, 0.30, 0), dir: new THREE.Vector3(1, 0, 0), len: 0.55 }
+    ], 0x7fd1ff);
+
+    // store refs
+    st._traceLen = traceLen;
+    st._front = front;
+    st._marker = marker;
+    st._traceGroup = traceGroup;
+    st._phase = 0;
+  },
+
+  update() {
+    const st = this.state;
+    const c = 2.998e8;
+    const vp = c / Math.sqrt(st.er);          // m/s
+    const tr = st.tr * 1e-9;                  // s
+    const d = vp * tr;                        // m
+    const delay = st.L / vp;                  // s
+
+    st._vp = vp;
+    st._d = d;
+    st._delay = delay;
+
+    setHud(
+      'Signal Speed & Distance',
+      String.raw`$v_p=\frac{c}{\sqrt{\varepsilon_{r,\mathrm{eff}}}}\qquad d=v_p\,t_r$`,
+      [
+        { k: 'vp', v: (vp / 1e8).toFixed(3) + ' × 10^8 m/s' },
+        { k: 'd = vp·tr', v: (d * 100).toFixed(2) + ' cm' },
+        { k: 'delay L/vp', v: (delay * 1e9).toFixed(2) + ' ns' }
+      ]
+    );
+
+    // ---- 2D chart: distance vs rise time for several er ----
+    const ctx = chartEl.getContext('2d');
+    const W = chartEl.width, H = chartEl.height;
+    ctx.clearRect(0, 0, W, H);
+
+    const padL = 58, padR = 18, padT = 26, padB = 44;
+    const x0 = padL, x1 = W - padR, y0 = padT, y1 = H - padB;
+
+    // background
+    ctx.fillStyle = '#0b1420';
+    ctx.fillRect(0, 0, W, H);
+
+    // axes
+    ctx.strokeStyle = '#3a5568';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(x0, y0); ctx.lineTo(x0, y1); ctx.lineTo(x1, y1);
+    ctx.stroke();
+
+    // grid
+    ctx.strokeStyle = '#1c2c3a';
+    ctx.lineWidth = 1;
+    for (let i = 0; i <= 5; i++) {
+      const x = x0 + (x1 - x0) * i / 5;
+      ctx.beginPath(); ctx.moveTo(x, y0); ctx.lineTo(x, y1); ctx.stroke();
+    }
+    for (let i = 0; i <= 4; i++) {
+      const y = y1 - (y1 - y0) * i / 4;
+      ctx.beginPath(); ctx.moveTo(x0, y); ctx.lineTo(x1, y); ctx.stroke();
+    }
+
+    // curves: d(tr) = c/sqrt(er) * tr, tr in ns -> d in cm
+    const trMax = 10; // ns
+    const dMax = 300; // cm (c*10ns = 300 cm)
+    const erList = [1, 2, 3.5, 5, 6];
+    const colors = ['#7fd1ff', '#9be7a8', '#ffd166', '#ff9f7f', '#e08bff'];
+
+    erList.forEach((er, idx) => {
+      const slope = (2.998e8 / Math.sqrt(er)) * 1e-9 * 100; // cm per ns
+      ctx.strokeStyle = colors[idx];
+      ctx.lineWidth = (Math.abs(er - st.er) < 0.06) ? 3.2 : 1.6;
+      ctx.beginPath();
+      for (let i = 0; i <= 60; i++) {
+        const trn = trMax * i / 60;
+        const dcm = slope * trn;
+        const px = x0 + (x1 - x0) * (trn / trMax);
+        const py = y1 - (y1 - y0) * Math.min(dcm / dMax, 1);
+        if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+      }
+      ctx.stroke();
+
+      // label at right end
+      ctx.fillStyle = colors[idx];
+      ctx.font = '11px monospace';
+      ctx.fillText('εr=' + er, x1 - 62, y0 + 14 + idx * 15);
+    });
+
+    // current operating point
+    const px = x0 + (x1 - x0) * (st.tr / trMax);
+    const py = y1 - (y1 - y0) * Math.min((st._d * 100) / dMax, 1);
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.arc(px, py, 5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.moveTo(px, py); ctx.lineTo(px, y1);
+    ctx.stroke();
+
+    // axis labels
+    ctx.fillStyle = '#9fb6c8';
+    ctx.font = '12px monospace';
+    ctx.fillText('tr (ns)', x1 - 52, y1 + 26);
+    ctx.save();
+    ctx.translate(16, y1 - 40);
+    ctx.rotate(-Math.PI / 2);
+    ctx.fillText('d (cm)', 0, 0);
+    ctx.restore();
+
+    // title
+    ctx.fillStyle = '#cfe6f5';
+    ctx.font = '13px monospace';
+    ctx.fillText('Distance traveled in rise time', x0, 16);
+  },
+
+  tick(dt) {
+    const st = this.state;
+    if (!st._front) return;
+
+    // animate wavefront along the trace, looping
+    st._phase = (st._phase + dt * 0.55) % 1;
+    const Lv = st._traceLen;
+    const x = -Lv / 2 + Lv * st._phase;
+    st._front.position.x = x;
+
+    // marker line from start to wavefront
+    const pos = st._marker.geometry.attributes.position;
+    pos.setXYZ(0, -Lv / 2, 0.16, 0.35);
+    pos.setXYZ(1, x, 0.16, 0.35);
+    pos.needsUpdate = true;
+
+    // pulse the front glow
+    st._front.material.emissiveIntensity = 1.2 + 0.6 * Math.sin(st._phase * Math.PI * 6);
+  },
+
+  lesson: String.raw`
+### Propagation speed on a transmission line
+
+A signal does not travel at the speed of light in vacuum along a PCB trace. The trace plus its surrounding dielectric form a transmission line with per-unit-length inductance $L'$ and capacitance $C'$. The wavefront moves at
+
+$$v_p=\frac{1}{\sqrt{L'C'}}$$
+
+For a homogeneous dielectric of relative permittivity $\varepsilon_r$, the line is filled with that dielectric and
+
+$$v_p=\frac{c}{\sqrt{\varepsilon_r}},\qquad c=2.998\times10^{8}\ \mathrm{m/s}$$
+
+### Microstrip: effective dielectric constant
+
+In a microstrip the field is partly in the substrate ($\varepsilon_r$) and partly in air ($\varepsilon_r=1$). The result is an *effective* dielectric constant $\varepsilon_{r,\mathrm{eff}}$ between 1 and $\varepsilon_r$, roughly
+
+$$\varepsilon_{r,\mathrm{eff}}\approx\frac{\varepsilon_r+1}{2}$$
+
+so the propagation speed lies between $c$ and $c/\sqrt{\varepsilon_r}$. For FR-4 ($\varepsilon_r\approx4.2$), $\varepsilon_{r,\mathrm{eff}}\approx2.6$ and $v_p\approx0.62c\approx1.86\times10^{8}\ \mathrm{m/s}$.
+
+### Distance traveled during a rise time
+
+The edge of a digital signal is not instantaneous. During the rise time $t_r$ the wavefront covers
+
+$$d=v_p\,t_r$$
+
+This is the *spatial extent* of the edge. If $d$ is comparable to the trace length $L$, the line must be treated as distributed (transmission-line) rather than lumped.
+
+### Propagation delay
+
+The delay per unit length is
+
+$$\frac{1}{v_p}=\frac{\sqrt{\varepsilon_{r,\mathrm{eff}}}{c}$$
+
+and the total one-way delay over a trace of length $L$ is
+
+$$t_d=\frac{L}{v_p}=L\sqrt{\varepsilon_{r,\mathrm{eff}}}/c$$
+
+Typical numbers: about $6\ \mathrm{ps/mm}$ for an inner-layer FR-4 stripline, and about $7\ \mathrm{ps/mm}$ for a microstrip. A $30\ \mathrm{cm}$ trace therefore delays the signal by roughly $2\ \mathrm{ns}$.
+
+### Practical rule of thumb
+
+Compare $d=v_p t_r$ with $L$. If $d \ll L$ the line is electrically short and lumped analysis is fine; if $d \gtrsim L$ you must match impedances and account for reflections.
+`,
+
+  quiz: [
+    {
+      q: 'A microstrip has εr,eff = 4. What is the propagation speed vp?',
+      options: [
+        '1.50 × 10^8 m/s',
+        '2.998 × 10^8 m/s',
+        '5.99 × 10^8 m/s',
+        '0.75 × 10^8 m/s'
+      ],
+      answer: 0
+    },
+    {
+      q: 'A trace of length 0.30 m has vp = 1.5 × 10^8 m/s. What is the one-way propagation delay?',
+      options: [
+        '0.5 ns',
+        '2.0 ns',
+        '4.5 ns',
+        '20 ns'
+      ],
+      answer: 1
+    }
+  ]
+});
+modules.push({
+  id: 'rise_time_length',
+  title: '5. Rise Time and Length; Lumped versus Distributed Circuits',
+
+  controls: [
+    { type: 'range', id: 'tr', label: 'Rise time t_r (ns)', min: 0.1, max: 10, step: 0.1, value: 1.0 },
+    { type: 'range', id: 'vp', label: 'Propagation velocity factor v_p/c', min: 0.4, max: 0.9, step: 0.01, value: 0.66 },
+    { type: 'range', id: 'L', label: 'Trace length L (m)', min: 0.01, max: 1.0, step: 0.01, value: 0.15 },
+    { type: 'select', id: 'crit', label: 'Criterion', options: ['tr/6', 'tr/2'], value: 'tr/6' }
+  ],
+
+  build() {
+    const st = this.state;
+    Object.assign(st, { tr: 1.0, vp: 0.66, L: 0.15, crit: 'tr/6' });
+
+    // ---- 3D: a PCB-like trace with a wavefront travelling along it ----
+    const group = new THREE.Group();
+    group.position.set(0, 0, 0);
+    content.add(group);
+
+    const LMAX = 1.0;                 // metres represented by the full trace
+    const SCALE = 4.0;                // world units per metre
+    const traceLen = LMAX * SCALE;
+
+    // substrate
+    const sub = new THREE.Mesh(
+      new THREE.BoxGeometry(traceLen + 0.6, 0.12, 1.1),
+      new THREE.MeshStandardMaterial({ color: 0x1b2b3a, roughness: 0.85, metalness: 0.1 })
+    );
+    sub.position.set(0, -0.08, 0);
+    group.add(sub);
+
+    // copper trace
+    const trace = new THREE.Mesh(
+      new THREE.BoxGeometry(traceLen, 0.06, 0.34),
+      new THREE.MeshStandardMaterial({ color: 0xc98b4a, roughness: 0.35, metalness: 0.85 })
+    );
+    trace.position.set(0, 0.02, 0);
+    group.add(trace);
+
+    // source pad (left) and load pad (right)
+    const padMat = new THREE.MeshStandardMaterial({ color: 0x8fd6ff, roughness: 0.4, metalness: 0.6 });
+    const padL = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.10, 0.5), padMat);
+    padL.position.set(-traceLen / 2 - 0.05, 0.05, 0);
+    group.add(padL);
+    const padR = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.10, 0.5), padMat);
+    padR.position.set(traceLen / 2 + 0.05, 0.05, 0);
+    group.add(padR);
+
+    // length marker (a bracket over the trace)
+    const markerMat = new THREE.LineBasicMaterial({ color: 0x7fd1ff });
+    const markerPts = [
+      new THREE.Vector3(-traceLen / 2, 0.42, 0),
+      new THREE.Vector3(-traceLen / 2, 0.55, 0),
+      new THREE.Vector3(traceLen / 2, 0.55, 0),
+      new THREE.Vector3(traceLen / 2, 0.42, 0)
+    ];
+    const marker = new THREE.Line(new THREE.BufferGeometry().setFromPoints(markerPts), markerMat);
+    group.add(marker);
+
+    // wavefront: a glowing slab that slides along the trace
+    const front = new THREE.Mesh(
+      new THREE.BoxGeometry(0.10, 0.16, 0.44),
+      new THREE.MeshStandardMaterial({ color: 0xffe066, emissive: 0xffb020, emissiveIntensity: 1.4, roughness: 0.3 })
+    );
+    front.position.set(-traceLen / 2, 0.10, 0);
+    group.add(front);
+
+    // critical-length tick (moves with L_c)
+    const tickMat = new THREE.LineBasicMaterial({ color: 0xff6b6b });
+    const tickPts = [
+      new THREE.Vector3(0, 0.30, 0.30),
+      new THREE.Vector3(0, 0.62, 0.30)
+    ];
+    const tick = new THREE.Line(new THREE.BufferGeometry().setFromPoints(tickPts), tickMat);
+    group.add(tick);
+
+    // small arrow field showing the travelling wave direction
+    addArrowField([
+      { origin: new THREE.Vector3(-traceLen / 2 + 0.3, 0.30, 0.30), dir: new THREE.Vector3(1, 0, 0), len: 0.7 },
+      { origin: new THREE.Vector3(-traceLen / 2 + 1.2, 0.30, 0.30), dir: new THREE.Vector3(1, 0, 0), len: 0.7 }
+    ], 0x7fd1ff);
+
+    // camera framing
+    camera.position.set(0, 3.2, 6.2);
+    camera.lookAt(0, 0, 0);
+
+    this._g = group;
+    this._traceLen = traceLen;
+    this._front = front;
+    this._tick = tick;
+    this._padR = padR;
+    this._padL = padL;
+    this._phase = 0;
+  },
+
+  update() {
+    const st = this.state;
+    const c = 2.998e8;
+    const vp = st.vp * c;                 // m/s
+    const tr = st.tr * 1e-9;              // s
+    const L = st.L;                       // m
+    const div = (st.crit === 'tr/6') ? 6 : 2;
+    const Lc = vp * tr / div;             // critical length in metres
+    const ratio = L / Lc;
+    const distributed = ratio > 1;
+
+    // ---- 3D: place the wavefront and the critical-length tick ----
+    const traceLen = this._traceLen;
+    const LMAX = 1.0;
+    const xL = -traceLen / 2;
+    const xR = traceLen / 2;
+
+    // wavefront sweeps from source to load, looping
+    this._phase = (this._phase + 0.006) % 1;
+    const xf = xL + this._phase * traceLen;
+    this._front.position.x = xf;
+
+    // critical length tick position (clamped to the drawn trace)
+    const xc = xL + Math.min(Lc / LMAX, 1) * traceLen;
+    this._tick.position.x = xc;
+
+    // colour the load pad by verdict
+    const padMat = this._padR.material;
+    padMat.color.setHex(distributed ? 0xff8a5c : 0x8fd6ff);
+    padMat.emissive = new THREE.Color(distributed ? 0x552211 : 0x112233);
+
+    // ---- 2D chart: L_c vs t_r for both criteria, with shaded regions ----
+    const el = chartEl;
+    const ctx = el.getContext('2d');
+    const W = el.width, H = el.height;
+    ctx.clearRect(0, 0, W, H);
+
+    const pad = 46;
+    const x0 = pad, x1 = W - pad, y0 = H - pad, y1 = pad;
+
+    // background
+    ctx.fillStyle = '#0b1420';
+    ctx.fillRect(0, 0, W, H);
+
+    // axes
+    ctx.strokeStyle = '#3a4d63';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(x0, y1); ctx.lineTo(x0, y0); ctx.lineTo(x1, y0);
+    ctx.stroke();
+
+    // t_r range 0.1 .. 10 ns  -> log-ish linear mapping
+    const trMin = 0.1, trMax = 10;
+    const LcMax = (0.9 * 2.998e8 * 10e-9) / 2;   // largest L_c (tr/2, vp=0.9)
+    const mapX = t => x0 + (t - trMin) / (trMax - trMin) * (x1 - x0);
+    const mapY = lc => y0 - (lc / LcMax) * (y0 - y1);
+
+    // shaded "lumped" region: L < L_c  (below the curves)
+    ctx.fillStyle = 'rgba(80,180,255,0.10)';
+    ctx.fillRect(x0, y0 - (y0 - y1) * 0.0, x1 - x0, y0 - y1);
+    // shaded "distributed" region: L > L_c (above the curves)
+    ctx.fillStyle = 'rgba(255,120,80,0.10)';
+    ctx.fillRect(x0, y1, x1 - x0, y0 - y1);
+
+    // draw the two criterion curves
+    const drawCurve = (div, color) => {
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 2.2;
+      ctx.beginPath();
+      for (let i = 0; i <= 200; i++) {
+        const t = trMin + (trMax - trMin) * i / 200;
+        const lc = (st.vp * 2.998e8 * t * 1e-9) / div;
+        const px = mapX(t), py = mapY(lc);
+        if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+      }
+      ctx.stroke();
+    };
+    drawCurve(6, '#7fd1ff');
+    drawCurve(2, '#ff9a6b');
+
+    // horizontal line at the current L
+    const yL = mapY(L);
+    ctx.strokeStyle = '#ffe066';
+    ctx.lineWidth = 1.6;
+    ctx.setLineDash([6, 5]);
+    ctx.beginPath();
+    ctx.moveTo(x0, yL); ctx.lineTo(x1, yL);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // current operating point on the selected criterion curve
+    const lcNow = (st.vp * 2.998e8 * st.tr * 1e-9) / div;
+    const px = mapX(st.tr), py = mapY(lcNow);
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.arc(px, py, 4.5, 0, Math.PI * 2);
+    ctx.fill();
+
+    // labels
+    ctx.fillStyle = '#9fb6cc';
+    ctx.font = '12px system-ui, sans-serif';
+    ctx.fillText('t_r (ns)', x1 - 52, y0 + 22);
+    ctx.fillText('L_c (m)', x0 - 34, y1 - 8);
+    ctx.fillStyle = '#7fd1ff';
+    ctx.fillText('L_c = v_p t_r / 6', x0 + 8, y1 + 18);
+    ctx.fillStyle = '#ff9a6b';
+    ctx.fillText('L_c = v_p t_r / 2', x0 + 8, y1 + 34);
+
+    // ---- HUD ----
+    setHud(
+      'Critical Length',
+      String.raw`$L_c=\frac{v_p t_r}{6}$`,
+      [
+        { k: 'v_p', v: (st.vp * 2.998e8).toExponential(2) + ' m/s' },
+        { k: 't_r', v: st.tr.toFixed(2) + ' ns' },
+        { k: 'L_c', v: Lc.toFixed(3) + ' m' },
+        { k: 'L', v: L.toFixed(3) + ' m' },
+        { k: 'L / L_c', v: ratio.toFixed(2) },
+        { k: 'Verdict', v: distributed ? 'Distributed' : 'Lumped' }
+      ]
+    );
+  },
+
+  tick(dt) {
+    // gentle idle animation of the wavefront handled in update()
+  },
+
+  lesson: String.raw`
+### Rise time, length, and the 1/6 rule
+
+A wire is *lumped* when the signal's rise time is long compared with the time it takes the wave to traverse the wire. In that case the whole trace charges roughly uniformly and a simple RC / lumped model is adequate. When the rise time is short compared with the traversal time, the trace behaves as a *distributed* transmission line: the wavefront propagates, and reflections at the ends matter.
+
+The traversal time is $t_d = L/v_p$. The criterion is usually written as
+
+$$L_c = \frac{v_p\, t_r}{6}$$
+
+where $v_p$ is the propagation velocity (often $v_p = c/\sqrt{\varepsilon_r}$, i.e. a velocity factor between about 0.4 and 0.9). If $L < L_c$ the circuit is treated as lumped; if $L > L_c$ it must be treated as distributed.
+
+### Where does the 1/6 come from?
+
+Consider a step of rise time $t_r$ launched into a line of length $L$ terminated in a mismatched load. The reflection coefficient is $\Gamma$. The reflected wave arrives back at the source after $2t_d$. If $2t_d$ is small compared with $t_r$, the reflection is absorbed into the rising edge and the source sees only a small perturbation. A common engineering criterion is that the reflection-induced error be below roughly 10 percent of the step amplitude. For a first-order edge, the fraction of the edge that has already been "used up" by the round trip is about $2t_d/t_r$; requiring this to be small gives $2t_d \lesssim t_r/3$, i.e. $t_d \lesssim t_r/6$, hence $L_c = v_p t_r/6$.
+
+The looser $t_r/2$ criterion corresponds to allowing a larger reflection error (roughly a factor of three more), and is used when a cruder approximation is acceptable.
+
+### Practical reading
+
+- $L/L_c \ll 1$: lumped, reflections negligible, use ordinary circuit theory.
+- $L/L_c \approx 1$: borderline; both models give comparable answers.
+- $L/L_c \gg 1$: distributed; use transmission-line theory, match terminations, and watch for ringing.
+
+The chart shows $L_c$ versus $t_r$ for both criteria. The blue curve is the conservative $t_r/6$ rule; the orange curve is the looser $t_r/2$ rule. The dashed yellow line is your current trace length $L$; the operating point is where your $t_r$ meets the selected criterion curve.
+`,
+
+  quiz: [
+    {
+      q: 'A trace has v_p = 2.0e8 m/s and a rise time of 1 ns. Using the t_r/6 criterion, what is the critical length?',
+      options: ['0.033 m', '0.100 m', '0.200 m', '0.600 m'],
+      answer: 0
+    },
+    {
+      q: 'If L is much larger than L_c, which model is appropriate?',
+      options: ['A lumped RC model', 'A distributed transmission-line model', 'A pure DC resistive model', 'No model is needed'],
+      answer: 1
+    }
+  ]
+});
+modules.push({
+  id: 'knee_frequency',
+  title: '6. Knee Frequency',
+  controls: [
+    { type: 'range', id: 'tr', label: 'Rise time t_r (ns)', min: 0.1, max: 10, step: 0.1, value: 1.0 },
+    { type: 'range', id: 'fprobe', label: 'Probe frequency (MHz)', min: 1, max: 500, step: 1, value: 100 }
+  ],
+
+  build() {
+    const st = this.state;
+
+    // ---- 3D spectrum bars -------------------------------------------------
+    this.bars = [];
+    this.barGroup = new THREE.Group();
+    content.add(this.barGroup);
+
+    const N = 40;
+    const fMin = 1, fMax = 500;
+    const barW = 0.16, barD = 0.16;
+
+    for (let i = 0; i < N; i++) {
+      const f = fMin + (fMax - fMin) * (i / (N - 1));
+      const h = 0.2;
+      const geo = new THREE.BoxGeometry(barW, h, barD);
+      const mat = new THREE.MeshStandardMaterial({
+        color: 0x3fa9ff,
+        emissive: 0x0a2a44,
+        roughness: 0.45,
+        metalness: 0.25
+      });
+      const mesh = new THREE.Mesh(geo, mat);
+      mesh.position.set((i - (N - 1) / 2) * 0.22, h / 2, 0);
+      mesh.userData.f = f;
+      mesh.userData.baseH = h;
+      this.barGroup.add(mesh);
+      this.bars.push(mesh);
+    }
+
+    // frequency axis line
+    const axisGeo = new THREE.BufferGeometry().setFromPoints([
+      new THREE.Vector3(-4.6, 0.02, 0),
+      new THREE.Vector3(4.6, 0.02, 0)
+    ]);
+    const axisLine = new THREE.Line(axisGeo, new THREE.LineBasicMaterial({ color: 0x8fb8d8 }));
+    this.barGroup.add(axisLine);
+
+    // knee marker in 3D
+    this.kneeMarker = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.035, 0.035, 1.6, 12),
+      new THREE.MeshStandardMaterial({ color: 0xffb347, emissive: 0x5a2a00 })
+    );
+    this.kneeMarker.position.set(0, 0.8, 0);
+    this.barGroup.add(this.kneeMarker);
+
+    // probe marker
+    this.probeMarker = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.025, 0.025, 1.2, 10),
+      new THREE.MeshStandardMaterial({ color: 0x7fffd4, emissive: 0x0b3a2a })
+    );
+    this.probeMarker.position.set(0, 0.6, 0);
+    this.barGroup.add(this.probeMarker);
+
+    // ---- 2D chart ---------------------------------------------------------
+    this.ctx = chartEl.getContext('2d');
+    this.chartW = chartEl.width;
+    this.chartH = chartEl.height;
+
+    // ---- HUD --------------------------------------------------------------
+    setHud(
+      'Knee Frequency',
+      String.raw`$f_{\mathrm{knee}}\approx\frac{0.35}{t_r}$`,
+      [
+        { k: 'Rise time', v: '1.0 ns' },
+        { k: 'f_knee', v: '350 MHz' },
+        { k: 'f_probe / f_knee', v: '0.29' }
+      ]
+    );
+  },
+
+  update() {
+    const st = this.state;
+    const tr = Number(st.tr);
+    const fprobe = Number(st.fprobe);
+
+    const fknee = 0.35 / tr; // GHz when tr in ns -> 0.35/tr GHz = 350/tr MHz
+    const fkneeMHz = 350 / tr;
+    const ratio = fprobe / fkneeMHz;
+
+    // ---- 3D bars: amplitude of trapezoidal pulse spectrum ----------------
+    // |V(f)| ~ sinc-like envelope; above knee falls as 1/f^2.
+    const fMin = 1, fMax = 500;
+    const N = this.bars.length;
+
+    for (let i = 0; i < N; i++) {
+      const mesh = this.bars[i];
+      const f = mesh.userData.f;
+
+      // normalized spectrum: flat-ish below knee, 1/f^2 above
+      let amp;
+      if (f <= fkneeMHz) {
+        amp = 1.0;
+      } else {
+        amp = Math.pow(fkneeMHz / f, 2);
+      }
+      // small sinc ripple for realism
+      const x = Math.PI * f / Math.max(fkneeMHz, 1e-6);
+      amp *= Math.abs(Math.sin(x) / Math.max(x, 1e-6)) * 0.35 + 0.65;
+
+      const h = 0.25 + 2.2 * amp;
+      mesh.scale.y = h / mesh.userData.baseH;
+      mesh.position.y = h / 2;
+
+      // color: blue below knee, orange above
+      const mat = mesh.material;
+      if (f <= fkneeMHz) {
+        mat.color.setHex(0x3fa9ff);
+        mat.emissive.setHex(0x0a2a44);
+      } else {
+        mat.color.setHex(0xff8a4c);
+        mat.emissive.setHex(0x3a1600);
+      }
+    }
+
+    // knee marker position along x
+    const xKnee = ((fkneeMHz - fMin) / (fMax - fMin)) * (N - 1) * 0.22 - ((N - 1) / 2) * 0.22;
+    this.kneeMarker.position.x = THREE.MathUtils.clamp(xKnee, -4.6, 4.6);
+    this.kneeMarker.position.y = 0.8;
+
+    const xProbe = ((fprobe - fMin) / (fMax - fMin)) * (N - 1) * 0.22 - ((N - 1) / 2) * 0.22;
+    this.probeMarker.position.x = THREE.MathUtils.clamp(xProbe, -4.6, 4.6);
+    this.probeMarker.position.y = 0.6;
+
+    // ---- 2D chart --------------------------------------------------------
+    const ctx = this.ctx;
+    const W = this.chartW, H = this.chartH;
+    ctx.clearRect(0, 0, W, H);
+
+    // background
+    ctx.fillStyle = '#0b1220';
+    ctx.fillRect(0, 0, W, H);
+
+    const padL = 52, padR = 20, padT = 26, padB = 42;
+    const plotW = W - padL - padR;
+    const plotH = H - padT - padB;
+
+    // axes
+    ctx.strokeStyle = '#5b7a99';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(padL, padT);
+    ctx.lineTo(padL, padT + plotH);
+    ctx.lineTo(padL + plotW, padT + plotH);
+    ctx.stroke();
+
+    // grid
+    ctx.strokeStyle = 'rgba(120,160,200,0.18)';
+    ctx.lineWidth = 1;
+    for (let i = 0; i <= 5; i++) {
+      const x = padL + (plotW * i) / 5;
+      ctx.beginPath();
+      ctx.moveTo(x, padT);
+      ctx.lineTo(x, padT + plotH);
+      ctx.stroke();
+    }
+    for (let i = 0; i <= 4; i++) {
+      const y = padT + (plotH * i) / 4;
+      ctx.beginPath();
+      ctx.moveTo(padL, y);
+      ctx.lineTo(padL + plotW, y);
+      ctx.stroke();
+    }
+
+    // labels
+    ctx.fillStyle = '#9fc3e0';
+    ctx.font = '12px system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Frequency (MHz)', padL + plotW / 2, H - 10);
+    ctx.save();
+    ctx.translate(14, padT + plotH / 2);
+    ctx.rotate(-Math.PI / 2);
+    ctx.fillText('|V(f)| (normalized)', 0, 0);
+    ctx.restore();
+
+    // x ticks
+    ctx.fillStyle = '#7fa6c8';
+    ctx.font = '11px system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    for (let i = 0; i <= 5; i++) {
+      const f = fMin + (fMax - fMin) * (i / 5);
+      const x = padL + (plotW * i) / 5;
+      ctx.fillText(f.toFixed(0), x, padT + plotH + 16);
+    }
+
+    // spectrum curve
+    const fToX = (f) => padL + ((f - fMin) / (fMax - fMin)) * plotW;
+    const ampToY = (a) => padT + plotH - a * plotH * 0.9;
+
+    ctx.beginPath();
+    for (let i = 0; i <= 400; i++) {
+      const f = fMin + (fMax - fMin) * (i / 400);
+      let amp;
+      if (f <= fkneeMHz) {
+        amp = 1.0;
+      } else {
+        amp = Math.pow(fkneeMHz / f, 2);
+      }
+      const x = Math.PI * f / Math.max(fkneeMHz, 1e-6);
+      amp *= Math.abs(Math.sin(x) / Math.max(x, 1e-6)) * 0.35 + 0.65;
+      const px = fToX(f);
+      const py = ampToY(amp);
+      if (i === 0) ctx.moveTo(px, py);
+      else ctx.lineTo(px, py);
+    }
+    ctx.strokeStyle = '#4fc3ff';
+    ctx.lineWidth = 2.2;
+    ctx.stroke();
+
+    // fill under curve
+    ctx.lineTo(fToX(fMax), padT + plotH);
+    ctx.lineTo(fToX(fMin), padT + plotH);
+    ctx.closePath();
+    ctx.fillStyle = 'rgba(79,195,255,0.12)';
+    ctx.fill();
+
+    // knee marker
+    const kx = fToX(fkneeMHz);
+    ctx.strokeStyle = '#ffb347';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([6, 4]);
+    ctx.beginPath();
+    ctx.moveTo(kx, padT);
+    ctx.lineTo(kx, padT + plotH);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    ctx.fillStyle = '#ffb347';
+    ctx.font = 'bold 12px system-ui, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText('f_knee = ' + fkneeMHz.toFixed(1) + ' MHz', Math.min(kx + 8, W - 150), padT + 14);
+
+    // probe marker
+    const px = fToX(fprobe);
+    ctx.strokeStyle = '#7fffd4';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(px, padT + plotH);
+    ctx.lineTo(px, padT + plotH - 18);
+    ctx.stroke();
+    ctx.fillStyle = '#7fffd4';
+    ctx.font = '11px system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('probe', px, padT + plotH - 24);
+
+    // ---- HUD -------------------------------------------------------------
+    setHud(
+      'Knee Frequency',
+      String.raw`$f_{\mathrm{knee}}\approx\frac{0.35}{t_r}$`,
+      [
+        { k: 'Rise time', v: tr.toFixed(2) + ' ns' },
+        { k: 'f_knee', v: fkneeMHz.toFixed(1) + ' MHz' },
+        { k: 'f_probe / f_knee', v: ratio.toFixed(2) }
+      ]
+    );
+  },
+
+  tick(dt) {
+    // gentle rotation of the bar group for depth perception
+    if (this.barGroup) {
+      this.barGroup.rotation.y = Math.sin(performance.now() * 0.00025) * 0.18;
+    }
+  },
+
+  lesson: String.raw`
+The knee frequency is the approximate upper bound of the meaningful spectral content of a digital pulse:
+
+$$f_{\mathrm{knee}}\approx\frac{0.35}{t_r}$$
+
+where $t_r$ is the 10-90% rise time. A faster edge (smaller $t_r$) pushes $f_{\mathrm{knee}}$ higher, so more high-frequency harmonics are present. Those harmonics drive EMI, crosstalk, and transmission-line effects.
+
+Below $f_{\mathrm{knee}}$ the trapezoidal-pulse spectrum is roughly flat. Above it, the envelope falls as $1/f^2$ (the Fourier transform of a ramp edge). Thus doubling the edge rate roughly doubles the knee frequency and the high-frequency energy that can radiate.
+
+A probe or measurement bandwidth should be compared with $f_{\mathrm{knee}}$: if $f_{\mathrm{probe}} \ll f_{\mathrm{knee}}$, the probe cannot resolve the edge and will under-report high-frequency content.
+`,
+
+  quiz: [
+    {
+      q: 'If the rise time is halved, what happens to the knee frequency?',
+      options: [
+        'It doubles',
+        'It halves',
+        'It stays the same',
+        'It scales with the square of the rise time'
+      ],
+      answer: 0
+    },
+    {
+      q: 'Above the knee frequency, how does the trapezoidal pulse spectrum envelope fall?',
+      options: [
+        'As 1/f',
+        'As 1/f^2',
+        'It remains flat',
+        'As f^2'
+      ],
+      answer: 1
+    }
+  ]
+});
+/* === UI CONTROLLER === */
+
+const moduleList = document.getElementById('moduleList');
+const controlsEl = document.getElementById('controls');
+const lessonEl   = document.getElementById('lesson');
+const quizEl     = document.getElementById('quiz');
+
+let activeModule = null;
+
+function buildControls(mod) {
+  controlsEl.innerHTML = '';
+  (mod.controls || []).forEach(c => {
+    const wrap = document.createElement('div');
+    wrap.className = 'ctrl';
+    const label = document.createElement('label');
+    label.textContent = c.label;
+    wrap.appendChild(label);
+
+    let input;
+    if (c.type === 'range') {
+      input = document.createElement('input');
+      input.type = 'range';
+      input.min = c.min; input.max = c.max; input.step = c.step ?? 0.01;
+      input.value = c.value;
+      input.addEventListener('input', () => {
+        mod.state[c.id] = parseFloat(input.value);
+        mod.update();
+      });
+    } else if (c.type === 'select') {
+      input = document.createElement('select');
+      (c.options || []).forEach(o => {
+        const opt = document.createElement('option');
+        opt.value = o.value; opt.textContent = o.label;
+        input.appendChild(opt);
+      });
+      input.value = c.value;
+      input.addEventListener('change', () => {
+        mod.state[c.id] = input.value;
+        mod.update();
+      });
+    } else if (c.type === 'check') {
+      input = document.createElement('input');
+      input.type = 'checkbox';
+      input.checked = !!c.value;
+      input.addEventListener('change', () => {
+        mod.state[c.id] = input.checked;
+        mod.update();
+      });
+    }
+    wrap.appendChild(input);
+    controlsEl.appendChild(wrap);
+  });
+}
+
+function buildQuiz(mod) {
+  quizEl.innerHTML = '';
+  (mod.quiz || []).forEach(item => {
+    const q = document.createElement('div');
+    q.className = 'q';
+    const p = document.createElement('p');
+    p.textContent = item.q;
+    q.appendChild(p);
+    item.options.forEach((optText, i) => {
+      const opt = document.createElement('div');
+      opt.className = 'opt';
+      opt.textContent = optText;
+      opt.addEventListener('click', () => {
+        if (i === item.answer) opt.classList.add('right');
+        else opt.classList.add('wrong');
+      });
+      q.appendChild(opt);
+    });
+    quizEl.appendChild(q);
+  });
+}
+
+function disposeNode(node) {
+  node.traverse(obj => {
+    if (obj.geometry) obj.geometry.dispose();
+    if (obj.material) {
+      const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
+      mats.forEach(m => {
+        for (const k in m) {
+          if (m[k] && m[k].isTexture) m[k].dispose();
+        }
+        m.dispose();
+      });
+    }
+  });
+}
+
+function loadModule(mod) {
+  activeModule = mod;
+  disposeNode(content);
+  content.clear();
+  renderer.renderLists.dispose();
+  mod.state = mod.state || {};
+  mod.build();
+  lessonEl.innerHTML = mod.lesson || '';
+  if (window.renderMathInElement) {
+    renderMathInElement(lessonEl, { throwOnError: false, strict: false });
+  }
+  buildControls(mod);
+  buildQuiz(mod);
+  mod.update();
+  document.querySelectorAll('#moduleList li').forEach(li => {
+    li.classList.toggle('active', li.dataset.id === mod.id);
+  });
+}
+
+modules.forEach(mod => {
+  const li = document.createElement('li');
+  li.textContent = mod.title;
+  li.dataset.id = mod.id;
+  li.addEventListener('click', () => loadModule(mod));
+  moduleList.appendChild(li);
+});
+
+if (modules.length) loadModule(modules[0]);
+
+/* ---------- render loop ---------- */
+let last = performance.now();
+function animate(now) {
+  const dt = Math.min((now - last) / 1000, 0.05);
+  last = now;
+  if (activeModule && typeof activeModule.tick === 'function') activeModule.tick(dt);
+  renderer.render(scene, camera);
+  requestAnimationFrame(animate);
+}
+requestAnimationFrame(animate);
+
+window.addEventListener('resize', () => {
+  const w = viewport.clientWidth, h = viewport.clientHeight;
+  renderer.setSize(w, h);
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+});
+</script>
+</body>
+</html>
