@@ -2242,7 +2242,7 @@ modules.push({
     const beta = k0 * Math.sqrt(1 + (eps - 1) * (q * q) / (1 + q * q));
     const alpha = Math.sqrt(Math.max(beta * beta - k0 * k0, 1e-12)); // 1/cm
     const vp_c = k0 / beta;                                          // v_p / c
-    const r1e = 1 / alpha;                                           // 1/e radius (cm)
+    const r1e = 1 / Math.max(alpha, 1e-6);                                           // 1/e radius (cm)
 
     // confinement metric: fraction of field energy within 2*a
     const conf = 1 - Math.exp(-2 * alpha * a_cm);
@@ -2487,7 +2487,7 @@ modules.push({
     const pts = [];
     let x = -L / 2, y = -half, dir = 1;
     pts.push(new THREE.Vector3(x, y, 0));
-    while (x < L / 2) {
+    let guard = 0; while (x < L / 2 && guard++ < 200 && Math.abs(slope) > 1e-4) {
       const dy = dir * 2 * half;
       const dx = dy / slope;
       x += dx;
