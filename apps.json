@@ -59,4 +59,10 @@
     "category": "Simulation",
     "description": "Chapter 5 explores the physics of electromagnetic radiation and antenna engineering, covering fundamental radiation parameters, wire and aperture antenna architectures, and phased-array beam steering.",
   },
+  {
+    "file": "EM-WAVEGUIDES-RESONATORS-FIBER-CH8.html",
+    "title": "EM-WAVEGUIDES-RESONATORS-FIBER-CH8",
+    "category": "Simulation",
+    "description": "Chapter 8 of Kraus and Fleisch's Electromagnetics with Applications explains how electromagnetic waves are confined and guided through hollow metallic waveguides, surface-wave structures, dielectric slabs, and optical fibers—covering TE/TM cutoff modes, dispersion, waveguide devices, and resonant cavities.",
+  },
 ]
