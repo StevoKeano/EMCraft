@@ -1641,6 +1641,1869 @@ modules.push({
     { q: 'The relation between B, H and M in a linear medium is:', options: ['B = &mu;<sub>0</sub>(H + M)', 'B = &mu;<sub>0</sub>H &minus; M', 'B = M &minus; &mu;<sub>0</sub>H', 'B = &mu;<sub>0</sub>M only'], answer: 0 }
   ]
 });
+modules.push({
+  id: 'magnetic_boundary_ferromagnetism',
+  title: '7-16 to 7-17 Magnetic Boundary Relations & Ferromagnetism',
+
+  controls: [
+    { id: 'mu_r1', label: 'mu_r1 (region 1)', type: 'range', min: 1, max: 200, step: 5, value: 5 },
+    { id: 'mu_r2', label: 'mu_r2 (region 2)', type: 'range', min: 1, max: 200, step: 5, value: 80 },
+    { id: 'alpha1_deg', label: 'alpha1 (deg from normal)', type: 'range', min: 5, max: 85, step: 5, value: 30 },
+    { id: 'K_s_kAm', label: 'K_s (kA/m, tangential surface current)', type: 'range', min: -50, max: 50, step: 5, value: 0 }
+  ],
+
+  build() {
+    const g = new THREE.Group();
+    content.add(g);
+
+    // Interface plane (y = 0), region 1 below (y<0), region 2 above (y>0)
+    const planeGeo = new THREE.PlaneGeometry(6, 6);
+    const planeMat = new THREE.MeshStandardMaterial({
+      color: 0x2a3b55, emissive: 0x0b1a2e, metalness: 0.4, roughness: 0.6,
+      side: THREE.DoubleSide, transparent: true, opacity: 0.55
+    });
+    const plane = new THREE.Mesh(planeGeo, planeMat);
+    plane.rotation.x = -Math.PI / 2;
+    g.add(plane);
+
+    // Grid lines on the interface
+    const gridMat = new THREE.LineBasicMaterial({ color: 0x4f7fb0, transparent: true, opacity: 0.5 });
+    for (let i = -3; i <= 3; i++) {
+      const pts1 = [new THREE.Vector3(i, 0, -3), new THREE.Vector3(i, 0, 3)];
+      const pts2 = [new THREE.Vector3(-3, 0, i), new THREE.Vector3(3, 0, i)];
+      g.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts1), gridMat));
+      g.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts2), gridMat));
+    }
+
+    // Region slabs (semi-transparent boxes)
+    const slab1 = new THREE.Mesh(
+      new THREE.BoxGeometry(6, 2.4, 6),
+      new THREE.MeshStandardMaterial({ color: 0x1b2a44, emissive: 0x081422, transparent: true, opacity: 0.35, roughness: 0.8 })
+    );
+    slab1.position.y = -1.2;
+    g.add(slab1);
+
+    const slab2 = new THREE.Mesh(
+      new THREE.BoxGeometry(6, 2.4, 6),
+      new THREE.MeshStandardMaterial({ color: 0x3a2a1b, emissive: 0x1a0f06, transparent: true, opacity: 0.35, roughness: 0.8 })
+    );
+    slab2.position.y = 1.2;
+    g.add(slab2);
+
+    // Domain blocks in region 2 (ferromagnet) — small cubes representing domains
+    const domainMat = new THREE.MeshStandardMaterial({ color: 0xffb347, emissive: 0x8a4a10, metalness: 0.3, roughness: 0.5 });
+    const domains = [];
+    for (let i = 0; i < 4; i++) {
+      for (let j = 0; j < 4; j++) {
+        const d = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.42, 0.42), domainMat.clone());
+        d.position.set(-1.5 + i * 1.0, 0.55, -1.5 + j * 1.0);
+        g.add(d);
+        domains.push(d);
+      }
+    }
+
+    // Arrow field groups
+    const field1 = addArrowField([], 0x7fd1ff);
+    const field2 = addArrowField([], 0xffd27f);
+    g.add(field1.group);
+    g.add(field2.group);
+
+    // Normal direction marker
+    const normalArrow = addArrowField([{ origin: new THREE.Vector3(0, -0.6, 0), dir: new THREE.Vector3(0, 1, 0), len: 1.2 }], 0x9fe8ff);
+    g.add(normalArrow.group);
+
+    this.meshRefs = { g, plane, slab1, slab2, domains, field1, field2, normalArrow };
+  },
+
+  update() {
+    const st = this.state;
+    const mu1 = st.mu_r1, mu2 = st.mu_r2;
+    const a1 = st.alpha1_deg * Math.PI / 180;
+    const Ks = st.K_s_kAm; // kA/m
+
+    // Tangential H relation: H_t2 = H_t1 + Ks (with sign convention along +x)
+    // Normal B continuity: mu0*mu1*H_n1 = mu0*mu2*H_n2
+    // Choose H_t1 = 1 (arbitrary scale, kA/m), then H_n1 = H_t1 / tan(a1)
+    const Ht1 = 1.0;
+    const Hn1 = Ht1 / Math.tan(a1);
+    const Ht2 = Ht1 + Ks;
+    const Hn2 = (mu1 / mu2) * Hn1;
+    const a2 = Math.atan2(Ht2, Hn2); // angle from normal
+    const a2deg = a2 * 180 / Math.PI;
+
+    const Bn = mu1 * Hn1; // in units of mu0 * kA/m -> mT scale factor
+    const Bn_mT = Bn * 1.256637; // mu0 = 1.256637e-6 H/m; kA/m * mu0 -> mT (approx)
+
+    // 3D arrows
+    const L1 = 1.6, L2 = 1.6;
+    const dir1 = new THREE.Vector3(Math.sin(a1), -Math.cos(a1), 0).normalize();
+    const dir2 = new THREE.Vector3(Math.sin(a2), Math.cos(a2), 0).normalize();
+
+    const vecs1 = [];
+    for (let i = -1; i <= 1; i++) {
+      vecs1.push({
+        origin: new THREE.Vector3(i * 1.2, -0.15, 0),
+        dir: dir1.clone(),
+        len: L1
+      });
+    }
+    const vecs2 = [];
+    for (let i = -1; i <= 1; i++) {
+      vecs2.push({
+        origin: new THREE.Vector3(i * 1.2, 0.15, 0),
+        dir: dir2.clone(),
+        len: L2
+      });
+    }
+    this.meshRefs.field1.setVectors(vecs1);
+    this.meshRefs.field2.setVectors(vecs2);
+
+    // Domain alignment: tilt domains toward applied field direction in region 2
+    const tilt = Math.min(1, Math.abs(Ks) / 50 + 0.15);
+    this.meshRefs.domains.forEach((d, idx) => {
+      const row = Math.floor(idx / 4), col = idx % 4;
+      d.rotation.z = (a2 - Math.PI / 2) * tilt * 0.6;
+      d.rotation.y = (col - 1.5) * 0.15 * tilt;
+      d.material.emissiveIntensity = 0.6 + 0.6 * tilt;
+    });
+
+    // 2D chart: alpha_2 vs mu_r2 for current alpha_1, mu_r1
+    const ctx = chartEl.getContext('2d');
+    const W = chartEl.width, H = chartEl.height;
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = '#0b1220';
+    ctx.fillRect(0, 0, W, H);
+
+    const padL = 60, padR = 30, padT = 40, padB = 50;
+    const plotW = W - padL - padR, plotH = H - padT - padB;
+
+    // axes
+    ctx.strokeStyle = '#3a5a80';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(padL, padT);
+    ctx.lineTo(padL, padT + plotH);
+    ctx.lineTo(padL + plotW, padT + plotH);
+    ctx.stroke();
+
+    // grid
+    ctx.strokeStyle = '#1e2f45';
+    ctx.lineWidth = 1;
+    for (let i = 0; i <= 5; i++) {
+      const x = padL + (i / 5) * plotW;
+      const y = padT + (i / 5) * plotH;
+      ctx.beginPath(); ctx.moveTo(x, padT); ctx.lineTo(x, padT + plotH); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(padL + plotW, y); ctx.stroke();
+    }
+
+    // labels
+    ctx.fillStyle = '#9fc4e8';
+    ctx.font = '14px sans-serif';
+    ctx.fillText('alpha_2 (deg)', padL + plotW / 2 - 40, H - 12);
+    ctx.save();
+    ctx.translate(16, padT + plotH / 2 + 40);
+    ctx.rotate(-Math.PI / 2);
+    ctx.fillText('mu_r2', 0, 0);
+    ctx.restore();
+
+    // tick labels
+    ctx.font = '12px sans-serif';
+    ctx.fillStyle = '#7fa8cc';
+    for (let i = 0; i <= 5; i++) {
+      const mu = 1 + (i / 5) * 199;
+      ctx.fillText(mu.toFixed(0), padL + (i / 5) * plotW - 10, padT + plotH + 20);
+      const ang = 90 - (i / 5) * 90;
+      ctx.fillText(ang.toFixed(0), padL - 30, padT + (i / 5) * plotH + 4);
+    }
+
+    // curve
+    ctx.strokeStyle = '#ffd27f';
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    let first = true;
+    for (let i = 0; i <= 200; i++) {
+      const mu = 1 + (i / 200) * 199;
+      const Hn2 = (mu1 / mu) * Hn1;
+      const a2c = Math.atan2(Ht2, Hn2);
+      const a2d = a2c * 180 / Math.PI;
+      const x = padL + (i / 200) * plotW;
+      const y = padT + plotH - (a2d / 90) * plotH;
+      if (first) { ctx.moveTo(x, y); first = false; } else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // current point marker
+    const xc = padL + ((mu2 - 1) / 199) * plotW;
+    const yc = padT + plotH - (a2deg / 90) * plotH;
+    ctx.fillStyle = '#7fd1ff';
+    ctx.beginPath();
+    ctx.arc(xc, yc, 6, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    setHud(
+      'Magnetic Boundary Conditions & Domains',
+      'B_{n1}=B_{n2},\\quad H_{t2}-H_{t1}=K_s,\\quad \\frac{\\tan\\alpha_1}{\\tan\\alpha_2}=\\frac{\\mu_{r1}}{\\mu_{r2}}',
+      [
+        { k: 'alpha_2', v: a2deg.toFixed(1) + ' deg' },
+        { k: 'B_n', v: Bn_mT.toFixed(2) + ' mT' },
+        { k: 'H_t1', v: Ht1.toFixed(2) + ' kA/m' },
+        { k: 'H_t2', v: Ht2.toFixed(2) + ' kA/m' }
+      ]
+    );
+  },
+
+  tick(dt) {
+    // gentle domain shimmer
+    const t = performance.now() * 0.001;
+    if (this.meshRefs && this.meshRefs.domains) {
+      this.meshRefs.domains.forEach((d, i) => {
+        d.position.y = 0.55 + Math.sin(t * 1.5 + i * 0.7) * 0.03;
+      });
+    }
+  },
+
+  lesson: `<p>At a magnetic interface the normal component of <b>B</b> is continuous: <b>B</b><sub>n1</sub> = <b>B</b><sub>n2</sub>, equivalently mu<sub>1</sub>H<sub>n1</sub> = mu<sub>2</sub>H<sub>n2</sub>. The tangential component of <b>H</b> jumps by the free surface current density: H<sub>t2</sub> - H<sub>t1</sub> = K<sub>s</sub> x n_hat. With K<sub>s</sub> = 0 the tangential H is continuous and the field lines refract according to tan(alpha<sub>1</sub>)/tan(alpha<sub>2</sub>) = mu<sub>r1</sub>/mu<sub>r2</sub>. Ferromagnetism comes from exchange-coupled domains below the Curie temperature T<sub>c</sub>; an applied H grows and aligns domains, producing large mu<sub>r</sub> and hysteresis.</p>`,
+
+  quiz: [
+    { q: 'Which component of B is continuous across a magnetic boundary?', options: ['Normal component', 'Tangential component', 'Both', 'Neither'], answer: 0 },
+    { q: 'If K_s = 0 and mu_r2 > mu_r1, the field line in region 2 bends...', options: ['Closer to the normal', 'Farther from the normal', 'Not at all', 'Opposite direction'], answer: 0 },
+    { q: 'Ferromagnetic domain alignment occurs below which temperature?', options: ['Curie temperature T_c', 'Absolute zero only', 'Room temperature always', 'Melting point'], answer: 0 }
+  ]
+});
+modules.push({
+  id: 'bh_curves_hysteresis',
+  title: '7-18 to 7-19 Magnetization Curves & Hysteresis',
+
+  controls: [
+    { id: 'H_peak_kAm', label: 'Peak applied field H_max (kA/m)', type: 'range', min: 0.5, max: 10, step: 0.25, value: 5.0 },
+    { id: 'B_sat_T', label: 'Saturation flux density B_sat (T)', type: 'range', min: 0.4, max: 2.2, step: 0.1, value: 1.4 },
+    { id: 'Hc_kAm', label: 'Coercivity H_c (kA/m)', type: 'range', min: 0.2, max: 4.0, step: 0.2, value: 1.2 }
+  ],
+
+  build() {
+    const g = new THREE.Group();
+    content.add(g);
+
+    // --- 3D hysteresis ribbon: a tube-like ribbon swept in (H, phase, B) space ---
+    // Axes: x = H (kA/m scaled), z = phase (loop parameter), y = B (T)
+    const N = 220;
+    const pos = new Float32Array(N * 2 * 3);
+    const idx = [];
+    for (let i = 0; i < N - 1; i++) {
+      const a = i * 2, b = i * 2 + 1, c = (i + 1) * 2, d = (i + 1) * 2 + 1;
+      idx.push(a, b, c, b, d, c);
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    geo.setIndex(idx);
+    geo.computeVertexNormals();
+    const ribbon = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({
+      color: 0x2f7fff, emissive: 0x1a4a9a, emissiveIntensity: 0.7,
+      side: THREE.DoubleSide, metalness: 0.3, roughness: 0.45, transparent: true, opacity: 0.85
+    }));
+    g.add(ribbon);
+
+    // --- moving marker on the loop ---
+    const marker = new THREE.Mesh(
+      new THREE.SphereGeometry(0.09, 20, 16),
+      new THREE.MeshStandardMaterial({ color: 0xffd166, emissive: 0xffb703, emissiveIntensity: 1.2 })
+    );
+    g.add(marker);
+
+    // --- ground grid / axes lines ---
+    const axisMat = new THREE.LineBasicMaterial({ color: 0x6fa8dc });
+    const mkLine = (pts) => {
+      const lg = new THREE.BufferGeometry().setFromPoints(pts);
+      return new THREE.Line(lg, axisMat);
+    };
+    g.add(mkLine([new THREE.Vector3(-6, 0, 0), new THREE.Vector3(6, 0, 0)]));   // H axis
+    g.add(mkLine([new THREE.Vector3(0, 0, -4), new THREE.Vector3(0, 0, 4)]));   // phase axis
+    g.add(mkLine([new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 3.2, 0)]));  // B axis
+
+    // faint grid on the H-B plane
+    const gridMat = new THREE.LineBasicMaterial({ color: 0x2b4a6f, transparent: true, opacity: 0.55 });
+    for (let i = -5; i <= 5; i++) {
+      const lg = new THREE.BufferGeometry().setFromPoints([
+        new THREE.Vector3(i, 0, -3.5), new THREE.Vector3(i, 0, 3.5)
+      ]);
+      g.add(new THREE.Line(lg, gridMat));
+    }
+    for (let j = 0; j <= 3; j++) {
+      const lg = new THREE.BufferGeometry().setFromPoints([
+        new THREE.Vector3(-5, j, -3.5), new THREE.Vector3(5, j, -3.5)
+      ]);
+      g.add(new THREE.Line(lg, gridMat));
+    }
+
+    // --- normal (single-valued) magnetization curve, drawn as a separate line ---
+    const normalGeo = new THREE.BufferGeometry();
+    normalGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(120 * 3), 3));
+    const normalCurve = new THREE.Line(normalGeo, new THREE.LineBasicMaterial({ color: 0x9be7ff }));
+    g.add(normalCurve);
+
+    this.meshRefs = { group: g, ribbon, marker, normalCurve, N };
+    this.phase = 0;
+  },
+
+  // Hysteresis branch model: B(H) = B_sat * tanh((H - s*Hc)/H0) with s = ±1 branch sign
+  _branchB(H, s, Bsat, Hc) {
+    const H0 = Math.max(0.35, Hc * 0.9); // loop "width" scale
+    return Bsat * Math.tanh((H - s * Hc) / H0);
+  },
+
+  update() {
+    const st = this.state;
+    const Hp = st.H_peak_kAm;
+    const Bsat = st.B_sat_T;
+    const Hc = st.Hc_kAm;
+    const refs = this.meshRefs;
+    const N = refs.N;
+
+    // Build the loop: ascending branch (s=+1) from -Hp to +Hp, then descending (s=-1) back
+    const loop = [];
+    for (let i = 0; i < N; i++) {
+      const t = i / (N - 1);
+      const H = -Hp + 2 * Hp * t;
+      const B = this._branchB(H, +1, Bsat, Hc);
+      loop.push({ H, B, phase: t });
+    }
+    for (let i = 0; i < N; i++) {
+      const t = i / (N - 1);
+      const H = Hp - 2 * Hp * t;
+      const B = this._branchB(H, -1, Bsat, Hc);
+      loop.push({ H, B, phase: 1 + t });
+    }
+
+    // Ribbon geometry: two edges offset in phase (z) direction
+    const posAttr = refs.ribbon.geometry.attributes.position;
+    const halfW = 0.18;
+    for (let i = 0; i < loop.length; i++) {
+      const p = loop[i];
+      const x = p.H * 0.55;
+      const y = p.B * 1.6;
+      const z = (p.phase - 1) * 3.2;
+      posAttr.setXYZ(i * 2, x, y, z - halfW);
+      posAttr.setXYZ(i * 2 + 1, x, y, z + halfW);
+    }
+    posAttr.needsUpdate = true;
+    refs.ribbon.geometry.computeVertexNormals();
+
+    // Normal magnetization curve (single-valued, no hysteresis)
+    const nAttr = refs.normalCurve.geometry.attributes.position;
+    for (let i = 0; i < 120; i++) {
+      const t = i / 119;
+      const H = -Hp + 2 * Hp * t;
+      const B = Bsat * Math.tanh(H / Math.max(0.35, Hc * 0.9));
+      nAttr.setXYZ(i, H * 0.55, B * 1.6, -3.2);
+    }
+    nAttr.needsUpdate = true;
+
+    // Marker position (animated by tick phase)
+    const ph = this.phase % 1;
+    const seg = ph < 0.5 ? 0 : 1;
+    const tt = ph < 0.5 ? ph * 2 : (ph - 0.5) * 2;
+    const Hm = seg === 0 ? -Hp + 2 * Hp * tt : Hp - 2 * Hp * tt;
+    const Bm = this._branchB(Hm, seg === 0 ? +1 : -1, Bsat, Hc);
+    refs.marker.position.set(Hm * 0.55, Bm * 1.6, (ph - 0.5) * 3.2);
+
+    // Derived quantities
+    const Br = this._branchB(0, -1, Bsat, Hc); // remanence on descending branch at H=0
+    const Bop = this._branchB(Hp, +1, Bsat, Hc);
+
+    // ---- 2D chart ----
+    const W = chartEl.width, H2 = chartEl.height;
+    const ctx = chartEl.getContext('2d');
+    ctx.clearRect(0, 0, W, H2);
+
+    const pad = 46;
+    const x0 = pad, x1 = W - pad, y0 = H2 - pad, y1 = pad;
+    const HmaxPlot = Math.max(Hp * 1.15, Hc * 1.6, 1);
+    const BmaxPlot = Math.max(Bsat * 1.15, 0.5);
+
+    const mapX = (H) => x0 + (H + HmaxPlot) / (2 * HmaxPlot) * (x1 - x0);
+    const mapY = (B) => y0 - (B / BmaxPlot) * (y0 - y1);
+
+    // background
+    ctx.fillStyle = '#0b1220';
+    ctx.fillRect(0, 0, W, H2);
+
+    // grid
+    ctx.strokeStyle = '#1e3350';
+    ctx.lineWidth = 1;
+    for (let i = 0; i <= 8; i++) {
+      const x = x0 + (x1 - x0) * i / 8;
+      ctx.beginPath(); ctx.moveTo(x, y1); ctx.lineTo(x, y0); ctx.stroke();
+    }
+    for (let j = 0; j <= 6; j++) {
+      const y = y1 + (y0 - y1) * j / 6;
+      ctx.beginPath(); ctx.moveTo(x0, y); ctx.lineTo(x1, y); ctx.stroke();
+    }
+
+    // axes
+    ctx.strokeStyle = '#7fb2e5';
+    ctx.lineWidth = 1.6;
+    ctx.beginPath(); ctx.moveTo(x0, mapY(0)); ctx.lineTo(x1, mapY(0)); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(mapX(0), y1); ctx.lineTo(mapX(0), y0); ctx.stroke();
+
+    // normal curve (dashed)
+    ctx.setLineDash([5, 5]);
+    ctx.strokeStyle = '#9be7ff';
+    ctx.lineWidth = 1.6;
+    ctx.beginPath();
+    for (let i = 0; i <= 200; i++) {
+      const H = -HmaxPlot + 2 * HmaxPlot * i / 200;
+      const B = Bsat * Math.tanh(H / Math.max(0.35, Hc * 0.9));
+      const px = mapX(H), py = mapY(B);
+      i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+    }
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // hysteresis loop (filled)
+    ctx.beginPath();
+    for (let i = 0; i < loop.length; i++) {
+      const px = mapX(loop[i].H), py = mapY(loop[i].B);
+      i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+    }
+    ctx.closePath();
+    ctx.fillStyle = 'rgba(47,127,255,0.22)';
+    ctx.fill();
+    ctx.strokeStyle = '#4d9bff';
+    ctx.lineWidth = 2.4;
+    ctx.stroke();
+
+    // Br and Hc markers
+    ctx.strokeStyle = '#ffd166';
+    ctx.lineWidth = 1.4;
+    ctx.beginPath(); ctx.moveTo(mapX(0), mapY(Br)); ctx.lineTo(mapX(0), mapY(0)); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(mapX(-Hc), mapY(0)); ctx.lineTo(mapX(0), mapY(0)); ctx.stroke();
+
+    ctx.fillStyle = '#ffd166';
+    ctx.font = '13px system-ui, sans-serif';
+    ctx.fillText('B_r', mapX(0) + 6, mapY(Br) - 6);
+    ctx.fillText('H_c', mapX(-Hc) - 30, mapY(0) - 8);
+
+    // operating point
+    ctx.fillStyle = '#ff6b6b';
+    ctx.beginPath();
+    ctx.arc(mapX(Hp), mapY(Bop), 5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#ffb3b3';
+    ctx.fillText('op', mapX(Hp) + 8, mapY(Bop) - 8);
+
+    // axis labels
+    ctx.fillStyle = '#cfe3ff';
+    ctx.font = '14px system-ui, sans-serif';
+    ctx.fillText('H (kA/m)', x1 - 70, mapY(0) + 22);
+    ctx.fillText('B (T)', mapX(0) + 10, y1 + 14);
+
+    // loop area (energy per cycle) — numeric integral of H dB over the loop
+    let area = 0;
+    for (let i = 0; i < loop.length; i++) {
+      const a = loop[i], b = loop[(i + 1) % loop.length];
+      area += 0.5 * (a.H + b.H) * (b.B - a.B);
+    }
+    const wHyst = Math.abs(area) * 1e3; // kA/m * T -> J/m^3
+
+    setHud(
+      'B-H Magnetization & Hysteresis Loop',
+      'w_{\\mathrm{hyst}} = \\oint \\mathbf{H}\\cdot d\\mathbf{B},\\quad \\mathbf{B} = \\mu_0(\\mathbf{H}+\\mathbf{M})',
+      [
+        { k: 'B_op', v: Bop.toFixed(3) + ' T' },
+        { k: 'H_op', v: Hp.toFixed(2) + ' kA/m' },
+        { k: 'B_r', v: Br.toFixed(3) + ' T' },
+        { k: 'H_c', v: Hc.toFixed(2) + ' kA/m' },
+        { k: 'w_hyst', v: wHyst.toFixed(1) + ' J/m³' }
+      ]
+    );
+  },
+
+  tick(dt) {
+    this.phase = (this.phase + dt * 0.18) % 1;
+  },
+
+  lesson: `<p>Section 7-18: the normal magnetization curve <em>B(H)</em> starts at the origin, steepens as magnetic domains rotate and align, then saturates at <em>B_sat = μ₀(H + M_sat)</em>. Section 7-19: real ferromagnets retain history — the loop shows <strong>remanence</strong> <em>B_r</em> at <em>H = 0</em> and <strong>coercivity</strong> <em>H_c</em>, the reverse field needed to null <em>B</em>. The enclosed area <em>∮H·dB</em> is the volumetric energy dissipated per cycle (J/m³), so wide, tall loops (hard magnets) lose more energy per cycle than narrow soft loops. Increasing <em>H_max</em> widens the loop; increasing <em>B_sat</em> raises the saturation knee; increasing <em>H_c</em> widens the loop horizontally and raises the loss.</p>`,
+
+  quiz: [
+    { q: 'What does the remanence B_r represent?', options: ['Flux density at H = 0 after saturation', 'Field needed to saturate the material', 'The slope of the normal curve at the origin', 'The area of the hysteresis loop'], answer: 0 },
+    { q: 'The area enclosed by a B–H hysteresis loop equals:', options: ['Stored magnetic energy', 'Energy dissipated per unit volume per cycle', 'Permeability times H_c', 'The saturation magnetization'], answer: 1 },
+    { q: 'Increasing coercivity H_c while keeping B_sat fixed will:', options: ['Narrow the loop and reduce loss', 'Widen the loop and increase loss per cycle', 'Remove hysteresis entirely', 'Shift B_r to zero'], answer: 1 }
+  ]
+});
+modules.push({
+  id: 'magnetic_energy_permanent',
+  title: '7-20 to 7-22 Energy in a Magnet, Permanent Magnets & Table',
+
+  controls: [
+    { id: 'pm_type', label: 'Material', type: 'select',
+      options: ['Ferrite (Ceramic)', 'Alnico 5', 'SmCo (Samarium-Cobalt)', 'NdFeB (Neodymium)'],
+      value: 'NdFeB (Neodymium)' },
+    { id: 'vol_cm3', label: 'Magnet volume (cm^3)', type: 'range', min: 1, max: 100, step: 1, value: 25 },
+    { id: 'H_kAm', label: 'Applied field H (kA/m)', type: 'range', min: 0, max: 200, step: 5, value: 50 }
+  ],
+
+  // Br [T], Hc [kA/m], (BH)max [kJ/m^3], mu_r-ish slope
+  MATS: {
+    'Ferrite (Ceramic)':          { Br: 0.40, Hc: 250, BHmax: 30,  color: 0x9aa7b4 },
+    'Alnico 5':                   { Br: 1.25, Hc: 60,  BHmax: 45,  color: 0xc9a227 },
+    'SmCo (Samarium-Cobalt)':     { Br: 1.05, Hc: 800, BHmax: 160, color: 0x7fd1ff },
+    'NdFeB (Neodymium)':          { Br: 1.35, Hc: 900, BHmax: 320, color: 0xff6b6b }
+  },
+
+  build() {
+    const g = new THREE.Group();
+    content.add(g);
+
+    // magnet bar
+    const barGeo = new THREE.BoxGeometry(2.2, 0.7, 0.7);
+    const barMat = new THREE.MeshStandardMaterial({ color: 0x8a8f98, metalness: 0.6, roughness: 0.35 });
+    const bar = new THREE.Mesh(barGeo, barMat);
+    bar.position.set(0, 0.9, 0);
+    g.add(bar);
+
+    // end caps (N red, S blue)
+    const capGeo = new THREE.BoxGeometry(0.28, 0.72, 0.72);
+    const nMat = new THREE.MeshStandardMaterial({ color: 0xff4d4d, emissive: 0x551111, metalness: 0.3, roughness: 0.4 });
+    const sMat = new THREE.MeshStandardMaterial({ color: 0x4d7dff, emissive: 0x111a55, metalness: 0.3, roughness: 0.4 });
+    const nCap = new THREE.Mesh(capGeo, nMat); nCap.position.set(1.24, 0.9, 0);
+    const sCap = new THREE.Mesh(capGeo, sMat); sCap.position.set(-1.24, 0.9, 0);
+    g.add(nCap, sCap);
+
+    // stored-energy indicator bar (vertical, grows with W_m)
+    const eGeo = new THREE.BoxGeometry(0.35, 1, 0.35);
+    const eMat = new THREE.MeshStandardMaterial({ color: 0x66ff99, emissive: 0x1a4d2a, metalness: 0.2, roughness: 0.5 });
+    const eBar = new THREE.Mesh(eGeo, eMat);
+    eBar.position.set(2.2, 0.5, 0);
+    g.add(eBar);
+
+    // base plate
+    const base = new THREE.Mesh(new THREE.CylinderGeometry(2.6, 2.6, 0.08, 40),
+      new THREE.MeshStandardMaterial({ color: 0x2a2f38, metalness: 0.5, roughness: 0.6 }));
+    base.position.set(0, 0.04, 0);
+    g.add(base);
+
+    // field arrows
+    this.arrows = addArrowField([], 0x7fd1ff);
+    content.add(this.arrows.group);
+
+    this.meshRefs = { bar, nCap, sCap, eBar, barMat, eMat };
+  },
+
+  update() {
+    const st = this.state;
+    const m = this.MATS[st.pm_type];
+    const H = st.H_kAm * 1000;            // A/m
+    const mu0 = 4 * Math.PI * 1e-7;
+
+    // Operating point on the second-quadrant demagnetization line:
+    // B = Br + mu0*mu_rec*H  (H negative in 2nd quadrant); use |H| here.
+    const slope = m.Br / (m.Hc * 1000);   // T per A/m (approx linear load line)
+    const B = Math.max(0, m.Br - slope * H); // T
+    const wm = 0.5 * B * H / 1000;        // kJ/m^3  (0.5*B*H in J/m^3 -> /1000)
+    const vol = st.vol_cm3 * 1e-6;        // m^3
+    const Wm = wm * 1000 * vol;           // J -> mJ? wm kJ/m^3 * vol m^3 = kJ -> *1000 = J... careful
+    // wm [kJ/m^3] * vol [m^3] = kJ ; convert to mJ: *1e6
+    const Wm_mJ = wm * vol * 1e6;
+
+    // 3D updates
+    const refs = this.meshRefs;
+    refs.barMat.color.setHex(m.color);
+    refs.barMat.emissive.setHex(m.color).multiplyScalar(0.15);
+    refs.eMat.color.setHex(0x66ff99);
+
+    const hNorm = Math.min(1, st.H_kAm / 200);
+    refs.eBar.scale.y = 0.15 + 1.6 * hNorm;
+    refs.eBar.position.y = 0.04 + refs.eBar.scale.y * 0.5;
+
+    // arrows: field lines leaving N cap, entering S cap
+    const vecs = [];
+    const len = 0.5 + 0.9 * hNorm;
+    for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * Math.PI * 2;
+      const r = 1.5;
+      const y = 0.9 + 0.55 * Math.sin(a);
+      const z = 0.55 * Math.cos(a);
+      vecs.push({ origin: new THREE.Vector3(1.45, y, z), dir: new THREE.Vector3(1, 0.25 * Math.sin(a), 0.25 * Math.cos(a)).normalize(), len });
+      vecs.push({ origin: new THREE.Vector3(-1.45, y, z), dir: new THREE.Vector3(-1, 0.25 * Math.sin(a), 0.25 * Math.cos(a)).normalize(), len });
+    }
+    this.arrows.setVectors(vecs);
+
+    // 2D chart
+    const ctx = chartEl.getContext('2d');
+    const W = chartEl.width, Hh = chartEl.height;
+    ctx.clearRect(0, 0, W, Hh);
+    ctx.fillStyle = '#0b1018'; ctx.fillRect(0, 0, W, Hh);
+
+    const padL = 60, padR = 20, padT = 30, padB = 46;
+    const x0 = padL, x1 = W - padR, y0 = padT, y1 = Hh - padB;
+
+    // axes
+    ctx.strokeStyle = '#3a4658'; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x0, y1); ctx.lineTo(x1, y1); ctx.stroke();
+
+    // grid
+    ctx.strokeStyle = '#1d2634'; ctx.lineWidth = 1;
+    for (let i = 0; i <= 5; i++) {
+      const yy = y0 + (y1 - y0) * i / 5;
+      ctx.beginPath(); ctx.moveTo(x0, yy); ctx.lineTo(x1, yy); ctx.stroke();
+    }
+    for (let i = 0; i <= 8; i++) {
+      const xx = x0 + (x1 - x0) * i / 8;
+      ctx.beginPath(); ctx.moveTo(xx, y0); ctx.lineTo(xx, y1); ctx.stroke();
+    }
+
+    // labels
+    ctx.fillStyle = '#9fb3c8'; ctx.font = '13px sans-serif';
+    ctx.fillText('w_m (kJ/m^3)', x0 - 50, y0 - 8);
+    ctx.fillText('|H| (kA/m)', x1 - 70, y1 + 26);
+    ctx.fillText('0', x0 - 12, y1 + 16);
+    ctx.fillText('200', x1 - 22, y1 + 16);
+
+    const wMax = 400; // kJ/m^3 scale
+    const toX = h => x0 + (x1 - x0) * (h / 200);
+    const toY = w => y1 - (y1 - y0) * (w / wMax);
+
+    // curves for each material
+    const names = Object.keys(this.MATS);
+    names.forEach((nm, idx) => {
+      const mm = this.MATS[nm];
+      const sl = mm.Br / (mm.Hc * 1000);
+      ctx.strokeStyle = '#' + mm.color.toString(16).padStart(6, '0');
+      ctx.lineWidth = nm === st.pm_type ? 3 : 1.4;
+      ctx.beginPath();
+      for (let h = 0; h <= 200; h += 2) {
+        const Bc = Math.max(0, mm.Br - sl * h * 1000);
+        const w = 0.5 * Bc * h * 1000 / 1000;
+        const px = toX(h), py = toY(Math.min(w, wMax));
+        if (h === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+      }
+      ctx.stroke();
+    });
+
+    // operating point marker
+    const px = toX(st.H_kAm), py = toY(Math.min(wm, wMax));
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath(); ctx.arc(px, py, 5, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(px, y1); ctx.stroke();
+
+    // legend
+    ctx.font = '12px sans-serif';
+    names.forEach((nm, i) => {
+      const mm = this.MATS[nm];
+      ctx.fillStyle = '#' + mm.color.toString(16).padStart(6, '0');
+      ctx.fillRect(x1 - 150, y0 + 8 + i * 18, 12, 10);
+      ctx.fillStyle = '#c8d6e5';
+      ctx.fillText(nm + '  (BH)max=' + mm.BHmax, x1 - 134, y0 + 17 + i * 18);
+    });
+
+    setHud(
+      'Magnetic Energy & Permanent Magnets',
+      'w_m = \\frac{1}{2}\\mathbf{B}\\cdot\\mathbf{H} = \\frac{B^2}{2\\mu}',
+      [
+        { k: 'Material', v: st.pm_type },
+        { k: 'w_m (kJ/m^3)', v: wm.toFixed(1) },
+        { k: 'Stored Energy W_m (mJ)', v: Wm_mJ.toFixed(1) },
+        { k: '(BH)_max (kJ/m^3)', v: String(m.BHmax) }
+      ]
+    );
+  },
+
+  tick(dt) {
+    // gentle rotation of the magnet group for depth cue
+    const g = content.children[content.children.length - 1];
+    // no-op safe: keep static
+  },
+
+  lesson: `<p>A permanent magnet stores magnetostatic energy in the field it produces. In a linear medium the energy density is
+  <b>w_m = ½ B·H = B²/(2μ) = ½ μ H²</b> (J/m³). For a magnet of volume V the stored energy is W_m = w_m V.</p>
+  <p>After the external field is removed, a permanent magnet retains a remanent magnetization M_r, giving a remanence B_r. Its
+  operating point lies in the <b>second quadrant</b> of the B–H loop, where H opposes B. The demagnetization curve is
+  approximately linear: B ≈ B_r + μ₀ μ_rec H (H negative). The product |B·H| peaks at <b>(BH)_max</b>, the figure of merit
+  for a magnet: Ferrite ≈ 30, Alnico 5 ≈ 45, SmCo ≈ 160, NdFeB ≈ 320 kJ/m³.</p>
+  <p>Limiting cases: with no applied field (H = 0) the energy density vanishes even though B_r ≠ 0 — energy is only extracted
+  when the magnet does work against an opposing field. Increasing |H| toward the coercive point H_c drives B → 0 and the
+  stored energy falls back to zero; the maximum energy density occurs near the middle of the demagnetization line.</p>`,
+
+  quiz: [
+    { q: 'The magnetostatic energy density in a linear medium is:', options: ['w_m = B·H', 'w_m = ½ B·H', 'w_m = μ₀H²', 'w_m = B²μ₀'], answer: 1 },
+    { q: 'Which material has the largest (BH)_max in the table?', options: ['Ferrite (Ceramic)', 'Alnico 5', 'SmCo', 'NdFeB (Neodymium)'], answer: 3 },
+    { q: 'For a permanent magnet operating in the second quadrant, the applied H is:', options: ['parallel to B', 'antiparallel to B', 'zero always', 'perpendicular to B'], answer: 1 }
+  ]
+});
+modules.push({
+  id: 'demagnetization_gapless',
+  title: '7-23 to 7-24 Demagnetization & Gapless Magnetic Circuit',
+
+  controls: [
+    { id: 'N_turns', label: 'Coil turns N', type: 'range', min: 50, max: 1000, step: 25, value: 300 },
+    { id: 'I_A', label: 'Coil current I (A)', type: 'range', min: 0.1, max: 10, step: 0.1, value: 2.0 },
+    { id: 'mu_r', label: 'Core relative permeability mu_r', type: 'range', min: 200, max: 5000, step: 100, value: 2000 },
+    { id: 'l_c_cm', label: 'Mean path length l_c (cm)', type: 'range', min: 10, max: 80, step: 2, value: 40 },
+    { id: 'show_demag', label: 'Show self-demagnetizing field H_d', type: 'check', value: true }
+  ],
+
+  build() {
+    const g = new THREE.Group();
+    content.add(g);
+
+    // --- Rectangular closed ferromagnetic core (gapless) ---
+    const coreMat = new THREE.MeshStandardMaterial({
+      color: 0x3a4a63, emissive: 0x14202e, metalness: 0.55, roughness: 0.45
+    });
+    const core = new THREE.Group();
+    const barGeo = new THREE.BoxGeometry(1, 1, 1);
+    const bars = [
+      { p: [0, 1.15, 0], s: [3.0, 0.42, 0.55] },   // top
+      { p: [0, -1.15, 0], s: [3.0, 0.42, 0.55] },  // bottom
+      { p: [-1.5, 0, 0], s: [0.42, 2.3, 0.55] },   // left
+      { p: [1.5, 0, 0], s: [0.42, 2.3, 0.55] }     // right
+    ];
+    for (const b of bars) {
+      const m = new THREE.Mesh(barGeo, coreMat);
+      m.position.set(...b.p);
+      m.scale.set(...b.s);
+      core.add(m);
+    }
+    g.add(core);
+
+    // --- Copper winding turns (compact loop) ---
+    const coilMat = new THREE.MeshStandardMaterial({
+      color: 0xc9773a, emissive: 0x3a1d08, metalness: 0.85, roughness: 0.35
+    });
+    const coil = new THREE.Group();
+    const turnGeo = new THREE.TorusGeometry(0.62, 0.055, 8, 28);
+    const NT = 14;
+    for (let i = 0; i < NT; i++) {
+      const t = new THREE.Mesh(turnGeo, coilMat);
+      t.rotation.y = Math.PI / 2;
+      t.position.set(-1.5 + (i / (NT - 1)) * 0.55 - 0.28, 0, 0);
+      t.scale.set(1, 1.35, 1);
+      coil.add(t);
+    }
+    g.add(coil);
+
+    // --- Flux arrows circulating around the core ---
+    const fluxVectors = [];
+    const path = [
+      [0, 1.15, 0], [1.5, 1.15, 0], [1.5, 0, 0], [1.5, -1.15, 0],
+      [0, -1.15, 0], [-1.5, -1.15, 0], [-1.5, 0, 0], [-1.5, 1.15, 0]
+    ];
+    for (let i = 0; i < path.length; i++) {
+      const a = new THREE.Vector3(...path[i]);
+      const b = new THREE.Vector3(...path[(i + 1) % path.length]);
+      const dir = b.clone().sub(a).normalize();
+      fluxVectors.push({ origin: a.clone().add(dir.clone().multiplyScalar(0.35)), dir, len: 0.55 });
+    }
+    const fluxField = addArrowField(fluxVectors, 0x7fd1ff);
+    g.add(fluxField.group);
+
+    // --- Demagnetizing field arrows (opposing M) ---
+    const demagVectors = [];
+    for (let i = 0; i < 8; i++) {
+      const ang = (i / 8) * Math.PI * 2;
+      demagVectors.push({
+        origin: new THREE.Vector3(Math.cos(ang) * 0.9, Math.sin(ang) * 0.9, 0.42),
+        dir: new THREE.Vector3(-Math.cos(ang), -Math.sin(ang), 0),
+        len: 0.45
+      });
+    }
+    const demagField = addArrowField(demagVectors, 0xff7f7f);
+    g.add(demagField.group);
+
+    // --- Axis / ground reference ---
+    const grid = new THREE.GridHelper(8, 16, 0x2a3a4a, 0x1a2430);
+    grid.position.y = -2.2;
+    g.add(grid);
+
+    this.meshRefs = { g, core, coil, fluxField, demagField, coreMat };
+    this.state = { N_turns: 300, I_A: 2.0, mu_r: 2000, l_c_cm: 40, show_demag: true };
+  },
+
+  update() {
+    const st = this.state;
+    const N = st.N_turns, I = st.I_A, mu_r = st.mu_r;
+    const lc = st.l_c_cm / 100;          // m
+    const Ac = 0.0012;                   // m^2 (fixed cross-section)
+    const mu0 = 4 * Math.PI * 1e-7;
+
+    const MMF = N * I;                   // A-turns
+    const Rm = lc / (mu0 * mu_r * Ac);   // 1/H
+    const Phi = MMF / Rm;                // Wb
+    const B = Phi / Ac;                  // T
+    const Hc = MMF / lc;                 // A/m
+
+    // Saturation roll-off model (soft knee near B_sat = 1.6 T)
+    const Bsat = 1.6;
+    const BsatEff = Bsat * Math.tanh(B / Bsat);
+    const PhiSat = BsatEff * Ac;
+
+    // Demagnetizing factor for a rectangular slab (approx aspect ratio)
+    const Nd = 0.35;                     // illustrative geometry factor
+    const Hd = -Nd * (B / mu0 - Hc);     // A/m (opposes M)
+
+    // --- 3D updates ---
+    const refs = this.meshRefs;
+    refs.coil.visible = true;
+    refs.coil.scale.setScalar(0.85 + 0.15 * Math.min(1, MMF / 2000));
+    refs.demagField.group.visible = st.show_demag;
+    refs.demagField.group.scale.setScalar(0.6 + 0.4 * Math.min(1, Math.abs(Hd) / 2e5));
+
+    // Flux arrow intensity via material emissive
+    const fluxIntensity = Math.min(1, PhiSat / 0.004);
+    refs.coreMat.emissive.setRGB(0.08 + 0.25 * fluxIntensity, 0.12 + 0.35 * fluxIntensity, 0.20 + 0.45 * fluxIntensity);
+
+    // --- 2D chart: Phi (mWb) vs MMF (A-turns) ---
+    const W = chartEl.width, H = chartEl.height;
+    const ctx = chartEl.getContext('2d');
+    ctx.clearRect(0, 0, W, H);
+
+    // Background
+    ctx.fillStyle = '#0b1118';
+    ctx.fillRect(0, 0, W, H);
+
+    const padL = 62, padR = 24, padT = 34, padB = 48;
+    const plotW = W - padL - padR;
+    const plotH = H - padT - padB;
+
+    const mmfMax = 10000;
+    const phiMax = 6.0; // mWb
+
+    const xOf = v => padL + (v / mmfMax) * plotW;
+    const yOf = v => padT + plotH - (v / phiMax) * plotH;
+
+    // Grid
+    ctx.strokeStyle = '#1e2a38';
+    ctx.lineWidth = 1;
+    for (let i = 0; i <= 10; i++) {
+      const x = padL + (i / 10) * plotW;
+      ctx.beginPath(); ctx.moveTo(x, padT); ctx.lineTo(x, padT + plotH); ctx.stroke();
+    }
+    for (let i = 0; i <= 6; i++) {
+      const y = padT + (i / 6) * plotH;
+      ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(padL + plotW, y); ctx.stroke();
+    }
+
+    // Axes
+    ctx.strokeStyle = '#5a7a9a';
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(padL, padT); ctx.lineTo(padL, padT + plotH); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(padL, padT + plotH); ctx.lineTo(padL + plotW, padT + plotH); ctx.stroke();
+
+    // Labels
+    ctx.fillStyle = '#9fc4e8';
+    ctx.font = '13px system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('MMF = N I  (A-turns)', padL + plotW / 2, H - 12);
+    ctx.save();
+    ctx.translate(16, padT + plotH / 2);
+    ctx.rotate(-Math.PI / 2);
+    ctx.fillText('Flux Phi  (mWb)', 0, 0);
+    ctx.restore();
+
+    // Tick labels
+    ctx.font = '11px system-ui, sans-serif';
+    ctx.fillStyle = '#7fa0c0';
+    for (let i = 0; i <= 10; i++) {
+      const v = (i / 10) * mmfMax;
+      ctx.fillText(v.toFixed(0), padL + (i / 10) * plotW, padT + plotH + 18);
+    }
+    for (let i = 0; i <= 6; i++) {
+      const v = (i / 6) * phiMax;
+      ctx.textAlign = 'right';
+      ctx.fillText(v.toFixed(1), padL - 8, padT + plotH - (i / 6) * plotH + 4);
+    }
+    ctx.textAlign = 'center';
+
+    // Linear regime curve (ideal, no saturation)
+    ctx.strokeStyle = '#4fd1ff';
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    for (let i = 0; i <= 200; i++) {
+      const mmf = (i / 200) * mmfMax;
+      const phi = (mmf / Rm) * 1000; // mWb
+      const x = xOf(mmf), y = yOf(Math.min(phi, phiMax));
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // Saturated curve (tanh roll-off)
+    ctx.strokeStyle = '#ffb347';
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    for (let i = 0; i <= 200; i++) {
+      const mmf = (i / 200) * mmfMax;
+      const phi = (mmf / Rm) * 1000;
+      const B = phi / 1000 / Ac;
+      const BsatEff = Bsat * Math.tanh(B / Bsat);
+      const phiSat = BsatEff * Ac * 1000;
+      const x = xOf(mmf), y = yOf(Math.min(phiSat, phiMax));
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // Operating point
+    const opX = xOf(Math.min(MMF, mmfMax));
+    const opY = yOf(Math.min(PhiSat * 1000, phiMax));
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.arc(opX, opY, 5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(opX, opY);
+    ctx.lineTo(opX, padT + plotH);
+    ctx.stroke();
+
+    // Legend
+    ctx.font = '12px system-ui, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#4fd1ff';
+    ctx.fillText('linear (no saturation)', padL + 12, padT + 18);
+    ctx.fillStyle = '#ffb347';
+    ctx.fillText('saturation roll-off', padL + 12, padT + 36);
+
+    // --- HUD ---
+    setHud(
+      'Gapless Magnetic Circuit & MMF',
+      '\\mathcal{F} = N I = \\Phi \\mathcal{R}_m,\\quad \\mathcal{R}_m = \\frac{l_c}{\\mu_0 \\mu_r A_c}',
+      [
+        { k: 'MMF', v: MMF.toFixed(1) + ' A-t' },
+        { k: 'Reluctance', v: (Rm / 1e6).toFixed(3) + ' 1/uH' },
+        { k: 'Flux Phi', v: (PhiSat * 1000).toFixed(3) + ' mWb' },
+        { k: 'Core B', v: BsatEff.toFixed(3) + ' T' }
+      ]
+    );
+  },
+
+  tick(dt) {
+    // Gentle flux arrow shimmer
+    const refs = this.meshRefs;
+    if (refs && refs.fluxField) {
+      refs.fluxField.group.rotation.z = Math.sin(performance.now() * 0.0008) * 0.02;
+    }
+  },
+
+  lesson: `<p>A finite magnetic body develops a <b>self-demagnetizing field</b> <span>H_d = -N_d M</span> that opposes the magnetization inside it; the demagnetizing factor <span>N_d</span> depends on geometry and aspect ratio. In a <b>gapless closed core</b> (toroid or rectangular loop) the demagnetizing field is essentially absent because the flux path is continuous.</p>
+  <p>Ampere's law around the mean path gives the magnetomotive force <span>\\mathcal{F} = N I = \\oint H\\cdot dl \\approx H_c l_c</span>. With flux <span>\\Phi = B A_c</span> and reluctance <span>\\mathcal{R}_m = l_c/(\\mu_0\\mu_r A_c)</span>, the magnetic Ohm's law is <span>\\Phi = \\mathcal{F}/\\mathcal{R}_m</span>. Increasing N, I, or mu_r raises flux; lengthening l_c lowers it.</p>
+  <p>At high MMF the core saturates: mu_r effectively falls and Phi rolls off from the linear regime. The chart shows the ideal linear line and the tanh saturation knee.</p>`,
+
+  quiz: [
+    { q: 'For a gapless closed core, the reluctance is proportional to which quantity?', options: ['l_c / (mu_0 mu_r A_c)', 'mu_0 mu_r A_c / l_c', 'N I / l_c', 'A_c l_c'], answer: 0 },
+    { q: 'The self-demagnetizing field inside a finite magnet is best described as:', options: ['Parallel to M', 'Opposing M (H_d = -N_d M)', 'Zero everywhere', 'Always equal to N I'], answer: 1 },
+    { q: 'If the mean path length l_c is doubled while N, I, mu_r and A_c stay fixed, the flux Phi:', options: ['Doubles', 'Halves', 'Stays the same', 'Quadruples'], answer: 1 }
+  ]
+});
+modules.push({
+  id: 'air_gap_force',
+  title: '7-25 to 7-26 Magnetic Circuit with Air Gap & Magnetic Gap Force',
+  controls: [
+    { id: 'NI_At', label: 'MMF N·I (A·turns)', type: 'range', min: 100, max: 5000, step: 50, value: 1200 },
+    { id: 'gap_mm', label: 'Air gap l_g (mm)', type: 'range', min: 0.2, max: 10.0, step: 0.2, value: 2.0 },
+    { id: 'area_cm2', label: 'Cross-section A (cm²)', type: 'range', min: 2, max: 50, step: 1, value: 10 },
+    { id: 'mu_r', label: 'Core μ_r', type: 'range', min: 500, max: 5000, step: 100, value: 2500 }
+  ],
+
+  build() {
+    const MU0 = 4 * Math.PI * 1e-7;
+    this.MU0 = MU0;
+    this.LC = 0.30; // fixed core path length (m)
+
+    // ---- C-core geometry (units: metres, scaled visually) ----
+    const coreMat = new THREE.MeshStandardMaterial({ color: 0x8a94a6, metalness: 0.85, roughness: 0.35, emissive: 0x1b2430, emissiveIntensity: 0.6 });
+    const coilMat = new THREE.MeshStandardMaterial({ color: 0xd9822b, metalness: 0.7, roughness: 0.4, emissive: 0x5a2a00, emissiveIntensity: 0.8 });
+    const gapMat  = new THREE.MeshStandardMaterial({ color: 0x2b3a4a, metalness: 0.2, roughness: 0.9 });
+
+    const core = new THREE.Group();
+    // vertical legs + top/bottom yokes forming a C (open on the right)
+    const legGeo = new THREE.BoxGeometry(0.16, 1.0, 0.16);
+    const yokeGeo = new THREE.BoxGeometry(0.62, 0.16, 0.16);
+    const legL = new THREE.Mesh(legGeo, coreMat); legL.position.set(-0.30, 0, 0);
+    const legR = new THREE.Mesh(legGeo, coreMat); legR.position.set(0.30, 0, 0);
+    const topY = new THREE.Mesh(yokeGeo, coreMat); topY.position.set(0, 0.50, 0);
+    const botY = new THREE.Mesh(yokeGeo, coreMat); botY.position.set(0, -0.50, 0);
+    core.add(legL, legR, topY, botY);
+
+    // gap faces (two small blocks on the right legs, facing each other)
+    const faceGeo = new THREE.BoxGeometry(0.16, 0.16, 0.16);
+    this.faceTop = new THREE.Mesh(faceGeo, gapMat); this.faceTop.position.set(0.30, 0.42, 0);
+    this.faceBot = new THREE.Mesh(faceGeo, gapMat); this.faceBot.position.set(0.30, -0.42, 0);
+    core.add(this.faceTop, this.faceBot);
+
+    // coil: torus stack around left leg
+    const coil = new THREE.Group();
+    for (let i = 0; i < 14; i++) {
+      const t = new THREE.Mesh(new THREE.TorusGeometry(0.13, 0.022, 8, 20), coilMat);
+      t.rotation.x = Math.PI / 2;
+      t.position.set(-0.30, -0.30 + i * 0.045, 0);
+      coil.add(t);
+    }
+    core.add(coil);
+    content.add(core);
+    this.core = core;
+
+    // gap field lines (arrows across the gap)
+    this.gapField = addArrowField([], 0x7fd1ff);
+    content.add(this.gapField.group);
+
+    // force arrows pulling the two gap faces together
+    this.forceArrows = addArrowField([], 0xff5a5a);
+    content.add(this.forceArrows.group);
+
+    // gap glow plane
+    const glowGeo = new THREE.PlaneGeometry(0.16, 0.84);
+    this.glow = new THREE.Mesh(glowGeo, new THREE.MeshBasicMaterial({ color: 0x4fc3ff, transparent: true, opacity: 0.25, side: THREE.DoubleSide }));
+    this.glow.position.set(0.30, 0, 0);
+    this.glow.rotation.y = Math.PI / 2;
+    content.add(this.glow);
+
+    // ---- chart setup ----
+    this.chartCtx = chartEl.getContext('2d');
+    this.chartData = [];
+  },
+
+  update() {
+    const st = this.state;
+    const MU0 = this.MU0;
+    const LC = this.LC;
+    const NI = st.NI_At;
+    const lg = st.gap_mm * 1e-3;
+    const A = st.area_cm2 * 1e-4;
+    const mur = st.mu_r;
+
+    // reluctance
+    const Rc = LC / (MU0 * mur * A);
+    const Rg = lg / (MU0 * A);
+    const Rtot = Rc + Rg;
+    const Phi = NI / Rtot;              // Wb
+    const B = Phi / A;                  // T
+    const Hg = B / MU0;                 // A/m
+    const Hc = B / (MU0 * mur);         // A/m
+    const Fgap = (B * B * A) / (2 * MU0); // N (one face)
+    const gapShare = (Rg / Rtot) * 100;   // %
+
+    // ---- 3D: gap size scaling ----
+    const gapVis = 0.06 + (st.gap_mm / 10) * 0.30; // visual gap
+    const half = gapVis / 2;
+    this.faceTop.position.y = 0.42 + half;
+    this.faceBot.position.y = -0.42 - half;
+    this.glow.scale.y = 0.84 + gapVis * 2;
+    this.glow.material.opacity = 0.12 + Math.min(0.55, B * 0.35);
+
+    // gap field arrows (across the gap, from top face to bottom face)
+    const nLines = 7;
+    const vecs = [];
+    const dir = new THREE.Vector3(0, -1, 0);
+    for (let i = 0; i < nLines; i++) {
+      const z = -0.30 + (i / (nLines - 1)) * 0.60;
+      vecs.push({
+        origin: new THREE.Vector3(0.30, 0.42 + half, z),
+        dir: dir.clone(),
+        len: gapVis
+      });
+    }
+    this.gapField.setVectors(vecs);
+
+    // force arrows: pull faces together (top face pushed down, bottom pushed up)
+    const fLen = 0.10 + Math.min(0.55, Fgap * 0.02);
+    this.forceArrows.setVectors([
+      { origin: new THREE.Vector3(0.30, 0.42 + half + 0.10, 0), dir: new THREE.Vector3(0, -1, 0), len: fLen },
+      { origin: new THREE.Vector3(0.30, -0.42 - half - 0.10, 0), dir: new THREE.Vector3(0, 1, 0), len: fLen }
+    ]);
+
+    // ---- 2D chart: F_gap vs l_g at fixed NI ----
+    const ctx = this.chartCtx;
+    const W = chartEl.width, H = chartEl.height;
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = '#0b1220';
+    ctx.fillRect(0, 0, W, H);
+
+    const padL = 70, padR = 30, padT = 40, padB = 55;
+    const plotW = W - padL - padR;
+    const plotH = H - padT - padB;
+
+    // compute curve
+    const pts = [];
+    let fmax = 0;
+    for (let i = 0; i <= 120; i++) {
+      const lgv = (0.2 + (i / 120) * 9.8) * 1e-3;
+      const Rgv = lgv / (MU0 * A);
+      const phiv = NI / (Rc + Rgv);
+      const bv = phiv / A;
+      const fv = (bv * bv * A) / (2 * MU0);
+      pts.push({ lg: lgv * 1e3, f: fv });
+      if (fv > fmax) fmax = fv;
+    }
+    fmax = Math.max(fmax, 1e-6);
+
+    // axes
+    ctx.strokeStyle = '#2a3a52';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(padL, padT); ctx.lineTo(padL, padT + plotH); ctx.lineTo(padL + plotW, padT + plotH);
+    ctx.stroke();
+
+    // grid
+    ctx.strokeStyle = '#1a2638';
+    ctx.lineWidth = 1;
+    for (let i = 0; i <= 5; i++) {
+      const y = padT + (i / 5) * plotH;
+      ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(padL + plotW, y); ctx.stroke();
+      const x = padL + (i / 5) * plotW;
+      ctx.beginPath(); ctx.moveTo(x, padT); ctx.lineTo(x, padT + plotH); ctx.stroke();
+    }
+
+    // curve
+    ctx.strokeStyle = '#4fc3ff';
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    for (let i = 0; i < pts.length; i++) {
+      const x = padL + (pts[i].lg - 0.2) / 9.8 * plotW;
+      const y = padT + plotH - (pts[i].f / fmax) * plotH;
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // current operating point
+    const xOp = padL + (st.gap_mm - 0.2) / 9.8 * plotW;
+    const yOp = padT + plotH - (Fgap / fmax) * plotH;
+    ctx.fillStyle = '#ff5a5a';
+    ctx.beginPath(); ctx.arc(xOp, yOp, 5, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = '#ff5a5a';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(xOp, padT + plotH); ctx.lineTo(xOp, yOp); ctx.stroke();
+
+    // labels
+    ctx.fillStyle = '#9fb4cc';
+    ctx.font = '13px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('gap length l_g (mm)', padL + plotW / 2, H - 14);
+    ctx.save();
+    ctx.translate(18, padT + plotH / 2);
+    ctx.rotate(-Math.PI / 2);
+    ctx.fillText('F_gap (N)', 0, 0);
+    ctx.restore();
+
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#cfe3ff';
+    ctx.font = '12px sans-serif';
+    ctx.fillText('F_max ≈ ' + fmax.toFixed(2) + ' N', padL + 8, padT + 16);
+
+    // tick labels
+    ctx.fillStyle = '#7f93aa';
+    ctx.font = '11px sans-serif';
+    ctx.textAlign = 'center';
+    for (let i = 0; i <= 5; i++) {
+      const lgv = 0.2 + (i / 5) * 9.8;
+      ctx.fillText(lgv.toFixed(1), padL + (i / 5) * plotW, padT + plotH + 18);
+    }
+    ctx.textAlign = 'right';
+    for (let i = 0; i <= 5; i++) {
+      const fv = fmax * (1 - i / 5);
+      ctx.fillText(fv.toFixed(1), padL - 8, padT + (i / 5) * plotH + 4);
+    }
+
+    // ---- HUD ----
+    setHud(
+      'Air-Gap Magnetic Circuit & Force',
+      '\\Phi = \\frac{NI}{\\frac{l_c}{\\mu_0\\mu_r A} + \\frac{l_g}{\\mu_0 A}},\\quad F_{\\mathrm{gap}} = \\frac{B^2 A}{2\\mu_0}',
+      [
+        { k: 'B_gap', v: B.toFixed(3) + ' T' },
+        { k: 'Flux Φ', v: (Phi * 1e3).toFixed(3) + ' mWb' },
+        { k: 'Gap Force F', v: Fgap.toFixed(2) + ' N' },
+        { k: 'Gap Share', v: gapShare.toFixed(1) + ' %' }
+      ]
+    );
+  },
+
+  tick(dt) {
+    // gentle pulse of the gap glow
+    if (this.glow) {
+      this.glow.material.opacity = 0.15 + 0.10 * Math.sin(performance.now() * 0.002);
+    }
+  },
+
+  lesson: `<p>A magnetic circuit with an air gap obeys the Hopkinson analogy: <b>MMF = Φ·R</b>, where the core reluctance is <i>l_c/(μ₀μ_r A)</i> and the gap reluctance is <i>l_g/(μ₀ A)</i>. Since μ_r ≫ 1, the gap reluctance dominates even for a millimetre-scale gap, so nearly all the MMF drops across the gap: <i>H_g = B/μ₀ ≫ H_c = B/(μ₀μ_r)</i>.</p>
+<p>The field energy stored in the gap is <i>U = B² A l_g /(2μ₀)</i>. Virtual work gives the attractive force between the two gap faces: <i>F = B² A /(2μ₀)</i> per face. For a C-core with two gap faces the total pull is <i>B² A / μ₀</i>. The force falls steeply with gap length because Φ ∝ 1/(l_g + l_c/μ_r), so <i>F ∝ 1/(l_g + l_c/μ_r)²</i>.</p>
+<p>Limiting cases: as <i>l_g → 0</i> the force is set by the core reluctance alone and reaches its maximum; as <i>l_g</i> grows the flux collapses and the force drops as <i>1/l_g²</i>. Increasing N·I or A raises the force quadratically in B.</p>`,
+
+  quiz: [
+    { q: 'In a magnetic circuit with a small air gap, where does most of the MMF drop occur?', options: ['Across the iron core', 'Across the air gap', 'Equally in both', 'Nowhere — MMF is conserved'], answer: 1 },
+    { q: 'The attractive force between two gap faces of area A carrying flux density B is:', options: ['B²A/μ₀', 'B²A/(2μ₀)', 'μ₀B²A', 'B A/μ₀'], answer: 1 },
+    { q: 'If the air gap length is doubled while N·I is fixed, the gap force approximately:', options: ['Doubles', 'Halves', 'Falls by roughly a factor of four', 'Stays the same'], answer: 2 }
+  ]
+});
+modules.push({
+  id: 'permanent_magnet_gap',
+  title: '7-27 Permanent Magnet with Air Gap',
+  controls: [
+    { id: 'Br_T', label: 'Remanence B_r (T)', type: 'range', min: 0.2, max: 1.4, step: 0.05, value: 1.1 },
+    { id: 'Hc_kAm', label: 'Coercivity H_c (kA/m)', type: 'range', min: 20, max: 900, step: 20, value: 400 },
+    { id: 'ratio_lm_lg', label: 'Length ratio l_m / l_g', type: 'range', min: 2, max: 50, step: 1, value: 15 }
+  ],
+  build() {
+    const g = new THREE.Group();
+    const mu0 = 4 * Math.PI * 1e-7;
+
+    // magnet block (left) and gap region (right)
+    const magMat = new THREE.MeshStandardMaterial({ color: 0x2b3a55, emissive: 0x0a1a33, metalness: 0.6, roughness: 0.35 });
+    const gapMat = new THREE.MeshStandardMaterial({ color: 0x1b2430, emissive: 0x000000, transparent: true, opacity: 0.25 });
+    const magnet = new THREE.Mesh(new THREE.BoxGeometry(2.2, 1.6, 1.6), magMat);
+    magnet.position.set(-1.6, 0, 0);
+    const gap = new THREE.Mesh(new THREE.BoxGeometry(1.2, 1.6, 1.6), gapMat);
+    gap.position.set(0.3, 0, 0);
+    const pole = new THREE.Mesh(new THREE.BoxGeometry(0.5, 1.6, 1.6),
+      new THREE.MeshStandardMaterial({ color: 0x8a9bb5, metalness: 0.8, roughness: 0.3 }));
+    pole.position.set(1.15, 0, 0);
+    g.add(magnet, gap, pole);
+
+    // N / S labels via small colored plates
+    const nMat = new THREE.MeshStandardMaterial({ color: 0xff4d6d, emissive: 0x66202c });
+    const sMat = new THREE.MeshStandardMaterial({ color: 0x4d8bff, emissive: 0x1a2f66 });
+    const nPlate = new THREE.Mesh(new THREE.BoxGeometry(0.06, 1.5, 1.5), nMat);
+    nPlate.position.set(-0.48, 0, 0);
+    const sPlate = new THREE.Mesh(new THREE.BoxGeometry(0.06, 1.5, 1.5), sMat);
+    sPlate.position.set(-2.72, 0, 0);
+    g.add(nPlate, sPlate);
+
+    // B field arrows (through magnet + gap, same direction)
+    const bArrows = addArrowField([
+      { origin: new THREE.Vector3(-2.4, 0.55, 0.55), dir: new THREE.Vector3(1, 0, 0), len: 3.4 },
+      { origin: new THREE.Vector3(-2.4, -0.55, -0.55), dir: new THREE.Vector3(1, 0, 0), len: 3.4 }
+    ], 0x7fd1ff);
+    g.add(bArrows.group);
+
+    // H field arrows: inside magnet H points opposite to B (leftwards), in gap H points with B
+    const hArrows = addArrowField([
+      { origin: new THREE.Vector3(-0.6, 0.0, 0.85), dir: new THREE.Vector3(-1, 0, 0), len: 1.6 },
+      { origin: new THREE.Vector3(0.9, 0.0, 0.85), dir: new THREE.Vector3(1, 0, 0), len: 0.9 }
+    ], 0xffb347);
+    g.add(hArrows.group);
+
+    // axis line
+    const axisGeo = new THREE.BufferGeometry().setFromPoints([
+      new THREE.Vector3(-3.2, 0, 0), new THREE.Vector3(1.6, 0, 0)
+    ]);
+    g.add(new THREE.Line(axisGeo, new THREE.LineBasicMaterial({ color: 0x556677 })));
+
+    content.add(g);
+    this.meshRefs = { group: g, magnet, gap, pole, bArrows, hArrows, mu0 };
+  },
+
+  update() {
+    const st = this.state;
+    const mu0 = this.meshRefs.mu0;
+    const Br = st.Br_T;
+    const Hc = st.Hc_kAm * 1e3;          // A/m
+    const ratio = st.ratio_lm_lg;
+
+    // Linear demagnetization curve: B = Br + mu0*H  (H negative in 2nd quadrant)
+    // Load line: B = -mu0*ratio*H  =>  Br + mu0 H = -mu0 ratio H
+    // H_m = -Br / (mu0 (1 + ratio))
+    const Hm = -Br / (mu0 * (1 + ratio));      // A/m
+    const Bm = Br + mu0 * Hm;                  // T
+    const Hg = -Hm * ratio;                    // A/m  (H_g = -(l_m/l_g) H_m)
+    const Bg = mu0 * Hg;                       // T  (equals Bm)
+    const gapEnergyDensity = 0.5 * Bg * Hg / 1000; // kJ/m^3
+
+    // scale arrows by field magnitude
+    const bLen = 1.2 + 2.2 * (Bm / 1.4);
+    const hLenMag = 0.6 + 1.6 * Math.min(1, Math.abs(Hm) / Hc);
+    const hLenGap = 0.6 + 1.6 * Math.min(1, Math.abs(Hg) / Hc);
+    this.meshRefs.bArrows.setVectors([
+      { origin: new THREE.Vector3(-2.4, 0.55, 0.55), dir: new THREE.Vector3(1, 0, 0), len: bLen },
+      { origin: new THREE.Vector3(-2.4, -0.55, -0.55), dir: new THREE.Vector3(1, 0, 0), len: bLen }
+    ]);
+    this.meshRefs.hArrows.setVectors([
+      { origin: new THREE.Vector3(-0.6, 0.0, 0.85), dir: new THREE.Vector3(-1, 0, 0), len: hLenMag },
+      { origin: new THREE.Vector3(0.9, 0.0, 0.85), dir: new THREE.Vector3(1, 0, 0), len: hLenGap }
+    ]);
+
+    // ---- 2D chart ----
+    const W = chartEl.width, H = chartEl.height;
+    const ctx = chartEl.getContext('2d');
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = '#0b1018';
+    ctx.fillRect(0, 0, W, H);
+
+    const padL = 60, padR = 30, padT = 30, padB = 50;
+    const plotW = W - padL - padR, plotH = H - padT - padB;
+
+    // H axis range (negative): from -Hc to 0
+    const Hmin = -Hc * 1.15;
+    const Bmax = Br * 1.15;
+    const xOf = h => padL + (h - Hmin) / (0 - Hmin) * plotW;
+    const yOf = b => padT + plotH - (b / Bmax) * plotH;
+
+    // grid
+    ctx.strokeStyle = '#1e2a3a';
+    ctx.lineWidth = 1;
+    for (let i = 0; i <= 5; i++) {
+      const h = Hmin + (0 - Hmin) * i / 5;
+      ctx.beginPath(); ctx.moveTo(xOf(h), padT); ctx.lineTo(xOf(h), padT + plotH); ctx.stroke();
+      const b = Bmax * i / 5;
+      ctx.beginPath(); ctx.moveTo(padL, yOf(b)); ctx.lineTo(padL + plotW, yOf(b)); ctx.stroke();
+    }
+
+    // axes
+    ctx.strokeStyle = '#7f8fa6';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(padL, padT); ctx.lineTo(padL, padT + plotH); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(padL, padT + plotH); ctx.lineTo(padL + plotW, padT + plotH); ctx.stroke();
+
+    // labels
+    ctx.fillStyle = '#9fb3c8';
+    ctx.font = '13px sans-serif';
+    ctx.fillText('H (A/m)', padL + plotW / 2 - 30, H - 12);
+    ctx.save(); ctx.translate(16, padT + plotH / 2); ctx.rotate(-Math.PI / 2);
+    ctx.fillText('B (T)', -20, 0); ctx.restore();
+
+    // demagnetization curve B = Br + mu0 H
+    ctx.strokeStyle = '#7fd1ff';
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    for (let i = 0; i <= 100; i++) {
+      const h = Hmin + (0 - Hmin) * i / 100;
+      const b = Br + mu0 * h;
+      if (i === 0) ctx.moveTo(xOf(h), yOf(b)); else ctx.lineTo(xOf(h), yOf(b));
+    }
+    ctx.stroke();
+
+    // load line B = -mu0*ratio*H
+    ctx.strokeStyle = '#ffb347';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([6, 4]);
+    ctx.beginPath();
+    ctx.moveTo(xOf(0), yOf(0));
+    ctx.lineTo(xOf(Hmin), yOf(-mu0 * ratio * Hmin));
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // operating point
+    ctx.fillStyle = '#ff4d6d';
+    ctx.beginPath();
+    ctx.arc(xOf(Hm), yOf(Bm), 6, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 1.5; ctx.stroke();
+
+    ctx.fillStyle = '#ffffff';
+    ctx.font = '12px sans-serif';
+    ctx.fillText(`OP: H=${(Hm/1e3).toFixed(1)} kA/m, B=${Bm.toFixed(3)} T`,
+      Math.min(xOf(Hm) + 10, W - 220), Math.max(yOf(Bm) - 10, 20));
+
+    setHud(
+      'Permanent Magnet Operating Point with Gap',
+      'H_m l_m + H_g l_g = 0,\\quad \\frac{B_m}{H_m} = -\\mu_0\\frac{l_m}{l_g}',
+      [
+        { k: 'B_gap', v: `${Bg.toFixed(3)} T` },
+        { k: 'H_m', v: `${(Hm / 1e3).toFixed(1)} kA/m` },
+        { k: 'H_gap', v: `${(Hg / 1e3).toFixed(1)} kA/m` },
+        { k: 'Gap Energy Density', v: `${gapEnergyDensity.toFixed(2)} kJ/m^3` }
+      ]
+    );
+  },
+
+  tick(dt) {
+    // gentle rotation of the assembly for depth perception
+    if (this.meshRefs && this.meshRefs.group) {
+      this.meshRefs.group.rotation.y += dt * 0.15;
+    }
+  },
+
+  lesson: `<p>A permanent magnet of length <em>l<sub>m</sub></em> and area <em>A</em> is coupled across an air gap of length <em>l<sub>g</sub></em>. Ampere's law around a closed path gives <strong>H<sub>m</sub>l<sub>m</sub> + H<sub>g</sub>l<sub>g</sub> = 0</strong>, so H<sub>m</sub> is opposite in sign to H<sub>g</sub>. Flux continuity (no fringing) gives B<sub>m</sub> = B<sub>g</sub> = μ<sub>0</sub>H<sub>g</sub>. Combining yields the load line <strong>B<sub>m</sub>/H<sub>m</sub> = −μ<sub>0</sub>l<sub>m</sub>/l<sub>g</sub></strong>, whose intersection with the second-quadrant demagnetization curve fixes the operating point. A larger length ratio steepens the load line and pushes the operating point toward higher B and lower |H|; a small gap ratio (large gap) drives the magnet toward coercivity and reduces gap energy density.</p>`,
+  quiz: [
+    { q: 'For a magnet with gap, which relation holds for the field intensities?', options: ['H_m l_m = H_g l_g', 'H_m l_m + H_g l_g = 0', 'H_m = H_g', 'H_m l_g = H_g l_m'], answer: 1 },
+    { q: 'The load line slope B_m/H_m equals:', options: ['+μ0 l_m/l_g', '−μ0 l_m/l_g', '−μ0 l_g/l_m', '−l_m/l_g'], answer: 1 },
+    { q: 'Increasing l_m/l_g (smaller gap) moves the operating point toward:', options: ['lower B and higher |H|', 'higher B and lower |H|', 'the origin', 'B = 0'], answer: 1 }
+  ]
+});
+modules.push({
+  id: 'ac_behavior_eddy_currents',
+  title: '7-28 to 7-29 AC Behavior of Ferromagnetic Materials & Eddy Currents',
+  controls: [
+    { id: 'freq_Hz', label: 'AC frequency f (Hz)', type: 'range', min: 50, max: 5000, step: 50, value: 400 },
+    { id: 'Bmax_T', label: 'Peak flux density B_max (T)', type: 'range', min: 0.1, max: 1.5, step: 0.05, value: 0.8 },
+    { id: 'lam_mm', label: 'Lamination thickness t (mm)', type: 'range', min: 0.1, max: 5.0, step: 0.1, value: 0.5 },
+    { id: 'laminated', label: 'Laminated core', type: 'check', value: true }
+  ],
+
+  build() {
+    const g = new THREE.Group();
+    content.add(g);
+
+    // ---- core block(s) ----
+    const coreMat = new THREE.MeshStandardMaterial({
+      color: 0x8fa6c8, metalness: 0.85, roughness: 0.35,
+      emissive: 0x223355, emissiveIntensity: 0.6
+    });
+    const insMat = new THREE.MeshStandardMaterial({
+      color: 0xffb347, metalness: 0.1, roughness: 0.8,
+      emissive: 0x552200, emissiveIntensity: 0.5
+    });
+
+    const slabs = [];
+    const N = 8;                       // max number of laminations
+    const H = 2.2, Wd = 1.6, D = 1.2;  // block dims
+    for (let i = 0; i < N; i++) {
+      const m = new THREE.Mesh(new THREE.BoxGeometry(Wd, H, D), coreMat);
+      m.position.set(0, 0, (i - (N - 1) / 2) * (D / N));
+      slabs.push(m);
+      g.add(m);
+      if (i < N - 1) {
+        const ins = new THREE.Mesh(new THREE.BoxGeometry(Wd * 1.02, H * 1.02, 0.035), insMat);
+        ins.position.set(0, 0, (i - (N - 1) / 2 + 0.5) * (D / N));
+        ins.name = 'ins';
+        g.add(ins);
+      }
+    }
+
+    // ---- eddy current loops (rings in planes normal to B) ----
+    const loopMat = new THREE.MeshStandardMaterial({
+      color: 0x66e0ff, metalness: 0.4, roughness: 0.3,
+      emissive: 0x2aa8ff, emissiveIntensity: 1.4
+    });
+    const loops = [];
+    for (let i = 0; i < 6; i++) {
+      const r = 0.28 + i * 0.09;
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(r, 0.022, 8, 40), loopMat);
+      ring.rotation.x = Math.PI / 2;   // ring lies in x-z plane -> normal along y
+      ring.position.set(0, -0.9 + i * 0.36, 0);
+      loops.push(ring);
+      g.add(ring);
+    }
+
+    // ---- alternating B-field arrows ----
+    const field = addArrowField(
+      Array.from({ length: 5 }, (_, i) => ({
+        origin: new THREE.Vector3(-0.9 + i * 0.45, -1.35, 0),
+        dir: new THREE.Vector3(0, 1, 0),
+        len: 0.9
+      })),
+      0x9fe8ff
+    );
+    field.group.position.set(0, 0, 0);
+    g.add(field.group);
+
+    // ---- axis / frame lines ----
+    const frameMat = new THREE.LineBasicMaterial({ color: 0x3a5a80 });
+    const pts = [
+      [-1.1, -1.3, -0.9], [1.1, -1.3, -0.9], [1.1, 1.3, -0.9], [-1.1, 1.3, -0.9], [-1.1, -1.3, -0.9]
+    ];
+    const frameGeo = new THREE.BufferGeometry().setFromPoints(pts.map(p => new THREE.Vector3(...p)));
+    g.add(new THREE.Line(frameGeo, frameMat));
+
+    this.meshRefs = { g, slabs, loops, field, N, D };
+    this.phase = 0;
+  },
+
+  update() {
+    const st = this.state;
+    const f = st.freq_Hz, Bm = st.Bmax_T, tmm = st.lam_mm;
+    const lam = st.laminated;
+    const R = this.meshRefs;
+
+    // --- geometry: laminated vs solid ---
+    const tEff = lam ? tmm : 5.0;   // solid core behaves like a thick sheet
+    const nVis = lam ? Math.max(2, Math.min(R.N, Math.round(8 * (0.5 / Math.max(tmm, 0.1))))) : 1;
+    R.slabs.forEach((m, i) => {
+      m.visible = i < nVis;
+      m.scale.z = lam ? 1 : 1;
+      m.position.z = lam ? (i - (nVis - 1) / 2) * (R.D / nVis) : 0;
+      m.scale.z = lam ? 1 : 1;
+    });
+    R.g.children.forEach(c => { if (c.name === 'ins') c.visible = lam; });
+
+    // --- eddy loops: bigger & brighter with more loss ---
+    const eddyRel = f * f * Bm * Bm * (tEff * tEff) * 1e-6; // arbitrary relative units
+    const hystRel = f * Bm * 1e-3;
+    const total = eddyRel + hystRel;
+    const eddyShare = total > 0 ? eddyRel / total : 0;
+
+    R.loops.forEach((ring, i) => {
+      const s = 0.55 + 0.9 * Math.min(1, eddyShare) * (1 + i * 0.08);
+      ring.scale.setScalar(s);
+      ring.material.emissiveIntensity = 0.5 + 2.2 * eddyShare;
+      ring.visible = eddyShare > 0.02;
+    });
+
+    // --- skin depth (mm) ---
+    const mu0 = 4 * Math.PI * 1e-7;
+    const mur = 2000;                 // typical ferromagnetic relative permeability
+    const sigma = 5e6;                // S/m (iron-ish)
+    const delta_m = 1 / Math.sqrt(Math.PI * f * mu0 * mur * sigma);
+    const delta_mm = delta_m * 1000;
+
+    // --- HUD ---
+    setHud(
+      'AC Core Loss & Eddy Currents',
+      'P_{\\mathrm{eddy}} \\propto f^2 B_{\\max}^2 t^2 \\sigma,\\quad \\delta = \\frac{1}{\\sqrt{\\pi f \\mu \\sigma}}',
+      [
+        { k: 'Skin Depth', v: delta_mm.toFixed(3) + ' mm' },
+        { k: 'Eddy Share', v: (eddyShare * 100).toFixed(1) + ' %' },
+        { k: 'Hyst Share', v: ((1 - eddyShare) * 100).toFixed(1) + ' %' },
+        { k: 'Total Rel. Loss', v: total.toFixed(3) }
+      ]
+    );
+
+    // --- 2D chart ---
+    const W = chartEl.width, H = chartEl.height;
+    const ctx = chartEl.getContext('2d');
+    ctx.clearRect(0, 0, W, H);
+
+    const pad = 46;
+    const x0 = pad, x1 = W - pad, y0 = H - pad, y1 = pad;
+    const fMin = 50, fMax = 5000;
+
+    // background
+    ctx.fillStyle = '#0b1220';
+    ctx.fillRect(0, 0, W, H);
+
+    // grid
+    ctx.strokeStyle = '#1e2c44';
+    ctx.lineWidth = 1;
+    for (let i = 0; i <= 5; i++) {
+      const x = x0 + (x1 - x0) * i / 5;
+      ctx.beginPath(); ctx.moveTo(x, y1); ctx.lineTo(x, y0); ctx.stroke();
+      const y = y0 - (y0 - y1) * i / 5;
+      ctx.beginPath(); ctx.moveTo(x0, y); ctx.lineTo(x1, y); ctx.stroke();
+    }
+
+    // loss curves (normalized to max at fMax)
+    const eddyAt = (ff) => ff * ff * Bm * Bm * (tEff * tEff) * 1e-6;
+    const hystAt = (ff) => ff * Bm * 1e-3;
+    const maxV = Math.max(eddyAt(fMax), hystAt(fMax));
+
+    const plot = (fn, color, width) => {
+      ctx.beginPath();
+      for (let i = 0; i <= 200; i++) {
+        const ff = fMin + (fMax - fMin) * i / 200;
+        const x = x0 + (x1 - x0) * (ff - fMin) / (fMax - fMin);
+        const y = y0 - (y0 - y1) * (fn(ff) / maxV);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+      }
+      ctx.strokeStyle = color; ctx.lineWidth = width; ctx.stroke();
+    };
+
+    plot(eddyAt, '#4fd1ff', 3);
+    plot(hystAt, '#ffb347', 3);
+
+    // marker at current f
+    const xm = x0 + (x1 - x0) * (f - fMin) / (fMax - fMin);
+    ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(xm, y1); ctx.lineTo(xm, y0); ctx.stroke();
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath(); ctx.arc(xm, y0 - (y0 - y1) * (eddyAt(f) / maxV), 4, 0, Math.PI * 2); ctx.fill();
+
+    // labels
+    ctx.fillStyle = '#9fb6d4';
+    ctx.font = '13px system-ui, sans-serif';
+    ctx.fillText('f (Hz)', x1 - 40, y0 + 26);
+    ctx.fillText('loss (rel.)', x0 - 30, y1 - 10);
+    ctx.fillStyle = '#4fd1ff'; ctx.fillText('Eddy  ∝ f²', x0 + 10, y1 + 22);
+    ctx.fillStyle = '#ffb347'; ctx.fillText('Hysteresis  ∝ f', x0 + 130, y1 + 22);
+    ctx.fillStyle = '#9fb6d4';
+    ctx.fillText('50', x0 - 8, y0 + 18);
+    ctx.fillText('5000', x1 - 26, y0 + 18);
+  },
+
+  tick(dt) {
+    this.phase += dt * 3.0;
+    const R = this.meshRefs;
+    // alternating B-field: flip arrows
+    const s = Math.sin(this.phase);
+    R.field.group.rotation.z = 0;
+    R.field.group.scale.y = s >= 0 ? 1 : -1;
+    // loops pulse
+    R.loops.forEach((ring, i) => {
+      ring.rotation.z = this.phase * (0.6 + i * 0.15);
+    });
+  },
+
+  lesson: `<p>Under AC excitation a ferromagnetic core dissipates two loss mechanisms. <b>Hysteresis loss</b> scales linearly with frequency, <em>P<sub>h</sub> ∝ f B<sub>max</sub></em>, because each cycle traces the B–H loop once. <b>Eddy-current loss</b> scales as <em>P<sub>e</sub> ∝ f² B<sub>max</sub>² t² σ</em>: induced EMF grows with f, and the resulting current paths in a sheet of thickness t produce I²R heating that grows quadratically.</p>
+<p>Skin depth <em>δ = 1/√(π f μ σ)</em> shrinks as frequency rises, confining flux and current to the surface. Laminating the core into thin insulated sheets (thickness t) breaks the large eddy loops into small ones, cutting eddy loss by roughly (t/t_solid)². At low f hysteresis dominates; at high f eddy currents dominate — hence laminated cores are essential for transformers and motors operating at power frequencies and above.</p>`,
+
+  quiz: [
+    { q: 'How does eddy-current loss scale with frequency?', options: ['∝ f', '∝ f²', '∝ 1/f', 'independent of f'], answer: 1 },
+    { q: 'Laminating a core reduces eddy loss primarily because it…', options: ['raises μ', 'reduces σ', 'restricts eddy-current loop area/thickness', 'removes hysteresis'], answer: 2 },
+    { q: 'Skin depth δ = 1/√(π f μ σ) implies that as f increases, δ…', options: ['increases', 'stays constant', 'decreases', 'oscillates'], answer: 2 }
+  ]
+});
+modules.push({
+  id: 'ch7_problems_capstone',
+  title: 'Ch. 7 Problems & Capstone Solver',
+  controls: [
+    { id: 'mode', label: 'Problem Mode', type: 'select', options: ['Capacitor w/ Dielectric', 'Magnetic Gap Force', 'Dielectric Refraction'], value: 'Magnetic Gap Force' },
+    { id: 'p1', label: 'eps_r / NI [100 A-t] / eps_r2', type: 'range', min: 1, max: 20, step: 1, value: 6 },
+    { id: 'p2', label: 'V [kV] / Gap [0.1 mm] / Angle [deg]', type: 'range', min: 1, max: 50, step: 1, value: 10 },
+    { id: 'p3', label: 'Area [cm^2] / eps_r1', type: 'range', min: 1, max: 50, step: 1, value: 12 }
+  ],
+
+  build() {
+    const g = new THREE.Group();
+    content.add(g);
+
+    // shared materials
+    const plateMat = new THREE.MeshStandardMaterial({ color: 0x9fb6d6, metalness: 0.85, roughness: 0.25, emissive: 0x223344 });
+    const dieMat = new THREE.MeshStandardMaterial({ color: 0x4fd1c5, metalness: 0.1, roughness: 0.5, emissive: 0x0a3a36, transparent: true, opacity: 0.75 });
+    const coreMat = new THREE.MeshStandardMaterial({ color: 0x6b7a8f, metalness: 0.7, roughness: 0.35, emissive: 0x1a2430 });
+    const gapMat = new THREE.MeshStandardMaterial({ color: 0xffb347, metalness: 0.2, roughness: 0.6, emissive: 0x5a3300 });
+    const wireMat = new THREE.MeshStandardMaterial({ color: 0xff7a5c, metalness: 0.6, roughness: 0.3, emissive: 0x3a1208 });
+
+    // --- Capacitor group ---
+    const capGroup = new THREE.Group();
+    const plateGeo = new THREE.BoxGeometry(3.2, 0.12, 2.2);
+    const topPlate = new THREE.Mesh(plateGeo, plateMat);
+    topPlate.position.y = 1.1;
+    const botPlate = new THREE.Mesh(plateGeo, plateMat);
+    botPlate.position.y = -1.1;
+    const slab = new THREE.Mesh(new THREE.BoxGeometry(2.6, 1.6, 1.8), dieMat);
+    slab.position.y = 0;
+    capGroup.add(topPlate, botPlate, slab);
+    // field arrows between plates
+    const capArrows = addArrowField([
+      { origin: new THREE.Vector3(-1.0, -0.9, 0), dir: new THREE.Vector3(0, 1, 0), len: 1.6 },
+      { origin: new THREE.Vector3(0.0, -0.9, 0), dir: new THREE.Vector3(0, 1, 0), len: 1.6 },
+      { origin: new THREE.Vector3(1.0, -0.9, 0), dir: new THREE.Vector3(0, 1, 0), len: 1.6 }
+    ], 0x7fd1ff);
+    capGroup.add(capArrows.group);
+    capGroup.position.set(0, 0, 0);
+    g.add(capGroup);
+
+    // --- Magnetic C-core group ---
+    const magGroup = new THREE.Group();
+    const legGeo = new THREE.BoxGeometry(0.55, 2.6, 0.55);
+    const leftLeg = new THREE.Mesh(legGeo, coreMat);
+    leftLeg.position.set(-1.3, 0, 0);
+    const rightLeg = new THREE.Mesh(legGeo, coreMat);
+    rightLeg.position.set(1.3, 0, 0);
+    const topYoke = new THREE.Mesh(new THREE.BoxGeometry(3.15, 0.55, 0.55), coreMat);
+    topYoke.position.set(0, 1.3, 0);
+    const botYoke = new THREE.Mesh(new THREE.BoxGeometry(3.15, 0.55, 0.55), coreMat);
+    botYoke.position.set(0, -1.3, 0);
+    const gapBlock = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.5, 0.55), gapMat);
+    gapBlock.position.set(1.3, 0.55, 0);
+    // coil turns
+    const coil = new THREE.Group();
+    for (let i = 0; i < 6; i++) {
+      const t = new THREE.Mesh(new THREE.TorusGeometry(0.42, 0.07, 8, 20), wireMat);
+      t.rotation.x = Math.PI / 2;
+      t.position.set(-1.3, -0.9 + i * 0.28, 0);
+      coil.add(t);
+    }
+    magGroup.add(leftLeg, rightLeg, topYoke, botYoke, gapBlock, coil);
+    const magArrows = addArrowField([
+      { origin: new THREE.Vector3(-1.3, -1.0, 0), dir: new THREE.Vector3(0, 1, 0), len: 2.0 },
+      { origin: new THREE.Vector3(0, 1.3, 0), dir: new THREE.Vector3(1, 0, 0), len: 1.2 },
+      { origin: new THREE.Vector3(1.3, 0.8, 0), dir: new THREE.Vector3(0, -1, 0), len: 0.6 }
+    ], 0x7fd1ff);
+    magGroup.add(magArrows.group);
+    magGroup.position.set(0, 0, 0);
+    g.add(magGroup);
+
+    // --- Refraction interface group ---
+    const refGroup = new THREE.Group();
+    const half1 = new THREE.Mesh(new THREE.BoxGeometry(4.0, 1.6, 2.4), new THREE.MeshStandardMaterial({ color: 0x3a6ea5, metalness: 0.1, roughness: 0.6, emissive: 0x0a1a2a, transparent: true, opacity: 0.65 }));
+    half1.position.y = -0.8;
+    const half2 = new THREE.Mesh(new THREE.BoxGeometry(4.0, 1.6, 2.4), new THREE.MeshStandardMaterial({ color: 0x8fd694, metalness: 0.1, roughness: 0.6, emissive: 0x123a18, transparent: true, opacity: 0.65 }));
+    half2.position.y = 0.8;
+    const iface = new THREE.Mesh(new THREE.BoxGeometry(4.0, 0.04, 2.4), new THREE.MeshStandardMaterial({ color: 0xffe066, emissive: 0x554400 }));
+    iface.position.y = 0;
+    refGroup.add(half1, half2, iface);
+    const refArrows = addArrowField([
+      { origin: new THREE.Vector3(-1.2, -1.4, 0), dir: new THREE.Vector3(0.8, 1, 0), len: 1.6 },
+      { origin: new THREE.Vector3(0.6, 0.0, 0), dir: new THREE.Vector3(0.8, 1, 0), len: 1.4 }
+    ], 0xffd166);
+    refGroup.add(refArrows.group);
+    refGroup.position.set(0, 0, 0);
+    g.add(refGroup);
+
+    this.meshRefs = { g, capGroup, magGroup, refGroup, slab, gapBlock, capArrows, magArrows, refArrows, topPlate, botPlate };
+  },
+
+  update() {
+    const st = this.state;
+    const r = this.meshRefs;
+    const mode = st.mode;
+    const p1 = st.p1, p2 = st.p2, p3 = st.p3;
+
+    r.capGroup.visible = mode === 'Capacitor w/ Dielectric';
+    r.magGroup.visible = mode === 'Magnetic Gap Force';
+    r.refGroup.visible = mode === 'Dielectric Refraction';
+
+    let primary = 0, secondary = 0, fieldVal = 0, primaryLabel = '', secondaryLabel = '', fieldLabel = '';
+    const eps0 = 8.854e-12, mu0 = 4 * Math.PI * 1e-7;
+
+    if (mode === 'Capacitor w/ Dielectric') {
+      const epsr = p1;
+      const V = p2 * 1e3;                 // kV -> V
+      const A = p3 * 1e-4;                // cm^2 -> m^2
+      const d = 2e-3;                     // 2 mm plate separation
+      const C0 = eps0 * A / d;
+      const C = epsr * C0;
+      const W = 0.5 * C * V * V;
+      const sigmaFree = C * V / A;
+      const sigmaBound = sigmaFree * (1 - 1 / epsr);
+      primary = C * 1e9;                  // nF
+      secondary = W * 1e3;                // mJ
+      fieldVal = V / d;                   // V/m
+      primaryLabel = 'Capacitance C [nF]';
+      secondaryLabel = 'Stored Energy W [mJ]';
+      fieldLabel = 'E-field [kV/m]';
+      // visual: slab thickness scales with epsr
+      r.slab.scale.y = 0.6 + 0.05 * epsr;
+      r.slab.material.opacity = 0.45 + 0.03 * epsr;
+      r.capArrows.setVectors([
+        { origin: new THREE.Vector3(-1.0, -0.9, 0), dir: new THREE.Vector3(0, 1, 0), len: 1.6 },
+        { origin: new THREE.Vector3(0.0, -0.9, 0), dir: new THREE.Vector3(0, 1, 0), len: 1.6 },
+        { origin: new THREE.Vector3(1.0, -0.9, 0), dir: new THREE.Vector3(0, 1, 0), len: 1.6 }
+      ]);
+    } else if (mode === 'Magnetic Gap Force') {
+      const NI = p1 * 100;                // 100 A-t units -> A-t
+      const lg = p2 * 1e-4;               // 0.1 mm -> m
+      const A = p3 * 1e-4;                // cm^2 -> m^2
+      const lc = 0.5;                     // core path length [m]
+      const mur = 1000;
+      // reluctance: core + gap
+      const Rc = lc / (mur * mu0 * A);
+      const Rg = lg / (mu0 * A);
+      const Phi = NI / (Rc + Rg);
+      const B = Phi / A;
+      const F = B * B * A / (2 * mu0);
+      primary = Phi * 1e6;                // uWb
+      secondary = F;                      // N
+      fieldVal = B;                       // T
+      primaryLabel = 'Flux Phi [uWb]';
+      secondaryLabel = 'Gap Force F [N]';
+      fieldLabel = 'B-field [T]';
+      // visual: gap block height scales with lg
+      r.gapBlock.scale.y = 0.3 + lg / 1e-3 * 0.4;
+      r.gapBlock.position.y = 0.55 + (r.gapBlock.scale.y - 0.3) * 0.25;
+      r.magArrows.setVectors([
+        { origin: new THREE.Vector3(-1.3, -1.0, 0), dir: new THREE.Vector3(0, 1, 0), len: 2.0 },
+        { origin: new THREE.Vector3(0, 1.3, 0), dir: new THREE.Vector3(1, 0, 0), len: 1.2 },
+        { origin: new THREE.Vector3(1.3, 0.8, 0), dir: new THREE.Vector3(0, -1, 0), len: 0.6 }
+      ]);
+    } else {
+      const epsr2 = p1;
+      const theta1 = p2 * Math.PI / 180;
+      const epsr1 = p3;
+      // Snell-like for D: tan(theta2) = (eps_r2/eps_r1) tan(theta1) for E refraction
+      const theta2 = Math.atan((epsr2 / epsr1) * Math.tan(theta1));
+      const D1 = eps0 * epsr1 * 1e6;      // arbitrary scale
+      const D2 = eps0 * epsr2 * 1e6;
+      primary = theta2 * 180 / Math.PI;   // deg
+      secondary = D2 / D1;                // ratio
+      fieldVal = theta2;
+      primaryLabel = 'Refracted angle theta2 [deg]';
+      secondaryLabel = 'D2/D1 ratio';
+      fieldLabel = 'theta2 [rad]';
+      // visual: rotate arrows
+      const dir1 = new THREE.Vector3(Math.sin(theta1), Math.cos(theta1), 0);
+      const dir2 = new THREE.Vector3(Math.sin(theta2), Math.cos(theta2), 0);
+      r.refArrows.setVectors([
+        { origin: new THREE.Vector3(-1.2, -1.4, 0), dir: dir1, len: 1.6 },
+        { origin: new THREE.Vector3(0.6, 0.0, 0), dir: dir2, len: 1.4 }
+      ]);
+    }
+
+    // ---- 2D chart: sweep primary output vs p1 ----
+    const W = chartEl.width, H = chartEl.height;
+    const ctx = chartEl.getContext('2d');
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = '#0b1220';
+    ctx.fillRect(0, 0, W, H);
+
+    const padL = 60, padR = 20, padT = 30, padB = 45;
+    const plotW = W - padL - padR, plotH = H - padT - padB;
+
+    // grid
+    ctx.strokeStyle = '#1e2a3a';
+    ctx.lineWidth = 1;
+    for (let i = 0; i <= 5; i++) {
+      const y = padT + plotH * i / 5;
+      ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(W - padR, y); ctx.stroke();
+    }
+    for (let i = 0; i <= 5; i++) {
+      const x = padL + plotW * i / 5;
+      ctx.beginPath(); ctx.moveTo(x, padT); ctx.lineTo(x, H - padB); ctx.stroke();
+    }
+
+    // compute sweep
+    const N = 60;
+    const xs = [], ys = [];
+    for (let i = 0; i <= N; i++) {
+      const p1v = 1 + (20 - 1) * i / N;
+      let val = 0;
+      if (mode === 'Capacitor w/ Dielectric') {
+        const V = p2 * 1e3, A = p3 * 1e-4, d = 2e-3;
+        val = (eps0 * p1v * A / d) * 1e9;
+      } else if (mode === 'Magnetic Gap Force') {
+        const NI = p1v * 100, lg = p2 * 1e-4, A = p3 * 1e-4;
+        const Rc = 0.5 / (1000 * mu0 * A), Rg = lg / (mu0 * A);
+        val = (NI / (Rc + Rg)) * 1e6;
+      } else {
+        const theta1 = p2 * Math.PI / 180;
+        val = Math.atan((p1v / p3) * Math.tan(theta1)) * 180 / Math.PI;
+      }
+      xs.push(p1v); ys.push(val);
+    }
+    const yMin = Math.min(...ys), yMax = Math.max(...ys);
+    const yRange = Math.max(yMax - yMin, 1e-9);
+
+    // curve
+    ctx.strokeStyle = '#7fd1ff';
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    for (let i = 0; i <= N; i++) {
+      const x = padL + plotW * (xs[i] - 1) / 19;
+      const y = padT + plotH * (1 - (ys[i] - yMin) / yRange);
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // current marker
+    const curX = padL + plotW * (p1 - 1) / 19;
+    const curY = padT + plotH * (1 - (primary - yMin) / yRange);
+    ctx.fillStyle = '#ffb347';
+    ctx.beginPath(); ctx.arc(curX, curY, 5, 0, Math.PI * 2); ctx.fill();
+
+    // labels
+    ctx.fillStyle = '#9fb6d6';
+    ctx.font = '12px sans-serif';
+    ctx.fillText(primaryLabel, padL, padT - 10);
+    ctx.fillText('p1 sweep', W - padR - 70, H - 12);
+    ctx.fillText(yMax.toFixed(2), 8, padT + 10);
+    ctx.fillText(yMin.toFixed(2), 8, H - padB);
+
+    setHud(
+      'Ch. 7 Problems & Capstone Solver',
+      '\\mathbf{D}=\\varepsilon\\mathbf{E},\\quad \\mathbf{B}=\\mu\\mathbf{H},\\quad F_{\\mathrm{gap}}=\\frac{B^2 A}{2\\mu_0}',
+      [
+        { k: 'Mode', v: mode },
+        { k: 'Primary Output', v: primary.toFixed(3) + ' ' + primaryLabel },
+        { k: 'Secondary Metric', v: secondary.toFixed(3) + ' ' + secondaryLabel },
+        { k: 'Energy/Field', v: fieldVal.toFixed(3) + ' ' + fieldLabel }
+      ]
+    );
+  },
+
+  tick(dt) {
+    const r = this.meshRefs;
+    if (!r) return;
+    r.g.rotation.y += dt * 0.15;
+  },
+
+  lesson: `<p>Chapter 7 capstone synthesis: dielectrics modify capacitance via <em>C = eps_r C_0</em> and store energy <em>W = ½ C V²</em>; bound charge density is <em>sigma_b = sigma_f(1 - 1/eps_r)</em>. Magnetic circuits obey MMF = NI = Phi(R_core + R_gap), with gap reluctance <em>R_g = l_g/(mu_0 A)</em>; the attractive gap force is <em>F = B²A/(2mu_0)</em>. At dielectric interfaces, normal D is continuous (no free charge) while tangential E is continuous, giving refraction <em>tan theta_2 = (eps_r2/eps_r1) tan theta_1</em>. Limiting cases: eps_r → 1 recovers vacuum; l_g → 0 maximizes flux and force; theta_1 → 0 gives no refraction.</p>`,
+  quiz: [
+    { q: 'A dielectric slab with eps_r = 4 replaces vacuum in a capacitor. The capacitance becomes:', options: ['C_0/4', '4 C_0', '2 C_0', 'unchanged'], answer: 1 },
+    { q: 'For a magnetic circuit with fixed NI, increasing the air gap l_g causes the gap force to:', options: ['increase', 'decrease', 'stay constant', 'oscillate'], answer: 1 },
+    { q: 'At a dielectric interface with no free surface charge, which quantity is continuous across the boundary?', options: ['Normal D', 'Tangential D', 'Normal E', 'Total E magnitude'], answer: 0 }
+  ]
+});
 /* === UI CONTROLLER === */
     const modSelect = document.getElementById('modSelect');
     const controlsHost = document.getElementById('controlsHost');
