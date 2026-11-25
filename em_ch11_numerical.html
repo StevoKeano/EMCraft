@@ -1543,6 +1543,107 @@ modules.push({
       ], answer: 0 }
   ]
 });
+modules.push({
+  id: 'fdtd',
+  title: '9. Finite Difference-Time Domain (FD-TD) Technique',
+  controls: [
+    { type: 'range', id: 'S', label: 'Courant number S = c dt/dx', min: 0.1, max: 1.0, step: 0.05, value: 0.5 },
+    { type: 'range', id: 'N', label: 'Number of cells', min: 20, max: 120, step: 1, value: 60 },
+    { type: 'range', id: 'amp', label: 'Source amplitude', min: 0.1, max: 2, step: 0.05, value: 1.0 }
+  ],
+  build() {
+    const st = this.state;
+    st.E = new Float32Array(130); st.H = new Float32Array(130);
+    st.Eold = new Float32Array(130); st.Hold = new Float32Array(130);
+    st.t = 0; st.step = 0;
+    st.group = new THREE.Group(); content.add(st.group);
+    st.eMesh = new THREE.Mesh(new THREE.SphereGeometry(0.09, 8, 6), new THREE.MeshBasicMaterial({ color: 0xff6b6b }));
+    st.hMesh = new THREE.Mesh(new THREE.SphereGeometry(0.07, 8, 6), new THREE.MeshBasicMaterial({ color: 0x7fd1ff }));
+    st.group.add(st.eMesh, st.hMesh);
+    st.line = new THREE.Line(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: 0xffffff }));
+    st.group.add(st.line);
+    st.group.position.set(0, 0, 0);
+    this.reset();
+  },
+  reset() {
+    const st = this.state, N = st.N;
+    st.E.fill(0); st.H.fill(0); st.Eold.fill(0); st.Hold.fill(0);
+    st.t = 0; st.step = 0;
+    st.E[Math.floor(N / 4)] = st.amp;
+    st.Eold[Math.floor(N / 4)] = st.amp;
+  },
+  update() {
+    const st = this.state;
+    st.N = Math.round(st.N);
+    this.reset();
+    const N = st.N, dx = 1 / N;
+    st.dx = dx;
+    st.pos = new Float32Array(N + 1);
+    for (let i = 0; i <= N; i++) st.pos[i] = (i / N - 0.5) * 6;
+    st.geom = new THREE.BufferGeometry();
+    st.geom.setAttribute('position', new THREE.BufferAttribute(new Float32Array((N + 1) * 3), 3));
+    st.line.geometry.dispose(); st.line.geometry = st.geom;
+    st.eMesh.position.set(st.pos[Math.floor(N / 4)], 0, 0);
+    st.hMesh.position.set(st.pos[Math.floor(N / 4)] + dx * 3, 0, 0);
+  },
+  tick(dt) {
+    const st = this.state, N = st.N, S = st.S, dx = 1 / N;
+    const c = 1, eps = 1, mu = 1;
+    const dtStep = S * dx / c;
+    const E = st.E, H = st.H, Eo = st.Eold, Ho = st.Hold;
+    for (let i = 1; i < N; i++) Eo[i] = E[i] + (dtStep / (eps * dx)) * (H[i] - H[i - 1]);
+    for (let i = 0; i < N; i++) Ho[i] = H[i] + (dtStep / (mu * dx)) * (Eo[i + 1] - Eo[i]);
+    Eo[0] = 0; Eo[N] = 0;
+    for (let i = 0; i <= N; i++) { E[i] = Eo[i]; H[i] = Ho[i]; }
+    st.step++;
+    st.t += dtStep;
+    const src = Math.floor(N / 4);
+    E[src] += st.amp * Math.sin(2 * Math.PI * st.step * 0.08) * 0.15;
+    const pos = st.geom.attributes.position.array;
+    for (let i = 0; i <= N; i++) {
+      pos[i * 3] = st.pos[i];
+      pos[i * 3 + 1] = E[i] * 0.6;
+      pos[i * 3 + 2] = 0;
+    }
+    st.geom.attributes.position.needsUpdate = true;
+    st.eMesh.position.set(st.pos[src], E[src] * 0.6, 0);
+    st.hMesh.position.set(st.pos[src] + dx * 3, H[src] * 0.6, 0);
+    this.drawChart();
+    setHud('FD-TD leapfrog', 'E^{n+1}_i=E^n_i+\\frac{\\Delta t}{\\varepsilon\\Delta x}(H^n_{i+1/2}-H^n_{i-1/2})',
+      [{ k: 'S', v: S.toFixed(2) }, { k: 'cells', v: N }, { k: 'step', v: st.step }]);
+  },
+  drawChart() {
+    const st = this.state, N = st.N, ctx = chartEl.getContext('2d');
+    const W = chartEl.width, Hh = chartEl.height;
+    ctx.clearRect(0, 0, W, Hh);
+    ctx.fillStyle = '#0b1020'; ctx.fillRect(0, 0, W, Hh);
+    ctx.strokeStyle = '#223'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(0, Hh / 2); ctx.lineTo(W, Hh / 2); ctx.stroke();
+    const scale = Hh * 0.35;
+    ctx.strokeStyle = '#ff6b6b'; ctx.lineWidth = 2; ctx.beginPath();
+    for (let i = 0; i <= N; i++) {
+      const x = (i / N) * W, y = Hh / 2 - st.E[i] * scale;
+      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+    ctx.strokeStyle = '#7fd1ff'; ctx.lineWidth = 2; ctx.beginPath();
+    for (let i = 0; i <= N; i++) {
+      const x = (i / N) * W, y = Hh / 2 - st.H[i] * scale;
+      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+    ctx.fillStyle = '#ff6b6b'; ctx.fillText('E(x)', 8, 16);
+    ctx.fillStyle = '#7fd1ff'; ctx.fillText('H(x)', 8, 32);
+  },
+  lesson: String.raw`The Yee grid staggers $E$ and $H$ in space and time: $E_i^n$ sits at integer nodes, $H_{i+1/2}^{n+1/2}$ at half-integer nodes. Leapfrog updates give second-order accuracy:
+$E_i^{n+1}=E_i^n+\frac{\Delta t}{\varepsilon\Delta x}(H_{i+1/2}^n-H_{i-1/2}^n)$,
+$H_{i+1/2}^{n+1/2}=H_{i+1/2}^{n-1/2}+\frac{\Delta t}{\mu\Delta x}(E_{i+1}^n-E_i^n)$.
+Stability requires the Courant condition $S=c\Delta t/\Delta x\le 1$; $S=1$ is the magic time step with no numerical dispersion in 1D. For $S<1$ the pulse disperses and trails ripple.`,
+  quiz: [
+    { q: 'What is the Courant stability limit for 1D FD-TD?', options: ['S <= 1', 'S >= 1', 'S = 0.5 exactly', 'No limit'], answer: 0 },
+    { q: 'Why are E and H staggered on the Yee grid?', options: ['To satisfy Maxwell curl equations with centered differences', 'To reduce memory', 'To make the pulse faster', 'To avoid boundary conditions'], answer: 0 }
+  ]
+});
 /* === UI CONTROLLER === */
 
 let active = null;
