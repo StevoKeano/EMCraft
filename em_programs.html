@@ -1671,6 +1671,117 @@ modules.push({
     { q: 'As line length increases, the input impedance in the complex plane:', options: ['moves in a straight line', 'spirals inward', 'stays fixed', 'spirals outward'], answer: 1 }
   ]
 });
+modules.push({
+  id: 'v_level',
+  title: '11. V-LEVEL: Transmission Line Voltage & Current Envelopes',
+  controls: [
+    { id: 'zl', label: 'Z_L / Z_0', type: 'range', min: 0.1, max: 10, step: 0.1, value: 2.5 },
+    { id: 'len', label: 'Electrical length (lambda)', type: 'range', min: 1, max: 10, step: 0.1, value: 4 },
+    { id: 'alpha', label: 'Loss alpha (Np/lambda)', type: 'range', min: 0, max: 0.1, step: 0.005, value: 0.02 }
+  ],
+  state: { zl: 2.5, len: 4, alpha: 0.02, swr: 1, vmax: 1, vmin: 1 },
+  build() {
+    const g = new THREE.Group();
+    const lineMat = new THREE.MeshStandardMaterial({ color: 0x9fb7d4, metalness: 0.6, roughness: 0.35 });
+    const line = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 10, 12), lineMat);
+    line.rotation.z = Math.PI / 2;
+    line.position.x = 5;
+    g.add(line);
+    const vRibbon = new THREE.Mesh(
+      new THREE.BoxGeometry(10, 0.035, 1),
+      new THREE.MeshStandardMaterial({ color: 0xff6b6b, transparent: true, opacity: 0.55, emissive: 0x441111 })
+    );
+    vRibbon.position.set(5, 0.55, 0);
+    g.add(vRibbon);
+    const iRibbon = new THREE.Mesh(
+      new THREE.BoxGeometry(10, 0.035, 1),
+      new THREE.MeshStandardMaterial({ color: 0x5fd3ff, transparent: true, opacity: 0.55, emissive: 0x113344 })
+    );
+    iRibbon.position.set(5, -0.55, 0);
+    g.add(iRibbon);
+    const vEnv = new THREE.Mesh(new THREE.BoxGeometry(10, 0.02, 0.04), new THREE.MeshBasicMaterial({ color: 0xffb0b0 }));
+    vEnv.position.set(5, 0.55, 0.52);
+    g.add(vEnv);
+    const iEnv = new THREE.Mesh(new THREE.BoxGeometry(10, 0.02, 0.04), new THREE.MeshBasicMaterial({ color: 0xb0e8ff }));
+    iEnv.position.set(5, -0.55, 0.52);
+    g.add(iEnv);
+    const vMark = new THREE.Mesh(new THREE.SphereGeometry(0.09, 12, 8), new THREE.MeshBasicMaterial({ color: 0xff4444 }));
+    const iMark = new THREE.Mesh(new THREE.SphereGeometry(0.09, 12, 8), new THREE.MeshBasicMaterial({ color: 0x44bbff }));
+    g.add(vMark, iMark);
+    content.add(g);
+    this.group = g; this.vRibbon = vRibbon; this.iRibbon = iRibbon;
+    this.vEnv = vEnv; this.iEnv = iEnv; this.vMark = vMark; this.iMark = iMark;
+  },
+  update() {
+    const st = this.state;
+    const zl = st.zl, L = st.len, a = st.alpha;
+    const gamma = (zl - 1) / (zl + 1);
+    const absG = Math.abs(gamma);
+    const swr = (1 + absG) / (1 - absG);
+    const vmax = 1 + absG, vmin = 1 - absG;
+    st.swr = swr; st.vmax = vmax; st.vmin = vmin;
+    const beta = 2 * Math.PI;
+    const phi = gamma >= 0 ? 0 : Math.PI;
+    const decay = Math.exp(-a * L);
+    const vAmp = decay * Math.sqrt(1 + absG * absG + 2 * absG * Math.cos(phi));
+    const iAmp = decay * Math.sqrt(1 + absG * absG - 2 * absG * Math.cos(phi));
+    this.vRibbon.scale.z = Math.max(0.05, vAmp);
+    this.iRibbon.scale.z = Math.max(0.05, iAmp);
+    this.vEnv.scale.z = Math.max(0.05, vmax * decay);
+    this.iEnv.scale.z = Math.max(0.05, vmax * decay);
+    const zVmax = (phi === 0 ? 0 : Math.PI / (2 * beta)) % (Math.PI / beta);
+    const zVmin = zVmax + Math.PI / (2 * beta);
+    this.vMark.position.set(zVmax, 0.55, 0.55);
+    this.iMark.position.set(zVmin, -0.55, 0.55);
+    setHud('V-level', '|V(z)|=|V^{+}|\\sqrt{1+|\\Gamma|^{2}+2|\\Gamma|\\cos(2\\beta z+\\phi)}', [
+      { k: 'SWR', v: swr.toFixed(2) },
+      { k: 'Vmax', v: vmax.toFixed(2) },
+      { k: 'Vmin', v: vmin.toFixed(2) }
+    ]);
+    const ctx = chartEl.getContext('2d');
+    const w = chartEl.width, h = chartEl.height;
+    ctx.clearRect(0, 0, w, h);
+    ctx.fillStyle = '#0b1220'; ctx.fillRect(0, 0, w, h);
+    const pad = 34, x0 = pad, x1 = w - pad, y0 = h - pad, y1 = pad;
+    ctx.strokeStyle = '#334155'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y0); ctx.moveTo(x0, y0); ctx.lineTo(x0, y1); ctx.stroke();
+    ctx.fillStyle = '#94a3b8'; ctx.font = '12px sans-serif';
+    ctx.fillText('|V(z)|', x0 + 4, y1 + 12); ctx.fillText('|I(z)|', x0 + 4, y1 + 26);
+    ctx.fillText('z / lambda', x1 - 70, y0 + 16);
+    const N = 400;
+    const plot = (fn, color) => {
+      ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.beginPath();
+      for (let i = 0; i <= N; i++) {
+        const z = (i / N) * L;
+        const val = fn(z);
+        const px = x0 + (z / L) * (x1 - x0);
+        const py = y0 - (val / (vmax + 0.1)) * (y0 - y1);
+        if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+      }
+      ctx.stroke();
+    };
+    plot(z => Math.exp(-a * z) * Math.sqrt(1 + absG * absG + 2 * absG * Math.cos(2 * beta * z + phi)), '#ff6b6b');
+    plot(z => Math.exp(-a * z) * Math.sqrt(1 + absG * absG - 2 * absG * Math.cos(2 * beta * z + phi)), '#5fd3ff');
+    const mark = (z, val, color, label) => {
+      const px = x0 + (z / L) * (x1 - x0);
+      const py = y0 - (val / (vmax + 0.1)) * (y0 - y1);
+      ctx.fillStyle = color; ctx.beginPath(); ctx.arc(px, py, 4, 0, 2 * Math.PI); ctx.fill();
+      ctx.fillStyle = '#e2e8f0'; ctx.font = '11px sans-serif'; ctx.fillText(label, px + 6, py - 6);
+    };
+    mark(zVmax, vmax, '#ff4444', 'Vmax');
+    mark(zVmin, vmin, '#ff4444', 'Vmin');
+    mark(zVmin, vmax, '#44bbff', 'Imax');
+    mark(zVmax, vmin, '#44bbff', 'Imin');
+  },
+  tick(dt) {
+    this.group.rotation.y += dt * 0.08;
+  },
+  lesson: String.raw`For a mismatched transmission line, the voltage envelope is $|V(z)|=|V^{+}|\sqrt{1+|\Gamma|^{2}+2|\Gamma|\cos(2\beta z+\phi)}$ and the current envelope is $|I(z)|=|I^{+}|\sqrt{1+|\Gamma|^{2}-2|\Gamma|\cos(2\beta z+\phi)}$. The two envelopes are antiphase: where $|V|$ reaches $V_{\max}=|V^{+}|(1+|\Gamma|)$, $|I|$ reaches $I_{\min}=|I^{+}|(1-|\Gamma|)$, and vice versa. Maxima and minima repeat every $\lambda/4$ along the line. The standing-wave ratio is $\mathrm{SWR}=(1+|\Gamma|)/(1-|\Gamma|)=V_{\max}/V_{\min}$. With loss, both envelopes decay as $e^{-\alpha z}$, but the $\lambda/4$ spacing and antiphase relationship remain. Power flow is $P=\tfrac12\mathrm{Re}\{V I^{*}\}$; the net real power decreases along the line due to attenuation, while the reactive standing-wave component does not transport net power.`,
+  quiz: [
+    { q: 'How far apart are adjacent voltage maxima on a mismatched line?', options: ['lambda/4', 'lambda/2', 'lambda', '3 lambda/4'], answer: 0 },
+    { q: 'At a voltage minimum, what happens to the current magnitude?', options: ['It is also minimum', 'It is maximum', 'It is zero everywhere', 'It equals Vmax'], answer: 1 }
+  ]
+});
 /* === UI CONTROLLER === */
 
 let active = null;
