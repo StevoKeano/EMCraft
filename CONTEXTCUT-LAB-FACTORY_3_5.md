@@ -221,7 +221,8 @@ def verify_html(html: str, expected_ids: list[str]) -> list[str]:
         raise AssertionError("Found this.setHud(...); must call global setHud(...)")
     if re.search(r"quiz:\s*\[[^\]]*?\bcorrect\s*:", mod_section, re.S):
         raise AssertionError("Found quiz using correct: instead of answer:")
-
+    for bad in ("this.state =", "this.state.", "this.setHud(", "key:", "type: 'checkbox'", 'type: "checkbox"'):
+        assert bad not in mod_section, f"Forbidden pattern found in modules: {bad}"
     script_body = html.split('<script type="module">')[1].split("</script>")[0]
     with tempfile.NamedTemporaryFile(suffix=".mjs", mode="w", encoding="utf-8") as tf:
         tf.write(script_body)

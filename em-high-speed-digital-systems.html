@@ -278,8 +278,8 @@ modules.push({
     this.updateGeometry();
   },
 
-  update() {
-    const st = this.state;
+  update(stateArg) {
+    const st = stateArg || this.state || {};
     const Rs = st.Rs, RL = st.RL, L = st.L;
     const Cp = st.Cp * 1e-12;   // F/m
     const Lp = st.Lp * 1e-9;    // H/m
@@ -598,8 +598,8 @@ modules.push({
     this._chartH = chartEl.height;
   },
 
-  update() {
-    const st = this.state;
+  update(stateArg) {
+    const st = stateArg || this.state || {};
     const I = st.I, A = st.A, fHz = st.f * 1e6, r = st.r;
     const mu0 = 4 * Math.PI * 1e-7;
     const c = 3e8;
@@ -858,8 +858,8 @@ modules.push({
     );
   },
 
-  update() {
-    const st = this.state;
+  update(stateArg) {
+    const st = stateArg || this.state || {};
     const C = 2.998e8;
     const vp = st.vp * C;
     const tr = st.tr * 1e-9;
@@ -1154,8 +1154,8 @@ modules.push({
     st._phase = 0;
   },
 
-  update() {
-    const st = this.state;
+  update(stateArg) {
+    const st = stateArg || this.state || {};
     const c = 2.998e8;
     const vp = c / Math.sqrt(st.er);          // m/s
     const tr = st.tr * 1e-9;                  // s
@@ -1445,8 +1445,8 @@ modules.push({
     this._phase = 0;
   },
 
-  update() {
-    const st = this.state;
+  update(stateArg) {
+    const st = stateArg || this.state || {};
     const c = 2.998e8;
     const vp = st.vp * c;                 // m/s
     const tr = st.tr * 1e-9;              // s
@@ -1690,8 +1690,8 @@ modules.push({
     );
   },
 
-  update() {
-    const st = this.state;
+  update(stateArg) {
+    const st = stateArg || this.state || {};
     const tr = Number(st.tr);
     const fprobe = Number(st.fprobe);
 
@@ -2002,8 +2002,8 @@ modules.push({
     st._chart = { phase: 0 };
   },
 
-  update() {
-    const st = this.state;
+  update(stateArg) {
+    const st = stateArg || this.state || {};
     const z0 = st.z0, zl = st.zl, lenW = st.len;
 
     const gamma = (zl - z0) / (zl + z0);
@@ -2261,8 +2261,8 @@ modules.push({
     this._chartH = chartEl.height;
   },
 
-  update() {
-    const st = this.state;
+  update(stateArg) {
+    const st = stateArg || this.state || {};
     const C = st.C * 1e-12;
     const Z0 = st.Z0;
     const tau = Z0 * C;              // seconds
@@ -2553,8 +2553,8 @@ modules.push({
     this._ctx = chartEl.getContext('2d');
   },
 
-  update() {
-    const st = this.state;
+  update(stateArg) {
+    const st = stateArg || this.state || {};
     const Z0 = st.Z0;
     const R = st.Rterm;
     const term = st.term;
@@ -2804,8 +2804,8 @@ modules.push({
     this.chartCtx = chartEl.getContext('2d');
   },
 
-  update() {
-    const st = this.state;
+  update(stateArg) {
+    const st = stateArg || this.state || {};
     const w = st.w, h = st.h, er = st.er;
 
     // ---- analytic model (per unit length) ----
@@ -3081,8 +3081,8 @@ modules.push({
     ], 0x7fd1ff);
   },
 
-  update() {
-    const st = this.state;
+  update(stateArg) {
+    const st = stateArg || this.state || {};
     const n = parseInt(st.layers, 10);
     const w = st.traceW;
     const h = st.dielH;
@@ -3232,8 +3232,8 @@ modules.push({
     ]);
   },
 
-  update() {
-    const st = this.state;
+  update(stateArg) {
+    const st = stateArg || this.state || {};
     const s = st.spacing;      // mm
     const L = st.length;       // m
     const tr = st.tr;          // ns
