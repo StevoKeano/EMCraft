@@ -9,7 +9,7 @@
 <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
 <script type="importmap">
-{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" } }
+{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js", "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/" } }
 </script>
 <style>
   :root { --bg:#0b1020; --panel:#121a2e; --ink:#e8eefc; --accent:#7fd1ff; --muted:#8fa3c8; }
@@ -81,6 +81,7 @@
 
 <script type="module">
 import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
 const viewport = document.getElementById('viewport');
 const chartEl  = document.getElementById('chartEl');
@@ -96,6 +97,9 @@ scene.background = new THREE.Color(0x0b1020);
 const camera = new THREE.PerspectiveCamera(45, viewport.clientWidth / viewport.clientHeight, 0.1, 200);
 camera.position.set(6, 5, 9);
 camera.lookAt(0, 0, 0);
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.06;
 
 scene.add(new THREE.AmbientLight(0xffffff, 0.55));
 const key = new THREE.DirectionalLight(0xffffff, 1.1);
@@ -2304,6 +2308,7 @@ function animate(now) {
   const dt = Math.min((now - last) / 1000, 0.05);
   last = now;
   if (activeModule && typeof activeModule.tick === 'function') activeModule.tick(dt);
+  controls.update();
   renderer.render(scene, camera);
   requestAnimationFrame(animate);
 }
