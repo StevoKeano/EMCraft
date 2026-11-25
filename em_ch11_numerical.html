@@ -161,7 +161,10 @@ const KATEX_OPTS = {
 function setHud(titleStr, latexEqStr, rows) {
   document.getElementById('hudTitle').textContent = titleStr;
   const eq = document.getElementById('hudEq');
-  eq.innerHTML = latexEqStr;
+  const trimmedEq = (latexEqStr || '').trim();
+  eq.innerHTML = (trimmedEq && !trimmedEq.startsWith('$') && !trimmedEq.startsWith('\\(') && !trimmedEq.startsWith('\\['))
+    ? `$${trimmedEq}$`
+    : trimmedEq;
   renderTex(eq, KATEX_OPTS);
   const rowsEl = document.getElementById('hudRows');
   rowsEl.innerHTML = '';
