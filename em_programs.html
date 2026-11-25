@@ -885,6 +885,158 @@ With $di/dt \approx I/t_r$, faster edges and more simultaneous drivers both rais
     { q: 'Which change most directly reduces ground bounce?', options: ['Increasing package inductance', 'Slowing the edge rate (larger tr)', 'Adding more simultaneous drivers', 'Raising the supply voltage'], answer: 1 }
   ]
 });
+modules.push({
+  id: 'arraypatgain',
+  title: '6. ARRAYPATGAIN: Linear Antenna Array Pattern & Gain',
+  controls: [
+    { id: 'N', type: 'range', label: 'N elements', min: 2, max: 16, step: 1, value: 8 },
+    { id: 'd', type: 'range', label: 'd / lambda', min: 0.1, max: 1.0, step: 0.01, value: 0.5 },
+    { id: 'delta', type: 'range', label: 'delta (deg)', min: -180, max: 180, step: 1, value: 0 }
+  ],
+  build() {
+    const st = this.state;
+    Object.assign(st, { N: 8, d: 0.5, delta: 0 });
+
+    // element group along x-axis
+    this.elems = new THREE.Group();
+    content.add(this.elems);
+    this.spheres = [];
+    for (let n = 0; n < 16; n++) {
+      const s = new THREE.Mesh(
+        new THREE.SphereGeometry(0.055, 16, 12),
+        new THREE.MeshStandardMaterial({ color: 0xffd27f, emissive: 0x552200, roughness: 0.4 })
+      );
+      this.elems.add(s);
+      this.spheres.push(s);
+    }
+    // feed line
+    const lineGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(-4, 0, 0), new THREE.Vector3(4, 0, 0)]);
+    this.elems.add(new THREE.Line(lineGeo, new THREE.LineBasicMaterial({ color: 0x4a6fa5 })));
+
+    // polar pattern surface (rebuilt each update)
+    this.pattern = new THREE.Mesh(
+      new THREE.BufferGeometry(),
+      new THREE.MeshStandardMaterial({ color: 0x7fd1ff, transparent: true, opacity: 0.55, side: THREE.DoubleSide, roughness: 0.5 })
+    );
+    content.add(this.pattern);
+
+    // axis helper
+    addArrowField([
+      { origin: new THREE.Vector3(0, 0, 0), dir: new THREE.Vector3(0, 1, 0), len: 2.2 },
+      { origin: new THREE.Vector3(0, 0, 0), dir: new THREE.Vector3(1, 0, 0), len: 2.2 }
+    ], 0x88aacc);
+
+    this.ctx = chartEl.getContext('2d');
+  },
+
+  af(theta, N, d, delta) {
+    const kd = 2 * Math.PI * d;
+    const psi = kd * Math.cos(theta) + delta;
+    // |sum e^{j n psi}| = |sin(N psi/2) / sin(psi/2)|
+    const s = Math.sin(psi / 2);
+    if (Math.abs(s) < 1e-9) return N;
+    return Math.abs(Math.sin(N * psi / 2) / s);
+  },
+
+  update() {
+    const st = this.state;
+    const N = Math.round(st.N), d = st.d, delta = st.delta * Math.PI / 180;
+    const kd = 2 * Math.PI * d;
+
+    // place elements
+    const span = (N - 1) * d * 2.0;
+    for (let n = 0; n < 16; n++) {
+      const s = this.spheres[n];
+      s.visible = n < N;
+      s.position.set((n - (N - 1) / 2) * d * 2.0, 0, 0);
+    }
+    this.elems.children[this.elems.children.length - 1].geometry.dispose?.();
+    // rebuild feed line to match span
+    const lg = new THREE.BufferGeometry().setFromPoints([
+      new THREE.Vector3(-span / 2 - 0.2, 0, 0), new THREE.Vector3(span / 2 + 0.2, 0, 0)
+    ]);
+    this.elems.children[this.elems.children.length - 1].geometry = lg;
+
+    // pattern surface: revolve |AF(theta)| about x-axis
+    const NT = 96, NP = 48;
+    const pos = [], idx = [];
+    for (let i = 0; i <= NT; i++) {
+      const th = i / NT * Math.PI;
+      const r = this.af(th, N, d, delta) / N; // normalized 0..1
+      for (let j = 0; j <= NP; j++) {
+        const ph = j / NP * Math.PI * 2;
+        const y = r * Math.sin(th) * Math.cos(ph) * 2.2;
+        const z = r * Math.sin(th) * Math.sin(ph) * 2.2;
+        const x = r * Math.cos(th) * 2.2;
+        pos.push(x, y, z);
+      }
+    }
+    for (let i = 0; i < NT; i++) for (let j = 0; j < NP; j++) {
+      const a = i * (NP + 1) + j, b = a + NP + 1;
+      idx.push(a, b, a + 1, b, b + 1, a + 1);
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    g.setIndex(idx);
+    g.computeVertexNormals();
+    this.pattern.geometry.dispose();
+    this.pattern.geometry = g;
+
+    // chart: polar plot of |AF(theta)| vs theta (0..pi)
+    const ctx = this.ctx, W = chartEl.width, H = chartEl.height;
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = '#0b1220'; ctx.fillRect(0, 0, W, H);
+    const cx = W / 2, cy = H / 2, R = Math.min(W, H) * 0.42;
+
+    // grid rings
+    ctx.strokeStyle = '#22334a'; ctx.lineWidth = 1;
+    for (let k = 1; k <= 4; k++) {
+      ctx.beginPath(); ctx.arc(cx, cy, R * k / 4, 0, Math.PI * 2); ctx.stroke();
+    }
+    ctx.beginPath(); ctx.moveTo(cx - R, cy); ctx.lineTo(cx + R, cy); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(cx, cy - R); ctx.lineTo(cx, cy + R); ctx.stroke();
+
+    // pattern curve (theta measured from +x axis, drawn as polar)
+    ctx.strokeStyle = '#7fd1ff'; ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    for (let i = 0; i <= 360; i++) {
+      const th = i / 360 * Math.PI * 2;
+      const r = this.af(th, N, d, delta) / N;
+      const x = cx + R * r * Math.cos(th);
+      const y = cy - R * r * Math.sin(th);
+      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.closePath(); ctx.stroke();
+
+    // main beam direction marker
+    const thMax = Math.acos(Math.max(-1, Math.min(1, -delta / kd)));
+    ctx.fillStyle = '#ffd27f';
+    ctx.beginPath();
+    ctx.arc(cx + R * Math.cos(thMax), cy - R * R * 0 + cy - R * Math.sin(thMax) * 1, 4, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = '#9fb6d0'; ctx.font = '12px monospace';
+    ctx.fillText('|AF(theta)| polar plot', 10, 18);
+
+    setHud('Array pattern',
+      'AF(\\theta)=\\sum_{n=0}^{N-1}e^{j n(k d\\cos\\theta+\\delta)}',
+      [{ k: 'N', v: String(N) }, { k: 'd/lambda', v: d.toFixed(2) }, { k: 'delta', v: st.delta.toFixed(0) + ' deg' }]);
+  },
+
+  tick(dt) {
+    this.elems.rotation.y += dt * 0.15;
+  },
+
+  lesson: String.raw`For an $N$-element uniform linear array the array factor is
+$AF(\theta)=\sum_{n=0}^{N-1}e^{j n(k d\cos\theta+\delta)}$, which sums to
+$|AF|=\left|\frac{\sin(N\psi/2)}{\sin(\psi/2)}\right|$ with $\psi=k d\cos\theta+\delta$.
+The broadside maximum occurs when $\psi=0$, i.e. $\cos\theta=-\delta/(k d)$: a progressive phase $\delta$ steers the main beam off broadside. Grating lobes (extra maxima of the same height) appear when $d>\lambda$, since $\psi$ then spans more than $2\pi$ across $\theta\in[0,\pi]$; keeping $d\le\lambda$ (ideally $d=\lambda/2$) guarantees a single main lobe. The directivity gain grows roughly as $N$ for a fixed spacing.`,
+
+  quiz: [
+    { q: 'Grating lobes appear in a uniform linear array when:', options: ['d > lambda', 'd < lambda/2', 'delta = 0', 'N is even'], answer: 0 },
+    { q: 'The main beam is steered off broadside by:', options: ['a progressive phase delta between elements', 'changing N only', 'reducing d below lambda/2', 'removing the feed line'], answer: 0 }
+  ]
+});
 /* === UI CONTROLLER === */
 
 let active = null;
