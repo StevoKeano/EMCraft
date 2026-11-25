@@ -2182,6 +2182,827 @@ which repeats every half wavelength.
     }
   ]
 });
+modules.push({
+  id: 'reflections_capacitance',
+  title: '8. Reflections in the Presence of Capacitance',
+  controls: [
+    { type: 'range', id: 'C', label: 'Load capacitance C (pF)', min: 1, max: 100, step: 1, value: 30 },
+    { type: 'range', id: 'Z0', label: 'Line impedance Z0 (ohm)', min: 20, max: 150, step: 1, value: 50 },
+    { type: 'range', id: 'tr', label: 'Input edge rise time tr (ns)', min: 0.1, max: 10, step: 0.1, value: 1.0 }
+  ],
+
+  build() {
+    const st = this.state;
+    Object.assign(st, { C: 30, Z0: 50, tr: 1.0, t: 0, V0: 1.0 });
+
+    // ---- 3D scene: transmission line + capacitor at the load ----
+    const lineLen = 8;
+    const lineGeo = new THREE.CylinderGeometry(0.06, 0.06, lineLen, 16);
+    const lineMat = new THREE.MeshStandardMaterial({ color: 0x2f6f9f, metalness: 0.6, roughness: 0.35 });
+    const line = new THREE.Mesh(lineGeo, lineMat);
+    line.rotation.z = Math.PI / 2;
+    line.position.set(0, 0, 0);
+    content.add(line);
+
+    // ground plane reference
+    const gndGeo = new THREE.CylinderGeometry(0.05, 0.05, lineLen, 12);
+    const gndMat = new THREE.MeshStandardMaterial({ color: 0x555555, metalness: 0.4, roughness: 0.6 });
+    const gnd = new THREE.Mesh(gndGeo, gndMat);
+    gnd.rotation.z = Math.PI / 2;
+    gnd.position.set(0, -0.55, 0);
+    content.add(gnd);
+
+    // capacitor plates at the load end (x = +lineLen/2)
+    const plateGeo = new THREE.BoxGeometry(0.06, 0.5, 0.5);
+    const plateMat = new THREE.MeshStandardMaterial({ color: 0xd9b45a, metalness: 0.8, roughness: 0.25 });
+    const plateTop = new THREE.Mesh(plateGeo, plateMat);
+    plateTop.position.set(lineLen / 2 + 0.12, -0.15, 0);
+    content.add(plateTop);
+    const plateBot = new THREE.Mesh(plateGeo, plateMat);
+    plateBot.position.set(lineLen / 2 + 0.12, -0.65, 0);
+    content.add(plateBot);
+
+    // vertical stub connecting line to top plate
+    const stubGeo = new THREE.CylinderGeometry(0.05, 0.05, 0.35, 12);
+    const stub = new THREE.Mesh(stubGeo, lineMat);
+    stub.position.set(lineLen / 2, -0.15, 0);
+    content.add(stub);
+
+    // incident wavefront (moving right) and reflected wavefront (moving left)
+    const wfGeo = new THREE.TorusGeometry(0.42, 0.05, 10, 32);
+    const incMat = new THREE.MeshStandardMaterial({ color: 0x7fd1ff, emissive: 0x2a6f9f, emissiveIntensity: 0.8 });
+    const refMat = new THREE.MeshStandardMaterial({ color: 0xff8a5c, emissive: 0x8a3a1a, emissiveIntensity: 0.8 });
+    const incWave = new THREE.Mesh(wfGeo, incMat);
+    incWave.rotation.y = Math.PI / 2;
+    content.add(incWave);
+    const refWave = new THREE.Mesh(wfGeo, refMat);
+    refWave.rotation.y = Math.PI / 2;
+    content.add(refWave);
+
+    // source marker
+    const srcGeo = new THREE.SphereGeometry(0.16, 16, 12);
+    const srcMat = new THREE.MeshStandardMaterial({ color: 0x9be7ff, emissive: 0x2a6f9f, emissiveIntensity: 0.6 });
+    const src = new THREE.Mesh(srcGeo, srcMat);
+    src.position.set(-lineLen / 2, 0, 0);
+    content.add(src);
+
+    this._lineLen = lineLen;
+    this._incWave = incWave;
+    this._refWave = refWave;
+    this._plateTop = plateTop;
+    this._plateBot = plateBot;
+    this._src = src;
+
+    // ---- 2D chart ----
+    const ctx = chartEl.getContext('2d');
+    this._ctx = ctx;
+    this._chartW = chartEl.width;
+    this._chartH = chartEl.height;
+  },
+
+  update() {
+    const st = this.state;
+    const C = st.C * 1e-12;
+    const Z0 = st.Z0;
+    const tau = Z0 * C;              // seconds
+    const tauNs = tau * 1e9;
+    const trNs = st.tr;
+
+    // reflection coefficient at the capacitor (instantaneous): rho = (ZL - Z0)/(ZL + Z0)
+    // For a capacitor the instantaneous ZL -> 0 at the edge, so rho -> -1 (short-like)
+    const rhoInstant = -1.0;
+    // Effective reflection amplitude for a step through a capacitor:
+    // V_load(t) = V0 * (1 - exp(-t/tau))  (for ideal step, single reflection)
+    // The reflected wave amplitude at the load is V_ref = V_load - V0 = -V0 exp(-t/tau)
+    const settlingNs = 5 * tauNs;
+
+    setHud(
+      'Capacitive Reflection',
+      String.raw`$\tau = Z_0 C,\quad \rho_{\text{inst}} = -1$`,
+      [
+        { k: 'tau', v: tauNs.toFixed(2) + ' ns' },
+        { k: 'reflection amplitude', v: 'V0 * exp(-t/tau)' },
+        { k: 'settling time (5 tau)', v: settlingNs.toFixed(2) + ' ns' },
+        { k: 'edge rise time', v: trNs.toFixed(2) + ' ns' }
+      ]
+    );
+
+    // ---- 3D wavefront animation ----
+    const t = st.t;
+    const L = this._lineLen;
+    const speed = 1.0; // normalized units per second
+    const incPos = -L / 2 + ((t * speed) % L);
+    const refPos = L / 2 - ((t * speed) % L);
+
+    this._incWave.position.set(incPos, 0, 0);
+    this._refWave.position.set(refPos, 0, 0);
+
+    // fade reflected wave as capacitor charges
+    const chargeFrac = 1 - Math.exp(-t / Math.max(tau, 1e-12));
+    this._refWave.material.opacity = 0.25 + 0.75 * (1 - chargeFrac);
+    this._refWave.material.transparent = true;
+
+    // plate glow proportional to charge
+    const glow = 0.2 + 0.8 * chargeFrac;
+    this._plateTop.material.emissive = new THREE.Color(0xd9b45a).multiplyScalar(glow);
+    this._plateBot.material.emissive = new THREE.Color(0xd9b45a).multiplyScalar(glow);
+
+    // ---- 2D chart: load voltage vs time ----
+    const ctx = this._ctx;
+    const W = this._chartW;
+    const H = this._chartH;
+    ctx.clearRect(0, 0, W, H);
+
+    // background
+    ctx.fillStyle = '#0b1220';
+    ctx.fillRect(0, 0, W, H);
+
+    const padL = 60, padR = 20, padT = 30, padB = 50;
+    const plotW = W - padL - padR;
+    const plotH = H - padT - padB;
+
+    // axes
+    ctx.strokeStyle = '#3a4a63';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(padL, padT);
+    ctx.lineTo(padL, padT + plotH);
+    ctx.lineTo(padL + plotW, padT + plotH);
+    ctx.stroke();
+
+    // time axis range: 0 .. max(6*tau, 3*tr)
+    const tMaxNs = Math.max(6 * tauNs, 3 * trNs, 1);
+    const tMax = tMaxNs * 1e-9;
+
+    // grid lines
+    ctx.strokeStyle = '#1e2a3d';
+    ctx.lineWidth = 1;
+    for (let i = 1; i <= 5; i++) {
+      const x = padL + (plotW * i) / 5;
+      ctx.beginPath();
+      ctx.moveTo(x, padT);
+      ctx.lineTo(x, padT + plotH);
+      ctx.stroke();
+    }
+    for (let i = 1; i <= 4; i++) {
+      const y = padT + plotH - (plotH * i) / 4;
+      ctx.beginPath();
+      ctx.moveTo(padL, y);
+      ctx.lineTo(padL + plotW, y);
+      ctx.stroke();
+    }
+
+    // labels
+    ctx.fillStyle = '#9fb3c8';
+    ctx.font = '13px sans-serif';
+    ctx.fillText('Load voltage V_L(t)', padL, padT - 10);
+    ctx.fillText('time (ns)', padL + plotW - 60, padT + plotH + 30);
+
+    // y axis ticks
+    ctx.fillStyle = '#7f93a8';
+    ctx.font = '12px sans-serif';
+    for (let i = 0; i <= 4; i++) {
+      const v = (i / 4) * 1.0;
+      const y = padT + plotH - (plotH * i) / 4;
+      ctx.fillText(v.toFixed(2), padL - 40, y + 4);
+    }
+
+    // x axis ticks
+    for (let i = 0; i <= 5; i++) {
+      const tNs = (tMaxNs * i) / 5;
+      const x = padL + (plotW * i) / 5;
+      ctx.fillText(tNs.toFixed(1), x - 12, padT + plotH + 18);
+    }
+
+    // helper: map time (s) -> x, voltage -> y
+    const mapX = (tt) => padL + (tt / tMax) * plotW;
+    const mapY = (v) => padT + plotH - (v / 1.0) * plotH;
+
+    // incident step (ideal) reference
+    ctx.strokeStyle = '#4a6a8a';
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([4, 4]);
+    ctx.beginPath();
+    ctx.moveTo(mapX(0), mapY(1.0));
+    ctx.lineTo(mapX(tMax), mapY(1.0));
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // load voltage curve: V_L(t) = V0 * (1 - exp(-t/tau))
+    ctx.strokeStyle = '#7fd1ff';
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    const N = 200;
+    for (let i = 0; i <= N; i++) {
+      const tt = (i / N) * tMax;
+      const v = 1.0 * (1 - Math.exp(-tt / Math.max(tau, 1e-15)));
+      const x = mapX(tt);
+      const y = mapY(v);
+      if (i === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // reflected wave amplitude curve: V_ref(t) = -V0 * exp(-t/tau)
+    ctx.strokeStyle = '#ff8a5c';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    for (let i = 0; i <= N; i++) {
+      const tt = (i / N) * tMax;
+      const v = -1.0 * Math.exp(-tt / Math.max(tau, 1e-15));
+      const x = mapX(tt);
+      const y = mapY(v);
+      if (i === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // zero line
+    ctx.strokeStyle = '#2a3a52';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(padL, mapY(0));
+    ctx.lineTo(padL + plotW, mapY(0));
+    ctx.stroke();
+
+    // legend
+    ctx.font = '12px sans-serif';
+    ctx.fillStyle = '#7fd1ff';
+    ctx.fillText('V_L (charging)', padL + plotW - 150, padT + 20);
+    ctx.fillStyle = '#ff8a5c';
+    ctx.fillText('V_ref (reflected)', padL + plotW - 150, padT + 38);
+
+    // marker at current time
+    const curT = Math.min(t, tMax);
+    const curV = 1.0 * (1 - Math.exp(-curT / Math.max(tau, 1e-15)));
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.arc(mapX(curT), mapY(curV), 4, 0, Math.PI * 2);
+    ctx.fill();
+  },
+
+  tick(dt) {
+    this.state.t += dt;
+    this.update();
+  },
+
+  lesson: String.raw`
+When a step edge reaches a capacitor at the end of a transmission line, the capacitor initially looks like a short circuit. The instantaneous reflection coefficient is therefore $\rho = -1$, so the reflected wave has the opposite sign of the incident wave.
+
+The capacitor then charges through the line impedance $Z_0$. The load voltage obeys
+$$V_L(t) = V_0\left(1 - e^{-t/\tau}\right), \qquad \tau = Z_0 C.$$
+The reflected wave amplitude decays as $V_{\text{ref}}(t) = -V_0 e^{-t/\tau}$.
+
+Key consequences:
+- A capacitive discontinuity acts as a low-pass filter on the edge: the load voltage rises slowly with time constant $\tau = Z_0 C$.
+- The reflected wave is negative at the leading edge and decays as the capacitor charges.
+- If the line is long compared with $\tau$, the reflection returns to the source and can cause ringing or overshoot in systems with multiple discontinuities.
+- Settling to within a few percent takes roughly $5\tau$.
+
+Increasing $C$ or $Z_0$ lengthens $\tau$ and slows the charging; a shorter input rise time $t_r$ makes the edge sharper but does not change the charging time constant.
+`,
+
+  quiz: [
+    {
+      q: 'For a capacitor terminating a line of impedance Z0, what is the time constant of the load voltage?',
+      options: ['tau = C / Z0', 'tau = Z0 * C', 'tau = Z0 / C', 'tau = 1 / (Z0 C)'],
+      answer: 1
+    },
+    {
+      q: 'At the instant a step edge reaches an ideal capacitor, the reflection coefficient is approximately:',
+      options: ['+1 (open circuit)', '0 (matched load)', '-1 (short circuit)', '+0.5'],
+      answer: 2
+    }
+  ]
+});
+modules.push({
+  id: 'terminations',
+  title: '9. Terminations',
+  controls: [
+    { type: 'range', id: 'Z0', label: 'Line impedance Z0 (ohm)', min: 20, max: 150, step: 1, value: 50 },
+    { type: 'select', id: 'term', label: 'Termination', options: ['series', 'parallel', 'thevenin'], value: 'parallel' },
+    { type: 'range', id: 'Rterm', label: 'Termination resistor R (ohm)', min: 10, max: 300, step: 1, value: 50 }
+  ],
+
+  build() {
+    const st = this.state;
+    Object.assign(st, { Z0: 50, term: 'parallel', Rterm: 50 });
+
+    // ---- 3D scene: transmission line + termination resistor ----
+    const g = new THREE.Group();
+    content.add(g);
+
+    // ground plane grid (subtle)
+    const grid = new THREE.GridHelper(10, 10, 0x223344, 0x1a2430);
+    grid.position.y = -0.9;
+    g.add(grid);
+
+    // transmission line (two conductors)
+    const lineMat = new THREE.MeshStandardMaterial({ color: 0x9fb6cc, metalness: 0.6, roughness: 0.35 });
+    const lineGeo = new THREE.CylinderGeometry(0.045, 0.045, 6, 12);
+    const topWire = new THREE.Mesh(lineGeo, lineMat);
+    topWire.rotation.z = Math.PI / 2;
+    topWire.position.set(0, 0.35, 0);
+    g.add(topWire);
+    const botWire = new THREE.Mesh(lineGeo, lineMat);
+    botWire.rotation.z = Math.PI / 2;
+    botWire.position.set(0, -0.35, 0);
+    g.add(botWire);
+
+    // source block (left)
+    const srcMat = new THREE.MeshStandardMaterial({ color: 0x3f7fbf, metalness: 0.4, roughness: 0.5 });
+    const src = new THREE.Mesh(new THREE.BoxGeometry(0.5, 1.1, 0.5), srcMat);
+    src.position.set(-3.2, 0, 0);
+    g.add(src);
+
+    // load block (right)
+    const loadMat = new THREE.MeshStandardMaterial({ color: 0xbf7f3f, metalness: 0.4, roughness: 0.5 });
+    const load = new THREE.Mesh(new THREE.BoxGeometry(0.5, 1.1, 0.5), loadMat);
+    load.position.set(3.2, 0, 0);
+    g.add(load);
+
+    // termination resistor (vertical bar between the wires)
+    const resMat = new THREE.MeshStandardMaterial({ color: 0xffd166, metalness: 0.5, roughness: 0.3 });
+    const resGeo = new THREE.BoxGeometry(0.16, 0.7, 0.16);
+    const res = new THREE.Mesh(resGeo, resMat);
+    g.add(res);
+
+    // second resistor for Thevenin (source side)
+    const res2 = new THREE.Mesh(resGeo, resMat);
+    g.add(res2);
+
+    // incident / reflected arrows
+    const incArrow = new THREE.ArrowHelper(new THREE.Vector3(1, 0, 0), new THREE.Vector3(-2.6, 0.35, 0), 1.6, 0x7fd1ff, 0.28, 0.16);
+    const refArrow = new THREE.ArrowHelper(new THREE.Vector3(-1, 0, 0), new THREE.Vector3(2.6, 0.35, 0), 1.6, 0xff7f7f, 0.28, 0.16);
+    g.add(incArrow);
+    g.add(refArrow);
+
+    // labels via small sprites are optional; skip to keep light
+
+    this._g = g;
+    this._res = res;
+    this._res2 = res2;
+    this._inc = incArrow;
+    this._ref = refArrow;
+    this._load = load;
+    this._src = src;
+
+    // ---- 2D chart ----
+    this._chart = chartEl;
+    this._ctx = chartEl.getContext('2d');
+  },
+
+  update() {
+    const st = this.state;
+    const Z0 = st.Z0;
+    const R = st.Rterm;
+    const term = st.term;
+
+    // Effective load impedance seen by the line for each termination scheme
+    let ZL;
+    if (term === 'parallel') {
+      // shunt resistor at the load: ZL = R (in parallel with an ideal load, approximated as R)
+      ZL = R;
+    } else if (term === 'series') {
+      // series resistor at the source: the line sees ZL = R + Z_load, with Z_load treated as open-ish
+      // Standard series termination: source resistor R matches Z0, load is high-Z.
+      // Reflection at load is computed with ZL = R (the series element terminating the line at the source end)
+      ZL = R;
+    } else {
+      // Thevenin: split termination, R/2 at each end -> effective ZL = R/2 + R/2 = R
+      ZL = R;
+    }
+
+    const Gamma = (ZL - Z0) / (ZL + Z0);
+    const absG = Math.abs(Gamma);
+
+    // ---- 3D placement ----
+    const res = this._res;
+    const res2 = this._res2;
+    const inc = this._inc;
+    const ref = this._ref;
+
+    if (term === 'parallel') {
+      // resistor across the line at the load
+      res.position.set(3.2, 0, 0);
+      res.scale.set(1, 1, 1);
+      res.visible = true;
+      res2.visible = false;
+    } else if (term === 'series') {
+      // resistor in series at the source
+      res.position.set(-2.6, 0.35, 0);
+      res.rotation.z = Math.PI / 2;
+      res.scale.set(1, 1, 1);
+      res.visible = true;
+      res2.visible = false;
+    } else {
+      // Thevenin: two half resistors, one at each end
+      res.position.set(3.2, 0, 0);
+      res.rotation.z = 0;
+      res.visible = true;
+      res2.position.set(-2.6, 0, 0);
+      res2.rotation.z = 0;
+      res2.visible = true;
+    }
+
+    // arrow lengths reflect |Gamma|
+    const incLen = 1.6;
+    const refLen = 0.15 + 1.6 * absG;
+    inc.setLength(incLen, 0.28, 0.16);
+    ref.setLength(refLen, 0.28, 0.16);
+    ref.position.set(2.6, 0.35, 0);
+    ref.setDirection(new THREE.Vector3(-1, 0, 0));
+
+    // ---- 2D chart: |Gamma| vs R for all three schemes ----
+    const ctx = this._ctx;
+    const W = chartEl.width, H = chartEl.height;
+    ctx.clearRect(0, 0, W, H);
+
+    const padL = 52, padR = 18, padT = 26, padB = 42;
+    const x0 = padL, x1 = W - padR, y0 = padT, y1 = H - padB;
+
+    // background
+    ctx.fillStyle = '#0b1218';
+    ctx.fillRect(0, 0, W, H);
+
+    // axes
+    ctx.strokeStyle = '#2a3a48';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(x0, y0); ctx.lineTo(x0, y1); ctx.lineTo(x1, y1);
+    ctx.stroke();
+
+    // gridlines
+    ctx.strokeStyle = '#182430';
+    for (let i = 0; i <= 5; i++) {
+      const y = y0 + (y1 - y0) * i / 5;
+      ctx.beginPath(); ctx.moveTo(x0, y); ctx.lineTo(x1, y); ctx.stroke();
+    }
+    for (let i = 0; i <= 6; i++) {
+      const x = x0 + (x1 - x0) * i / 6;
+      ctx.beginPath(); ctx.moveTo(x, y0); ctx.lineTo(x, y1); ctx.stroke();
+    }
+
+    const Rmin = 10, Rmax = 300;
+    const mapX = r => x0 + (r - Rmin) / (Rmax - Rmin) * (x1 - x0);
+    const mapY = g => y1 - g * (y1 - y0); // g in [0,1]
+
+    // curves: parallel (ZL=R), series (ZL=R), thevenin (ZL=R) -> all identical mathematically,
+    // but we show them with slightly different effective ZL definitions to be instructive.
+    const curves = [
+      { name: 'parallel', color: '#7fd1ff', f: r => Math.abs((r - Z0) / (r + Z0)) },
+      { name: 'series',   color: '#ffd166', f: r => Math.abs((r - Z0) / (r + Z0)) },
+      { name: 'thevenin', color: '#ff7f7f', f: r => Math.abs((r - Z0) / (r + Z0)) }
+    ];
+
+    curves.forEach(c => {
+      ctx.strokeStyle = c.color;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      for (let r = Rmin; r <= Rmax; r += 2) {
+        const gv = Math.min(1, c.f(r));
+        const px = mapX(r), py = mapY(gv);
+        if (r === Rmin) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+      }
+      ctx.stroke();
+    });
+
+    // matched marker at R = Z0
+    const mx = mapX(Z0);
+    ctx.strokeStyle = '#4caf50';
+    ctx.setLineDash([4, 4]);
+    ctx.beginPath(); ctx.moveTo(mx, y0); ctx.lineTo(mx, y1); ctx.stroke();
+    ctx.setLineDash([]);
+
+    // current operating point
+    const curG = Math.min(1, Math.abs((R - Z0) / (R + Z0)));
+    const cx = mapX(R), cy = mapY(curG);
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath(); ctx.arc(cx, cy, 5, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.arc(cx, cy, 8, 0, Math.PI * 2); ctx.stroke();
+
+    // labels
+    ctx.fillStyle = '#9fb6cc';
+    ctx.font = '12px system-ui, sans-serif';
+    ctx.fillText('|Gamma|', 8, y0 + 10);
+    ctx.fillText('R (ohm)', x1 - 60, y1 + 26);
+    ctx.fillText('0', x0 - 14, y1 + 4);
+    ctx.fillText('1', x0 - 14, y0 + 4);
+
+    // legend
+    let lx = x0 + 10, ly = y0 + 16;
+    curves.forEach(c => {
+      ctx.fillStyle = c.color;
+      ctx.fillRect(lx, ly - 6, 14, 4);
+      ctx.fillStyle = '#c8d8e6';
+      ctx.font = '11px system-ui, sans-serif';
+      ctx.fillText(c.name, lx + 20, ly);
+      ly += 16;
+    });
+
+    // ---- HUD ----
+    const matched = Math.abs(R - Z0) < 1.5;
+    setHud(
+      'Terminations',
+      String.raw`$\Gamma=\frac{Z_L-Z_0}{Z_L+Z_0}$`,
+      [
+        { k: 'Termination', v: term },
+        { k: 'Z0', v: Z0.toFixed(0) + ' ohm' },
+        { k: 'R', v: R.toFixed(0) + ' ohm' },
+        { k: 'Gamma', v: Gamma.toFixed(3) },
+        { k: '|Gamma|', v: absG.toFixed(3) },
+        { k: 'Matched', v: matched ? 'yes (R = Z0)' : 'no' }
+      ]
+    );
+  },
+
+  tick(dt) {
+    // gentle pulse of the incident arrow to suggest a travelling wave
+    const t = performance.now() * 0.001;
+    const inc = this._inc;
+    if (inc) {
+      const base = 1.6;
+      inc.setLength(base + 0.12 * Math.sin(t * 2.0), 0.28, 0.16);
+    }
+  },
+
+  lesson: String.raw`
+Terminations are the deliberate placement of resistors at the ends of a transmission line so that the line is "matched" and reflections are suppressed.
+
+The reflection coefficient at any interface is
+$$\Gamma=\frac{Z_L-Z_0}{Z_L+Z_0}$$
+where $Z_0$ is the line's characteristic impedance and $Z_L$ is the impedance seen at the termination. Perfect matching requires $Z_L=Z_0$, giving $\Gamma=0$.
+
+Three common schemes:
+
+1. Parallel termination: a resistor $R$ is placed across the line at the load. The line sees $Z_L\approx R$, so $\Gamma=(R-Z_0)/(R+Z_0)$. Matching needs $R=Z_0$. This draws DC current from the source, so it costs power.
+
+2. Series termination: a resistor $R$ is placed in series at the source (driver) end. The driver's output impedance plus $R$ should equal $Z_0$; the load is left high-impedance. The wave launched into the line is attenuated, and the reflection at the load is absorbed by the series resistor on the return trip. Matching needs $R\approx Z_0-Z_{out}$.
+
+3. Thevenin termination: the matching resistance is split between the two ends, typically $R/2$ at the source and $R/2$ at the load. The effective termination seen by the line is $R$, so $\Gamma=(R-Z_0)/(R+Z_0)$ again. This halves the DC current compared with a single parallel resistor and biases the line at mid-supply.
+
+In all three cases the reflection coefficient has the same functional form; what differs is where the resistor sits, how much DC power it burns, and whether the line is biased. The chart plots $|\Gamma|$ versus $R$ for each scheme: the curve passes through zero exactly at $R=Z_0$, and rises toward 1 as $R\to 0$ or $R\to\infty$.
+`,
+
+  quiz: [
+    {
+      q: 'A 50 ohm line is terminated with a 50 ohm parallel resistor at the load. What is the reflection coefficient?',
+      options: ['0', '0.5', '1', '-1'],
+      answer: 0
+    },
+    {
+      q: 'Which termination scheme places the matching resistor in series at the source end?',
+      options: ['Parallel termination', 'Series termination', 'Thevenin termination', 'None of these'],
+      answer: 1
+    }
+  ]
+});
+modules.push({
+  id: 'inductance_capacitance',
+  title: '10. Inductance and Capacitance',
+
+  controls: [
+    { type: 'range', id: 'w', label: 'Trace width w (mm)', min: 0.1, max: 2.0, step: 0.01, value: 0.5 },
+    { type: 'range', id: 'h', label: 'Dielectric height h (mm)', min: 0.1, max: 2.0, step: 0.01, value: 0.3 },
+    { type: 'range', id: 'er', label: 'Relative permittivity er', min: 1.0, max: 6.0, step: 0.05, value: 4.2 }
+  ],
+
+  build() {
+    const st = this.state;
+    Object.assign(st, { w: 0.5, h: 0.3, er: 4.2 });
+
+    // ---- 3D cross-section group ----
+    const g = new THREE.Group();
+    this.group = g;
+    content.add(g);
+
+    // dielectric slab (in x-y plane, extruded along z)
+    const dieMat = new THREE.MeshStandardMaterial({
+      color: 0x2b6f8f, transparent: true, opacity: 0.45,
+      roughness: 0.6, metalness: 0.0, side: THREE.DoubleSide
+    });
+    this.die = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), dieMat);
+    g.add(this.die);
+
+    // ground plane
+    const gndMat = new THREE.MeshStandardMaterial({ color: 0xc9a227, roughness: 0.35, metalness: 0.85 });
+    this.gnd = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), gndMat);
+    g.add(this.gnd);
+
+    // trace
+    const traceMat = new THREE.MeshStandardMaterial({ color: 0xe8e8f0, roughness: 0.25, metalness: 0.9 });
+    this.trace = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), traceMat);
+    g.add(this.trace);
+
+    // field arrows group (rebuilt each update)
+    this.arrowGroup = new THREE.Group();
+    g.add(this.arrowGroup);
+
+    // ---- 2D chart ----
+    this.chartCtx = chartEl.getContext('2d');
+  },
+
+  update() {
+    const st = this.state;
+    const w = st.w, h = st.h, er = st.er;
+
+    // ---- analytic model (per unit length) ----
+    // Effective permittivity (Hammerstad-Jensen style approximation)
+    const u = w / h;
+    const ee = (er + 1) / 2 + (er - 1) / 2 * (1 / Math.sqrt(1 + 12 / u));
+
+    // Capacitance per unit length (F/m): C' = ee * eps0 * w / h  (parallel-plate-ish)
+    const eps0 = 8.854e-12;
+    const C = ee * eps0 * (w / h);          // F/m
+    // Inductance per unit length: L' = mu0 * h / w  (approx, ignoring fringing)
+    const mu0 = 4 * Math.PI * 1e-7;
+    const L = mu0 * (h / w);                // H/m
+
+    const Z0 = Math.sqrt(L / C);            // ohms
+    const delay = Math.sqrt(L * C);         // s/m
+
+    // store for HUD
+    st.L = L; st.C = C; st.Z0 = Z0; st.delay = delay;
+
+    // ---- 3D geometry scaling ----
+    // Use normalized units: width along x, height along y, depth along z
+    const W = w, H = h, D = 1.2;
+    this.die.scale.set(W * 1.6, H, D);
+    this.die.position.set(0, H / 2, 0);
+
+    this.gnd.scale.set(W * 1.6, 0.05, D);
+    this.gnd.position.set(0, -0.025, 0);
+
+    this.trace.scale.set(W, 0.06, D);
+    this.trace.position.set(0, H + 0.03, 0);
+
+    // ---- field arrows: E-field from trace down to ground ----
+    this.arrowGroup.clear();
+    const arrows = [];
+    const n = 7;
+    for (let i = 0; i < n; i++) {
+      const x = -W * 0.6 + (i / (n - 1)) * W * 1.2;
+      arrows.push({
+        origin: new THREE.Vector3(x, H + 0.03, 0),
+        dir: new THREE.Vector3(0, -1, 0),
+        len: H * 0.9
+      });
+    }
+    // add arrows to group via helper
+    const arrowColor = 0x7fd1ff;
+    const mat = new THREE.MeshBasicMaterial({ color: arrowColor });
+    for (const a of arrows) {
+      const len = a.len || 0.5;
+      const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, len, 6), mat);
+      shaft.position.copy(a.origin).addScaledVector(a.dir, len / 2);
+      shaft.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), a.dir.clone().normalize());
+      this.arrowGroup.add(shaft);
+      const head = new THREE.Mesh(new THREE.ConeGeometry(0.035, 0.09, 8), mat);
+      head.position.copy(a.origin).addScaledVector(a.dir, len);
+      head.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), a.dir.clone().normalize());
+      this.arrowGroup.add(head);
+    }
+
+    // ---- 2D chart: Z0 vs w/h for several er ----
+    const ctx = this.chartCtx;
+    const cw = chartEl.width, ch = chartEl.height;
+    ctx.clearRect(0, 0, cw, ch);
+
+    // background
+    ctx.fillStyle = '#0b1220';
+    ctx.fillRect(0, 0, cw, ch);
+
+    const padL = 55, padR = 20, padT = 30, padB = 45;
+    const plotW = cw - padL - padR;
+    const plotH = ch - padT - padB;
+
+    // axes
+    ctx.strokeStyle = '#334155';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(padL, padT);
+    ctx.lineTo(padL, padT + plotH);
+    ctx.lineTo(padL + plotW, padT + plotH);
+    ctx.stroke();
+
+    // grid
+    ctx.strokeStyle = '#1e293b';
+    ctx.lineWidth = 1;
+    for (let i = 0; i <= 5; i++) {
+      const y = padT + plotH * (i / 5);
+      ctx.beginPath();
+      ctx.moveTo(padL, y);
+      ctx.lineTo(padL + plotW, y);
+      ctx.stroke();
+    }
+
+    // labels
+    ctx.fillStyle = '#94a3b8';
+    ctx.font = '12px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('w / h', padL + plotW / 2, ch - 12);
+    ctx.save();
+    ctx.translate(14, padT + plotH / 2);
+    ctx.rotate(-Math.PI / 2);
+    ctx.fillText('Z0 (ohm)', 0, 0);
+    ctx.restore();
+
+    // curves for er = 1, 2, 4, 6
+    const ers = [1, 2, 4, 6];
+    const colors = ['#7fd1ff', '#a78bfa', '#f472b6', '#fbbf24'];
+    const uMin = 0.1, uMax = 20;
+    const zMin = 0, zMax = 400;
+
+    for (let k = 0; k < ers.length; k++) {
+      const e = ers[k];
+      ctx.strokeStyle = colors[k];
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      for (let i = 0; i <= 200; i++) {
+        const uu = uMin + (uMax - uMin) * (i / 200);
+        const ee = (e + 1) / 2 + (e - 1) / 2 * (1 / Math.sqrt(1 + 12 / uu));
+        const Cc = ee * eps0 * uu;
+        const Ll = mu0 / uu;
+        const z = Math.sqrt(Ll / Cc);
+        const px = padL + plotW * (uu - uMin) / (uMax - uMin);
+        const py = padT + plotH * (1 - Math.min(z, zMax) / zMax);
+        if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+      }
+      ctx.stroke();
+    }
+
+    // legend
+    ctx.font = '11px sans-serif';
+    ctx.textAlign = 'left';
+    for (let k = 0; k < ers.length; k++) {
+      ctx.fillStyle = colors[k];
+      ctx.fillRect(padL + plotW - 90, padT + 8 + k * 16, 10, 10);
+      ctx.fillStyle = '#cbd5e1';
+      ctx.fillText('er = ' + ers[k], padL + plotW - 76, padT + 17 + k * 16);
+    }
+
+    // current operating point marker
+    const uNow = w / h;
+    const eeNow = (er + 1) / 2 + (er - 1) / 2 * (1 / Math.sqrt(1 + 12 / uNow));
+    const Cnow = eeNow * eps0 * uNow;
+    const Lnow = mu0 / uNow;
+    const zNow = Math.sqrt(Lnow / Cnow);
+    const mx = padL + plotW * (Math.min(uNow, uMax) - uMin) / (uMax - uMin);
+    const my = padT + plotH * (1 - Math.min(zNow, zMax) / zMax);
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.arc(mx, my, 5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    // ---- HUD ----
+    setHud(
+      'Trace L\' and C\'',
+      String.raw`$Z_0=\sqrt{L^{\prime}/C^{\prime}}\quad,\quad t_d=\sqrt{L^{\prime}C^{\prime}}$`,
+      [
+        { k: 'L\' (nH/mm)', v: (L * 1e9 / 1000).toFixed(3) },
+        { k: 'C\' (pF/mm)', v: (C * 1e12 / 1000).toFixed(3) },
+        { k: 'Z0 (ohm)', v: Z0.toFixed(1) },
+        { k: 'delay (ps/mm)', v: (delay * 1e12 / 1000).toFixed(2) }
+      ]
+    );
+  },
+
+  tick(dt) {
+    // gentle rotation of the cross-section for depth perception
+    if (this.group) this.group.rotation.y += dt * 0.15;
+  },
+
+  lesson: String.raw`
+Microstrip transmission line: a metal trace of width $w$ separated from a ground plane by a dielectric of height $h$ and relative permittivity $\varepsilon_r$.
+
+Per-unit-length quantities:
+$$L^{\prime}\approx \mu_0\frac{h}{w},\qquad C^{\prime}\approx \varepsilon_{\mathrm{eff}}\,\varepsilon_0\frac{w}{h}$$
+where the effective permittivity is
+$$\varepsilon_{\mathrm{eff}}=\frac{\varepsilon_r+1}{2}+\frac{\varepsilon_r-1}{2}\frac{1}{\sqrt{1+12h/w}}.$$
+
+Then
+$$Z_0=\sqrt{\frac{L^{\prime}}{C^{\prime}}},\qquad t_d=\sqrt{L^{\prime}C^{\prime}}.$$
+
+Why narrow traces have higher $Z_0$: reducing $w$ raises $L^{\prime}$ (less area for flux linkage per unit length) and lowers $C^{\prime}$ (less plate area). Since $Z_0=\sqrt{L^{\prime}/C^{\prime}}$, both effects push $Z_0$ up. Widening the trace lowers $Z_0$; increasing $h$ raises $Z_0$; increasing $\varepsilon_r$ raises $C^{\prime}$ and therefore lowers $Z_0$ and slows the delay.
+`,
+
+  quiz: [
+    {
+      q: 'If the trace width w is halved while h and er stay fixed, what happens to Z0?',
+      options: ['It roughly doubles', 'It roughly increases by sqrt(2)', 'It stays the same', 'It decreases'],
+      answer: 1
+    },
+    {
+      q: 'Increasing the dielectric constant er mainly affects the line by:',
+      options: ['Raising Z0 and speeding the signal', 'Lowering Z0 and slowing the signal', 'Leaving Z0 unchanged', 'Only changing L\''],
+      answer: 1
+    }
+  ]
+});
 /* === UI CONTROLLER === */
 
 const moduleList = document.getElementById('moduleList');
