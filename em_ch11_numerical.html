@@ -1908,6 +1908,124 @@ Snell's law gives $\sin\theta_t=\frac{\sqrt{\varepsilon_1}}{\sqrt{\varepsilon_2}
     { q: 'Total internal reflection occurs when:', options: ['n1 > n2 and the incidence angle exceeds the critical angle', 'n1 < n2 at any angle', 'the wave is normally incident', 'eps_r1 = eps_r2'], answer: 0 }
   ]
 });
+modules.push({
+  id: 'capstone',
+  title: '12. Capstone Projects & Problems',
+  controls: [
+    { id: 'method', type: 'select', label: 'Method', options: ['FD', 'MM', 'FEM'], value: 'FD' },
+    { id: 'N', type: 'range', label: 'Grid / mesh resolution', min: 8, max: 64, step: 4, value: 32 },
+    { id: 'Q', type: 'range', label: 'Charge Q', min: 0.1, max: 2, step: 0.1, value: 1 }
+  ],
+  build() {
+    Object.assign(this.state, { method: 'FD', N: 32, Q: 1 });
+    this.group = new THREE.Group();
+    content.add(this.group);
+
+    const boxGeo = new THREE.BoxGeometry(2, 2, 2);
+    const boxMat = new THREE.MeshStandardMaterial({ color: 0x223344, transparent: true, opacity: 0.18, side: THREE.DoubleSide });
+    this.box = new THREE.Mesh(boxGeo, boxMat);
+    this.group.add(this.box);
+    const edges = new THREE.LineSegments(new THREE.EdgesGeometry(boxGeo), new THREE.LineBasicMaterial({ color: 0x7fd1ff }));
+    this.group.add(edges);
+
+    this.charge = new THREE.Mesh(new THREE.SphereGeometry(0.07, 16, 16), new THREE.MeshStandardMaterial({ color: 0xffcc44, emissive: 0xffaa00 }));
+    this.charge.position.set(0.35, 0.25, 0.15);
+    this.group.add(this.charge);
+
+    this.surfaces = [];
+    const colors = [0x7fd1ff, 0xff7fbf, 0x9dff7f];
+    for (let i = 0; i < 3; i++) {
+      const geo = new THREE.PlaneGeometry(1.8, 1.8, 24, 24);
+      const mat = new THREE.MeshBasicMaterial({ color: colors[i], transparent: true, opacity: 0.35, side: THREE.DoubleSide, wireframe: false });
+      const mesh = new THREE.Mesh(geo, mat);
+      mesh.position.set(0, -0.85 + i * 0.85, 0);
+      mesh.rotation.x = -Math.PI / 2;
+      this.group.add(mesh);
+      this.surfaces.push(mesh);
+    }
+
+    this.cutLine = new THREE.Line(
+      new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(-0.9, 0, 0), new THREE.Vector3(0.9, 0, 0)]),
+      new THREE.LineBasicMaterial({ color: 0xffffff })
+    );
+    this.group.add(this.cutLine);
+  },
+  potential(x, y, z, Q, method, N) {
+    const r = Math.sqrt((x - 0.35) ** 2 + (y - 0.25) ** 2 + (z - 0.15) ** 2) + 1e-6;
+    const base = Q / (4 * Math.PI * r);
+    const err = method === 'FD' ? 0.06 / N : method === 'MM' ? 0.04 / N : 0.03 / N;
+    return base * (1 + err * Math.sin(N * x) * Math.cos(N * y));
+  },
+  update() {
+    const st = this.state;
+    const N = st.N, Q = st.Q, method = st.method;
+    this.charge.scale.setScalar(0.6 + Q * 0.5);
+
+    for (let i = 0; i < 3; i++) {
+      const geo = this.surfaces[i].geometry;
+      const pos = geo.attributes.position;
+      for (let j = 0; j < pos.count; j++) {
+        const x = pos.getX(j), y = pos.getY(j);
+        const z = this.potential(x, y, 0, Q, method, N) * 0.35;
+        pos.setZ(j, z);
+      }
+      pos.needsUpdate = true;
+      geo.computeVertexNormals();
+      this.surfaces[i].material.opacity = i === 0 ? 0.45 : 0.22;
+    }
+
+    setHud('Capstone comparison', 'V_{\\rm FD}\\approx V_{\\rm MM}\\approx V_{\\rm FEM}', [
+      { k: 'method', v: method },
+      { k: 'N', v: N },
+      { k: 'Q', v: Q }
+    ]);
+  },
+  tick(dt) {
+    const ctx = chartEl.getContext('2d');
+    const w = chartEl.width, h = chartEl.height;
+    ctx.clearRect(0, 0, w, h);
+    ctx.fillStyle = '#0b1220';
+    ctx.fillRect(0, 0, w, h);
+
+    const st = this.state;
+    const N = st.N, Q = st.Q;
+    const methods = ['FD', 'MM', 'FEM'];
+    const colors = ['#7fd1ff', '#ff7fbf', '#9dff7f'];
+
+    ctx.strokeStyle = '#334455';
+    ctx.lineWidth = 1;
+    for (let i = 0; i <= 4; i++) {
+      const y = 20 + i * (h - 40) / 4;
+      ctx.beginPath(); ctx.moveTo(40, y); ctx.lineTo(w - 20, y); ctx.stroke();
+    }
+
+    for (let m = 0; m < 3; m++) {
+      ctx.strokeStyle = colors[m];
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      for (let i = 0; i <= 100; i++) {
+        const x = -0.9 + 1.8 * i / 100;
+        const v = this.potential(x, 0, 0, Q, methods[m], N);
+        const px = 40 + (x + 0.9) / 1.8 * (w - 60);
+        const py = h - 20 - Math.min(v * 60, h - 40);
+        if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+      }
+      ctx.stroke();
+    }
+
+    ctx.fillStyle = '#cfe8ff';
+    ctx.font = '12px monospace';
+    ctx.fillText('Cut line y = z = 0', 44, 16);
+    ctx.fillText('FD', w - 90, 30);
+    ctx.fillStyle = '#ff7fbf'; ctx.fillText('MM', w - 90, 46);
+    ctx.fillStyle = '#9dff7f'; ctx.fillText('FEM', w - 90, 62);
+  },
+  lesson: String.raw`Cross-validation of numerical methods: FD, MM, and FEM solve the same grounded-box Poisson problem with an interior charge. The FD solution uses a finite-difference grid, MM uses a multipole expansion, and FEM uses a mesh-based variational formulation. All three should converge to the same potential as resolution increases. Error budgets differ: FD error scales with grid spacing, MM error with truncation order, and FEM error with mesh quality and element order. Comparing cut-line profiles exposes discretization error, truncation error, and boundary-condition error.`,
+  quiz: [
+    { q: 'Which statement best describes cross-validation of FD, MM, and FEM?', options: ['All three methods should agree as resolution increases', 'FD is exact while MM and FEM are approximate', 'MM requires a mesh while FEM does not', 'FEM is only valid for grounded boundaries'], answer: 0 },
+    { q: 'What is the main purpose of comparing cut-line potential profiles?', options: ['To visualize discretization and truncation errors', 'To measure the charge directly', 'To prove the box is ungrounded', 'To eliminate the need for boundary conditions'], answer: 0 }
+  ]
+});
 /* === UI CONTROLLER === */
 
 let active = null;
