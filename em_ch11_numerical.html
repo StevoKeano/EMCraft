@@ -1644,6 +1644,154 @@ Stability requires the Courant condition $S=c\Delta t/\Delta x\le 1$; $S=1$ is t
     { q: 'Why are E and H staggered on the Yee grid?', options: ['To satisfy Maxwell curl equations with centered differences', 'To reduce memory', 'To make the pulse faster', 'To avoid boundary conditions'], answer: 0 }
   ]
 });
+modules.push({
+  id: 'fem',
+  title: '10. Finite Element Method (FEM)',
+  controls: [
+    { id: 'level', label: 'Mesh refinement level', type: 'range', min: 1, max: 4, step: 1, value: 2 },
+    { id: 'V0', label: 'Boundary potential V0', type: 'range', min: 1, max: 10, step: 0.5, value: 5 },
+    { id: 'epsr', label: 'Relative permittivity eps_r', type: 'range', min: 1, max: 5, step: 0.25, value: 2 }
+  ],
+  build() {
+    Object.assign(this.state, { level: 2, V0: 5, epsr: 2, mesh: null, nodes: [], tris: [], V: [], cut: [] });
+    this.group = new THREE.Group();
+    content.add(this.group);
+    this.geom = new THREE.BufferGeometry();
+    this.mat = new THREE.MeshStandardMaterial({ vertexColors: true, side: THREE.DoubleSide, roughness: 0.55, metalness: 0.05 });
+    this.mesh = new THREE.Mesh(this.geom, this.mat);
+    this.group.add(this.mesh);
+    this.wire = new THREE.LineSegments(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: 0x9fb8d8, transparent: true, opacity: 0.35 }));
+    this.group.add(this.wire);
+    this.buildMesh();
+  },
+  buildMesh() {
+    const st = this.state, L = st.level, n = Math.pow(2, L), h = 1 / n;
+    const nodes = [], tris = [], idx = (i, j) => i * (n + 1) + j;
+    for (let i = 0; i <= n; i++) for (let j = 0; j <= n; j++) nodes.push([-0.5 + i * h, -0.5 + j * h]);
+    for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) {
+      const a = idx(i, j), b = idx(i + 1, j), c = idx(i + 1, j + 1), d = idx(i, j + 1);
+      tris.push([a, b, c], [a, c, d]);
+    }
+    st.nodes = nodes; st.tris = tris; st.mesh = { n, h };
+    this.solve();
+  },
+  solve() {
+    const st = this.state, { n, h } = st.mesh, N = st.nodes.length, eps = st.epsr;
+    const K = Array.from({ length: N }, () => new Float64Array(N));
+    const f = new Float64Array(N);
+    for (const [a, b, c] of st.tris) {
+      const xa = st.nodes[a][0], ya = st.nodes[a][1], xb = st.nodes[b][0], yb = st.nodes[b][1], xc = st.nodes[c][0], yc = st.nodes[c][1];
+      const area = 0.5 * Math.abs((xb - xa) * (yc - ya) - (xc - xa) * (yb - ya));
+      const g = [[yb - yc, xc - xb], [yc - ya, xa - xc], [ya - yb, xb - xa]];
+      const ids = [a, b, c];
+      for (let p = 0; p < 3; p++) for (let q = 0; q < 3; q++) {
+        K[ids[p]][ids[q]] += eps * (g[p][0] * g[q][0] + g[p][1] * g[q][1]) / (4 * area);
+      }
+    }
+    const V = new Float64Array(N), fixed = new Uint8Array(N);
+    for (let i = 0; i < N; i++) {
+      const [x, y] = st.nodes[i];
+      if (Math.abs(x + 0.5) < 1e-9 || Math.abs(x - 0.5) < 1e-9 || Math.abs(y + 0.5) < 1e-9 || Math.abs(y - 0.5) < 1e-9) {
+        fixed[i] = 1; V[i] = st.V0 * (0.5 + x) * (0.5 + y) / 1.0;
+      }
+    }
+    for (let i = 0; i < N; i++) if (!fixed[i]) {
+      let s = 0;
+      for (let j = 0; j < N; j++) if (fixed[j]) s -= K[i][j] * V[j];
+      f[i] = s;
+    }
+    const free = [];
+    for (let i = 0; i < N; i++) if (!fixed[i]) free.push(i);
+    const m = free.length, A = Array.from({ length: m }, () => new Float64Array(m)), rhs = new Float64Array(m);
+    for (let r = 0; r < m; r++) {
+      rhs[r] = f[free[r]];
+      for (let c = 0; c < m; c++) A[r][c] = K[free[r]][free[c]];
+    }
+    for (let col = 0; col < m; col++) {
+      let piv = col;
+      for (let r = col + 1; r < m; r++) if (Math.abs(A[r][col]) > Math.abs(A[piv][col])) piv = r;
+      if (Math.abs(A[piv][col]) < 1e-14) continue;
+      [A[col], A[piv]] = [A[piv], A[col]]; [rhs[col], rhs[piv]] = [rhs[piv], rhs[col]];
+      for (let r = col + 1; r < m; r++) {
+        const fac = A[r][col] / A[col][col];
+        for (let c = col; c < m; c++) A[r][c] -= fac * A[col][c];
+        rhs[r] -= fac * rhs[col];
+      }
+    }
+    for (let r = m - 1; r >= 0; r--) {
+      let s = rhs[r];
+      for (let c = r + 1; c < m; c++) s -= A[r][c] * V[free[c]];
+      V[free[r]] = s / A[r][r];
+    }
+    st.V = Array.from(V);
+    st.cut = [];
+    for (let i = 0; i <= n; i++) st.cut.push([st.nodes[idxCut(i, n, n)][0], V[idxCut(i, n, n)]]);
+    this.updateGeometry();
+  },
+  updateGeometry() {
+    const st = this.state, pos = [], col = [], wirePos = [];
+    const vmin = Math.min(...st.V), vmax = Math.max(...st.V);
+    const color = v => {
+      const t = (v - vmin) / Math.max(1e-9, vmax - vmin);
+      return new THREE.Color().setHSL(0.62 - 0.55 * t, 0.85, 0.28 + 0.42 * t);
+    };
+    for (const [a, b, c] of st.tris) {
+      for (const id of [a, b, c]) {
+        pos.push(st.nodes[id][0], st.nodes[id][1], 0.02 * st.V[id]);
+        const cc = color(st.V[id]); col.push(cc.r, cc.g, cc.b);
+      }
+      wirePos.push(st.nodes[a][0], st.nodes[a][1], 0.02 * st.V[a], st.nodes[b][0], st.nodes[b][1], 0.02 * st.V[b]);
+      wirePos.push(st.nodes[b][0], st.nodes[b][1], 0.02 * st.V[b], st.nodes[c][0], st.nodes[c][1], 0.02 * st.V[c]);
+      wirePos.push(st.nodes[c][0], st.nodes[c][1], 0.02 * st.V[c], st.nodes[a][0], st.nodes[a][1], 0.02 * st.V[a]);
+    }
+    this.geom.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    this.geom.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+    this.geom.computeVertexNormals();
+    this.wire.geometry.setAttribute('position', new THREE.Float32BufferAttribute(wirePos, 3));
+  },
+  update() {
+    const st = this.state;
+    this.buildMesh();
+    setHud('Finite element method', 'F[V]=\\frac{1}{2}\\int\\varepsilon|\\nabla V|^2\\,dA', [
+      { k: 'level', v: st.level }, { k: 'eps_r', v: st.epsr }, { k: 'V0', v: st.V0 }
+    ]);
+    this.drawChart();
+  },
+  drawChart() {
+    const st = this.state, ctx = chartEl.getContext('2d'), W = chartEl.width, H = chartEl.height;
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = '#0b1220'; ctx.fillRect(0, 0, W, H);
+    const pad = 36, x0 = pad, y0 = H - pad, x1 = W - pad, y1 = pad;
+    ctx.strokeStyle = '#2a3a52'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y0); ctx.moveTo(x0, y0); ctx.lineTo(x0, y1); ctx.stroke();
+    ctx.fillStyle = '#9fb8d8'; ctx.font = '12px sans-serif';
+    ctx.fillText('V(x) along cut y = +0.5', x0, y1 - 8);
+    ctx.fillText('x', x1 - 10, y0 + 18);
+    ctx.fillText('V', x0 - 22, y1 + 10);
+    const vmax = Math.max(1e-6, ...st.V), vmin = Math.min(...st.V);
+    const mapX = x => x0 + (x + 0.5) * (x1 - x0);
+    const mapY = v => y0 - (v - vmin) / Math.max(1e-6, vmax - vmin) * (y0 - y1);
+    ctx.strokeStyle = '#7fd1ff'; ctx.lineWidth = 2.5; ctx.beginPath();
+    st.cut.forEach(([x, v], i) => { const px = mapX(x), py = mapY(v); i ? ctx.lineTo(px, py) : ctx.moveTo(px, py); });
+    ctx.stroke();
+    ctx.fillStyle = '#7fd1ff';
+    st.cut.forEach(([x, v]) => { ctx.beginPath(); ctx.arc(mapX(x), mapY(v), 2.2, 0, Math.PI * 2); ctx.fill(); });
+    ctx.fillStyle = '#cfe3ff'; ctx.font = '11px monospace';
+    ctx.fillText('V0 = ' + st.V0.toFixed(1) + '   eps_r = ' + st.epsr.toFixed(2) + '   nodes = ' + st.nodes.length, x0, y1 + 22);
+  },
+  tick() {},
+  lesson: String.raw`<b>Weak form.</b> Laplace's equation $\nabla\cdot(\varepsilon\nabla V)=0$ minimizes $F[V]=\frac{1}{2}\int\varepsilon|\nabla V|^2\,dA$. Multiplying by a test function $w$ and integrating by parts gives $\int\varepsilon\nabla V\cdot\nabla w\,dA=0$ for all admissible $w$; boundary values are imposed strongly.
+
+<b>Element matrices.</b> On a linear triangle with area $A$ and gradients $\nabla N_i$, the stiffness entry is $K_{ij}=\varepsilon\,A\,\nabla N_i\cdot\nabla N_j$. For the reference triangle these are constants, so each element contributes a small 3x3 block.
+
+<b>Assembly and solve.</b> Summing element blocks into the global matrix gives $KV=f$. Fixed boundary nodes are removed from the unknowns; their known values move to the right-hand side. The reduced system is solved for the free nodal potentials, then the field is interpolated linearly inside each triangle.
+
+<b>Refinement.</b> Increasing the mesh level subdivides each square into more triangles, reducing discretization error. The cut-line plot shows the nodal solution along the top boundary.` ,
+  quiz: [
+    { q: 'The weak form of Laplace used in FEM is obtained by:', options: ['integrating by parts and testing with w', 'differentiating the functional twice', 'setting all nodal values equal', 'replacing gradients by averages'], answer: 0 },
+    { q: 'For a linear triangular element, the stiffness entry K_ij is proportional to:', options: ['the dot product of the element shape-function gradients', 'the triangle perimeter', 'the nodal potential difference', 'the element area squared'], answer: 0 }
+  ]
+});
 /* === UI CONTROLLER === */
 
 let active = null;
