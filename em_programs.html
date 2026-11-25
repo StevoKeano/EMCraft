@@ -741,6 +741,150 @@ For $0<|V^{-}|/|V^{+}|<1$ the pattern is a mixed wave: a traveling component plu
     { q: 'Increasing alpha while keeping |V-|/|V+| fixed causes the envelope to:', options: ['stay flat', 'become asymmetric, decaying toward +z', 'grow without bound', 'oscillate faster'], answer: 1 }
   ]
 });
+modules.push({
+  id: 'ground_bounce',
+  title: '5. Ground Bounce: Package Inductance Transient',
+  controls: [
+    { id: 'N', label: 'Drivers N', type: 'range', min: 1, max: 32, step: 1, value: 8 },
+    { id: 'L', label: 'L_pkg (nH)', type: 'range', min: 0.1, max: 5, step: 0.1, value: 1.5 },
+    { id: 'tr', label: 'Rise time tr (ns)', type: 'range', min: 0.1, max: 5, step: 0.1, value: 1.0 }
+  ],
+  build() {
+    const st = this.state;
+    Object.assign(st, { N: 8, L: 1.5, tr: 1.0, I: 0.02, t: 0 });
+
+    const pkg = new THREE.Group();
+    const body = new THREE.Mesh(
+      new THREE.BoxGeometry(3.2, 0.5, 2.2),
+      new THREE.MeshStandardMaterial({ color: 0x2b3a55, roughness: 0.6, metalness: 0.3 })
+    );
+    body.position.y = 0.9;
+    pkg.add(body);
+
+    // ground rail
+    const rail = new THREE.Mesh(
+      new THREE.BoxGeometry(3.4, 0.12, 0.35),
+      new THREE.MeshStandardMaterial({ color: 0x8a6a2f, roughness: 0.5, metalness: 0.7 })
+    );
+    rail.position.set(0, 0.15, 1.05);
+    pkg.add(rail);
+
+    // driver pins (N) along front edge
+    st.pins = [];
+    for (let i = 0; i < 32; i++) {
+      const pin = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.055, 0.055, 0.55, 8),
+        new THREE.MeshStandardMaterial({ color: 0xc9d4e6, metalness: 0.9, roughness: 0.25 })
+      );
+      pin.position.set(-1.45 + i * 0.0935, 0.42, 0.85);
+      pin.visible = i < st.N;
+      pkg.add(pin);
+      st.pins.push(pin);
+    }
+
+    // ground spike indicator (vertical bar whose height = V_gnd)
+    st.spike = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.09, 0.09, 1, 12),
+      new THREE.MeshStandardMaterial({ color: 0xff5a4a, emissive: 0x662018, emissiveIntensity: 0.8 })
+    );
+    st.spike.position.set(1.55, 0.5, 1.05);
+    pkg.add(st.spike);
+
+    content.add(pkg);
+    st.pkg = pkg;
+    st.rail = rail;
+  },
+
+  update() {
+    const st = this.state;
+    const N = st.N, L = st.L * 1e-9, tr = st.tr * 1e-9;
+    const di_dt = st.I / tr;                 // A/s
+    const vg = N * L * di_dt;                // volts
+    st.vg = vg;
+
+    // pins visibility
+    st.pins.forEach((p, i) => { p.visible = i < N; });
+
+    // spike height scaled (1 V -> 1.2 units)
+    const h = Math.max(0.05, Math.min(2.2, vg * 1.2));
+    st.spike.scale.y = h;
+    st.spike.position.y = 0.15 + h * 0.5;
+    st.spike.material.color.setHSL(0.02, 0.9, Math.min(0.75, 0.35 + vg * 0.25));
+
+    // rail glow
+    st.rail.material.emissive = new THREE.Color(0xff3b2f);
+    st.rail.material.emissiveIntensity = Math.min(1.2, vg * 0.6);
+
+    setHud('Ground bounce', 'V_{\\mathrm{gnd}}=N L_{\\mathrm{pkg}}\\frac{di}{dt}', [
+      { k: 'N', v: String(N) },
+      { k: 'L_pkg', v: st.L.toFixed(1) + ' nH' },
+      { k: 'V_gnd', v: vg.toFixed(2) + ' V' }
+    ]);
+
+    // chart: V_gnd(t) transient waveform
+    const ctx = chartEl.getContext('2d');
+    const W = chartEl.width, H = chartEl.height;
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = '#0b1220'; ctx.fillRect(0, 0, W, H);
+
+    const tMax = 6 * tr; // ns window
+    const pad = 40;
+    const x0 = pad, x1 = W - pad, y0 = H - pad, y1 = pad;
+
+    // axes
+    ctx.strokeStyle = '#334155'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(x0, y1); ctx.lineTo(x0, y0); ctx.lineTo(x1, y0); ctx.stroke();
+
+    // waveform: ramp over tr then decay (RC-like) with tau = 2*tr
+    const tau = 2 * tr;
+    const pts = [];
+    for (let i = 0; i <= 200; i++) {
+      const t = (i / 200) * tMax;
+      let v;
+      if (t < tr) v = vg * (t / tr);
+      else v = vg * Math.exp(-(t - tr) / tau);
+      pts.push([t, v]);
+    }
+    const vMax = Math.max(vg, 1e-6);
+    ctx.strokeStyle = '#ff6b5a'; ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    pts.forEach(([t, v], i) => {
+      const px = x0 + (t / tMax) * (x1 - x0);
+      const py = y0 - (v / vMax) * (y0 - y1) * 0.9;
+      i ? ctx.lineTo(px, py) : ctx.moveTo(px, py);
+    });
+    ctx.stroke();
+
+    // peak marker
+    ctx.fillStyle = '#ffd166';
+    ctx.font = '13px monospace';
+    ctx.fillText('V_gnd peak = ' + vg.toFixed(2) + ' V', x0 + 8, y1 + 18);
+    ctx.fillStyle = '#94a3b8';
+    ctx.fillText('t (ns)', x1 - 50, y0 + 18);
+    ctx.fillText('V', x0 - 26, y1 + 4);
+  },
+
+  tick(dt) {
+    const st = this.state;
+    st.t += dt;
+    // gentle pulse of the spike for visual life
+    if (st.spike) {
+      const base = st.spike.scale.y;
+      st.spike.material.emissiveIntensity = 0.6 + 0.4 * Math.sin(st.t * 6);
+    }
+  },
+
+  lesson: String.raw`When $N$ drivers switch at the same instant, each pushes a current step $I$ through the package ground inductance $L_{\mathrm{pkg}}$. The shared return path sees the sum of all $di/dt$ terms, so the ground rail lifts by
+
+$$V_{\mathrm{gnd}} = N\,L_{\mathrm{pkg}}\,\frac{di}{dt}.$$
+
+With $di/dt \approx I/t_r$, faster edges and more simultaneous drivers both raise the spike. The spike is not a supply droop; it is a local reference shift that can corrupt logic thresholds and inject noise into quiet circuits. Mitigation: slow the edges (larger $t_r$), reduce $L_{\mathrm{pkg}}$ with better package/PCB return paths, stagger the switching, and add local decoupling.`,
+
+  quiz: [
+    { q: 'If the number of simultaneously switching drivers doubles while L_pkg and di/dt stay fixed, V_gnd:', options: ['stays the same', 'doubles', 'halves', 'quadruples'], answer: 1 },
+    { q: 'Which change most directly reduces ground bounce?', options: ['Increasing package inductance', 'Slowing the edge rate (larger tr)', 'Adding more simultaneous drivers', 'Raising the supply voltage'], answer: 1 }
+  ]
+});
 /* === UI CONTROLLER === */
 
 let active = null;
