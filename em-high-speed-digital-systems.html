@@ -100,7 +100,7 @@ camera.lookAt(0, 0, 0);
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
 controls.dampingFactor = 0.06;
-controls.zoomSpeed = 0.05;
+controls.zoomSpeed = 0.45;
 
 scene.add(new THREE.AmbientLight(0xffffff, 0.55));
 const key = new THREE.DirectionalLight(0xffffff, 1.1);
@@ -3851,6 +3851,8 @@ function disposeNode(node) {
 }
 
 function loadModule(mod) {
+  controls.target.set(0, 0, 0);
+  if (Number.isNaN(camera.position.x)) camera.position.set(6, 5, 9);
   activeModule = mod;
   disposeNode(content);
   content.clear();
@@ -3887,12 +3889,14 @@ if (modules.length) loadModule(modules[0]);
 /* ---------- render loop ---------- */
 let last = performance.now();
 function animate(now) {
+  requestAnimationFrame(animate);
   const dt = Math.min((now - last) / 1000, 0.05);
   last = now;
-  if (activeModule && typeof activeModule.tick === 'function') activeModule.tick(dt);
+  if (activeModule && typeof activeModule.tick === 'function') {
+    try { activeModule.tick(dt); } catch (e) { console.error('tick error:', e); activeModule.tick = null; }
+  }
   controls.update();
   renderer.render(scene, camera);
-  requestAnimationFrame(animate);
 }
 requestAnimationFrame(animate);
 
