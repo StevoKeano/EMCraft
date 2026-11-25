@@ -1085,6 +1085,146 @@ modules.push({
     { q: 'At y=a/2, the potential is symmetric about x=a/2 because:', options: ['only odd sine modes contribute', 'the lid is grounded', 'the trough is infinite', 'V0 is zero'], answer: 0 }
   ]
 });
+modules.push({
+  id: 'square_trough_four',
+  title: '6. Example 11-3: Infinite Square Trough with Different Potentials on All Four Sides',
+  controls: [
+    { id: 'V1', label: 'V1 (bottom)', type: 'range', min: 0, max: 10, step: 0.1, value: 3 },
+    { id: 'V2', label: 'V2 (top)', type: 'range', min: 0, max: 10, step: 0.1, value: 1 },
+    { id: 'V3', label: 'V3 (left)', type: 'range', min: 0, max: 10, step: 0.1, value: 2 },
+    { id: 'V4', label: 'V4 (right)', type: 'range', min: 0, max: 10, step: 0.1, value: 4 },
+    { id: 'a', label: 'Side a', type: 'range', min: 1, max: 4, step: 0.1, value: 2 },
+    { id: 'nmax', label: 'n_max', type: 'range', min: 1, max: 20, step: 1, value: 12 }
+  ],
+  build() {
+    Object.assign(this.state, { V1: 3, V2: 1, V3: 2, V4: 4, a: 2, nmax: 12 });
+    this.group = new THREE.Group();
+    content.add(this.group);
+    this.box = new THREE.Mesh(
+      new THREE.BoxGeometry(1, 1, 1),
+      new THREE.MeshStandardMaterial({ color: 0x223344, transparent: true, opacity: 0.25, side: THREE.DoubleSide })
+    );
+    this.group.add(this.box);
+    const mk = (c) => new THREE.MeshStandardMaterial({ color: c, emissive: c, emissiveIntensity: 0.5, side: THREE.DoubleSide });
+    this.walls = [
+      new THREE.Mesh(new THREE.PlaneGeometry(1, 1), mk(0xff6b6b)),
+      new THREE.Mesh(new THREE.PlaneGeometry(1, 1), mk(0x6bff9e)),
+      new THREE.Mesh(new THREE.PlaneGeometry(1, 1), mk(0x6bb8ff)),
+      new THREE.Mesh(new THREE.PlaneGeometry(1, 1), mk(0xffd76b))
+    ];
+    this.walls.forEach(w => this.group.add(w));
+    this.field = new THREE.Mesh(
+      new THREE.PlaneGeometry(1, 1, 40, 40),
+      new THREE.MeshStandardMaterial({ color: 0xffffff, transparent: true, opacity: 0.55, side: THREE.DoubleSide, vertexColors: true })
+    );
+    this.group.add(this.field);
+    this.geo = this.field.geometry;
+    this.colors = new Float32Array(this.geo.attributes.position.count * 3);
+    this.geo.setAttribute('color', new THREE.BufferAttribute(this.colors, 3));
+    this.arrows = [];
+    this.group.position.set(0, 0, 0);
+  },
+  update() {
+    const st = this.state, a = st.a, N = Math.round(st.nmax);
+    const V = [st.V1, st.V2, st.V3, st.V4];
+    const s = 1.6 / a;
+    this.group.scale.set(s, s, s);
+    this.box.scale.set(a, a, a);
+    // walls: bottom y=0, top y=a, left x=0, right x=a
+    const w = this.walls;
+    w[0].scale.set(a, a, 1); w[0].position.set(0, -a / 2, 0); w[0].rotation.x = -Math.PI / 2;
+    w[1].scale.set(a, a, 1); w[1].position.set(0, a / 2, 0); w[1].rotation.x = Math.PI / 2;
+    w[2].scale.set(a, a, 1); w[2].position.set(-a / 2, 0, 0); w[2].rotation.y = Math.PI / 2;
+    w[3].scale.set(a, a, 1); w[3].position.set(a / 2, 0, 0); w[3].rotation.y = -Math.PI / 2;
+    w.forEach((m, i) => { m.material.emissiveIntensity = 0.15 + V[i] / 10; });
+    // field plane at z=0, spanning x,y in [0,a]
+    this.field.scale.set(a, a, 1);
+    this.field.position.set(0, 0, 0);
+    const pos = this.geo.attributes.position;
+    const col = this.geo.attributes.color;
+    const G = (k, x, y) => {
+      let sum = 0;
+      for (let n = 1; n <= N; n++) {
+        const sn = Math.sin(n * Math.PI * x / a);
+        const sh = Math.sinh(n * Math.PI * (a - y) / a) / Math.sinh(n * Math.PI);
+        sum += sn * sh;
+      }
+      return sum;
+    };
+    const Gx = (k, x, y) => {
+      let sum = 0;
+      for (let n = 1; n <= N; n++) {
+        const sn = Math.sin(n * Math.PI * y / a);
+        const sh = Math.sinh(n * Math.PI * (a - x) / a) / Math.sinh(n * Math.PI);
+        sum += sn * sh;
+      }
+      return sum;
+    };
+    let maxV = 1e-6;
+    const vals = [];
+    for (let i = 0; i < pos.count; i++) {
+      const x = (pos.getX(i) + 0.5) * a;
+      const y = (pos.getY(i) + 0.5) * a;
+      const v = V[0] * G(0, x, y) + V[1] * G(1, x, a - y) + V[2] * Gx(2, x, y) + V[3] * Gx(3, a - x, y);
+      vals.push(v);
+      maxV = Math.max(maxV, Math.abs(v));
+    }
+    for (let i = 0; i < pos.count; i++) {
+      const t = vals[i] / maxV;
+      col.setXYZ(i, 0.2 + 0.8 * t, 0.4 + 0.5 * (1 - t), 0.9 - 0.6 * t);
+    }
+    col.needsUpdate = true;
+    // arrows showing gradient direction
+    this.arrows.forEach(a => content.remove(a));
+    this.arrows = [];
+    const vecs = [];
+    for (let i = 0; i < 6; i++) for (let j = 0; j < 6; j++) {
+      const x = (i + 0.5) * a / 6, y = (j + 0.5) * a / 6;
+      const v = V[0] * G(0, x, y) + V[1] * G(1, x, a - y) + V[2] * Gx(2, x, y) + V[3] * Gx(3, a - x, y);
+      vecs.push({ origin: new THREE.Vector3((x / a - 0.5) * s * a, (y / a - 0.5) * s * a, 0.02), dir: new THREE.Vector3(0, 0, v / maxV), len: 0.15 });
+    }
+    addArrowField(vecs, 0x9fe8ff);
+    setHud('Four-sided trough', 'V=\\sum_{k=1}^{4} V_k \\, G_k(x,y)', [
+      { k: 'V1', v: st.V1.toFixed(2) }, { k: 'V2', v: st.V2.toFixed(2) },
+      { k: 'V3', v: st.V3.toFixed(2) }, { k: 'V4', v: st.V4.toFixed(2) }
+    ]);
+    // chart: V(x, a/2)
+    const ctx = chartEl.getContext('2d');
+    const W = chartEl.width, H = chartEl.height;
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = '#0b1220'; ctx.fillRect(0, 0, W, H);
+    ctx.strokeStyle = '#2a3a55'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(40, H - 30); ctx.lineTo(W - 20, H - 30); ctx.moveTo(40, 20); ctx.lineTo(40, H - 30); ctx.stroke();
+    ctx.fillStyle = '#9fe8ff'; ctx.font = '12px sans-serif';
+    ctx.fillText('V(x, a/2)', 45, 18);
+    ctx.fillText('x', W - 30, H - 12);
+    const ymid = a / 2;
+    let maxPlot = 1e-6;
+    const pts = [];
+    for (let i = 0; i <= 200; i++) {
+      const x = i / 200 * a;
+      const v = V[0] * G(0, x, ymid) + V[1] * G(1, x, a - ymid) + V[2] * Gx(2, x, ymid) + V[3] * Gx(3, a - x, ymid);
+      pts.push([x, v]); maxPlot = Math.max(maxPlot, Math.abs(v));
+    }
+    ctx.strokeStyle = '#ffd76b'; ctx.lineWidth = 2; ctx.beginPath();
+    pts.forEach(([x, v], i) => {
+      const px = 40 + (x / a) * (W - 60);
+      const py = H - 30 - (v / maxPlot) * (H - 60);
+      i ? ctx.lineTo(px, py) : ctx.moveTo(px, py);
+    });
+    ctx.stroke();
+    ctx.fillStyle = '#6bb8ff'; ctx.font = '11px sans-serif';
+    ctx.fillText('a = ' + a.toFixed(2) + ', n_max = ' + N, 45, H - 40);
+  },
+  tick(dt) {
+    this.group.rotation.y += dt * 0.15;
+  },
+  lesson: String.raw`<b>Superposition principle.</b> The potential inside the trough satisfies Laplace's equation with four different boundary values. Because Laplace's equation is linear, we can write $V = V_1 G_1 + V_2 G_2 + V_3 G_3 + V_4 G_4$, where each $G_k$ is the solution with only one side held at unit potential and the other three at zero. Each $G_k$ is a Green's function built from the eigenfunctions $\sin(n\pi x/a)$ and $\sinh(n\pi(a-y)/a)$. The sum converges rapidly; truncating at $n_{\max}$ gives the plotted field.`,
+  quiz: [
+    { q: 'Why can the four-sided trough solution be written as a sum of four one-sided solutions?', options: ['Because Laplace\'s equation is linear', 'Because the sides are independent', 'Because the potentials are equal', 'Because the box is infinite'], answer: 0 },
+    { q: 'On the side y=0, which term must equal V1 while the others vanish?', options: ['G1', 'G2', 'G3', 'G4'], answer: 0 }
+  ]
+});
 /* === UI CONTROLLER === */
 
 let active = null;
