@@ -162,6 +162,7 @@ def sanitize_js(txt: str, mod_id: str = "", mod_title: str = "") -> str:
     txt = re.sub(r"(\\[a-zA-Z]+)''", lambda m: f"{m.group(1)}^{{\\prime\\prime}}", txt)
     txt = re.sub(r"(\\[a-zA-Z]+)'(?=[}\s\-\+\*/=^_)])", lambda m: f"{m.group(1)}^{{\\prime}}", txt)
     txt = re.sub(r"lesson:\s*`", "lesson: String.raw`", txt)
+    txt = re.sub(r"""(?<![A-Za-z0-9_$])r(['"`])((?:\\.|(?!\1).)*)\1""", lambda m: f"String.raw`{m.group(2)}`", txt)
     txt = re.sub(r"`(\$[^`\n]+?\$)`", r"\1", txt)
     txt = re.sub(r"<code>(\$[^<]+?\$)</code>", r"\1", txt)
     txt = txt.replace("\x0c", "\\f")
@@ -413,3 +414,17 @@ When the user uploads `CONTEXTCUT-LAB-FACTORY_3_5.md` and provides **Author(s), 
    - In `verify_html()`: assert `"left: '$', right: '$'" in html` and `"OrbitControls" in html`, reject `re.search(r"\bthis\.state\s*=\s*\{", mod_section)`, and reject 1-arg `re.search(r"\bsetHud\(\s*[^,)]+\s*\)", mod_section)` (allow 3-arg `setHud(title, eqTex, rows)`).
 5. **`tmux` Launch (No Duplicate Logging):**
    - Because `watch_<slug>.sh` already pipes `python3 "$BUILDER" 2>&1 | tee -a "$LOG"`, launch `tmux new -s <slug> 'bash /tmp/watch_<slug>.sh'` without an outer `| tee`.
+
+### Token-Forecasting Router, 3-Tier Escalation & Streaming Guard
+- **Pre-call complexity forecast (`forecast_tokens(spec)`):** Estimate total output tokens (`1150 + 45 * non_empty_lines + 140 * num_controls + 110 * num_quiz`) before calling Ollama:
+  - `< 3400` → start in `STANDARD` (`<= 220` lines)
+  - `3400..4099` → start in `COMPACT` (`<= 175` lines, loop-generated meshes, concise prose)
+  - `>= 4100` → start in `ULTRA_COMPACT` (`<= 140` lines, 4–6 primitive meshes, 2 short quiz items)
+- **3-tier escalation ladder:** On retry, escalate `STANDARD` → `COMPACT` → `ULTRA_COMPACT` (never bounce back down).
+- **Streaming early-abort (`2600` tok):** In the streaming reader, abort immediately if `tok_count >= 2600` and `"lesson:"` has not appeared yet (preventing guaranteed `>4200` token truncation) and advance to the next compression tier.
+
+### Base HTML Shell Runtime Guards (Verify on Cloned Shell)
+Before building modules onto a cloned base HTML shell, ensure the shell's module loader and control builder include these three safeguards:
+1. **Pre-seed `mod.state` before `mod.build()`:** Inside `loadModule(mod)`, initialize `mod.state = mod.state || {};` and copy every control's default `c.value` (parsed via `parseFloat` for `'range'` and `!!` for `'check'`) into `mod.state[c.id]` **before** `mod.build()` or `mod.update()` runs.
+2. **Support string or object `<select>` options:** In `buildControls(mod)`, normalize each option `o` as `const val = (typeof o === 'object' && o !== null) ? o.value : o;` and `const lbl = (typeof o === 'object' && o !== null) ? (o.label ?? o.value) : o;` so both `['2', '4', '6']` and `[{ value, label }]` render properly.
+3. **Smooth wheel zoom:** Set `controls.zoomSpeed = 0.05;` on `OrbitControls`.

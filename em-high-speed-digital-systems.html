@@ -278,8 +278,8 @@ modules.push({
     this.updateGeometry();
   },
 
-  update(stateArg) {
-    const st = stateArg || this.state || {};
+  update() {
+    const st = this.state;
     const Rs = st.Rs, RL = st.RL, L = st.L;
     const Cp = st.Cp * 1e-12;   // F/m
     const Lp = st.Lp * 1e-9;    // H/m
@@ -598,8 +598,8 @@ modules.push({
     this._chartH = chartEl.height;
   },
 
-  update(stateArg) {
-    const st = stateArg || this.state || {};
+  update() {
+    const st = this.state;
     const I = st.I, A = st.A, fHz = st.f * 1e6, r = st.r;
     const mu0 = 4 * Math.PI * 1e-7;
     const c = 3e8;
@@ -858,8 +858,8 @@ modules.push({
     );
   },
 
-  update(stateArg) {
-    const st = stateArg || this.state || {};
+  update() {
+    const st = this.state;
     const C = 2.998e8;
     const vp = st.vp * C;
     const tr = st.tr * 1e-9;
@@ -1154,8 +1154,8 @@ modules.push({
     st._phase = 0;
   },
 
-  update(stateArg) {
-    const st = stateArg || this.state || {};
+  update() {
+    const st = this.state;
     const c = 2.998e8;
     const vp = c / Math.sqrt(st.er);          // m/s
     const tr = st.tr * 1e-9;                  // s
@@ -1445,8 +1445,8 @@ modules.push({
     this._phase = 0;
   },
 
-  update(stateArg) {
-    const st = stateArg || this.state || {};
+  update() {
+    const st = this.state;
     const c = 2.998e8;
     const vp = st.vp * c;                 // m/s
     const tr = st.tr * 1e-9;              // s
@@ -1690,8 +1690,8 @@ modules.push({
     );
   },
 
-  update(stateArg) {
-    const st = stateArg || this.state || {};
+  update() {
+    const st = this.state;
     const tr = Number(st.tr);
     const fprobe = Number(st.fprobe);
 
@@ -2002,8 +2002,8 @@ modules.push({
     st._chart = { phase: 0 };
   },
 
-  update(stateArg) {
-    const st = stateArg || this.state || {};
+  update() {
+    const st = this.state;
     const z0 = st.z0, zl = st.zl, lenW = st.len;
 
     const gamma = (zl - z0) / (zl + z0);
@@ -2261,8 +2261,8 @@ modules.push({
     this._chartH = chartEl.height;
   },
 
-  update(stateArg) {
-    const st = stateArg || this.state || {};
+  update() {
+    const st = this.state;
     const C = st.C * 1e-12;
     const Z0 = st.Z0;
     const tau = Z0 * C;              // seconds
@@ -2553,8 +2553,8 @@ modules.push({
     this._ctx = chartEl.getContext('2d');
   },
 
-  update(stateArg) {
-    const st = stateArg || this.state || {};
+  update() {
+    const st = this.state;
     const Z0 = st.Z0;
     const R = st.Rterm;
     const term = st.term;
@@ -2804,8 +2804,8 @@ modules.push({
     this.chartCtx = chartEl.getContext('2d');
   },
 
-  update(stateArg) {
-    const st = stateArg || this.state || {};
+  update() {
+    const st = this.state;
     const w = st.w, h = st.h, er = st.er;
 
     // ---- analytic model (per unit length) ----
@@ -3081,8 +3081,8 @@ modules.push({
     ], 0x7fd1ff);
   },
 
-  update(stateArg) {
-    const st = stateArg || this.state || {};
+  update() {
+    const st = this.state;
     const n = parseInt(st.layers, 10);
     const w = st.traceW;
     const h = st.dielH;
@@ -3232,8 +3232,8 @@ modules.push({
     ]);
   },
 
-  update(stateArg) {
-    const st = stateArg || this.state || {};
+  update() {
+    const st = this.state;
     const s = st.spacing;      // mm
     const L = st.length;       // m
     const tr = st.tr;          // ns
@@ -3394,6 +3394,371 @@ Practical rules: shorten parallel runs, increase spacing, slow edge rates where 
     }
   ]
 });
+modules.push({
+  id: 'emi',
+  title: '13. Electromagnetic Interference',
+  controls: [
+    { type: 'range', id: 'area', label: 'Loop area (m²)', min: 1e-4, max: 1e-2, step: 1e-4, value: 2e-3 },
+    { type: 'range', id: 'current', label: 'Loop current (A)', min: 0.01, max: 1, step: 0.01, value: 0.2 },
+    { type: 'range', id: 'dist', label: 'Distance (m)', min: 1, max: 20, step: 0.5, value: 5 },
+    { type: 'select', id: 'shield', label: 'Shield', options: ['none', 'thin', 'thick'], value: 'thin' }
+  ],
+  build() {
+    const st = this.state;
+    Object.assign(st, { area: 2e-3, current: 0.2, dist: 5, shield: 'thin' });
+
+    const board = new THREE.Mesh(
+      new THREE.BoxGeometry(3.2, 0.12, 2.2),
+      new THREE.MeshStandardMaterial({ color: 0x1d4f6e, roughness: 0.7 })
+    );
+    board.position.set(-2.2, 0, 0);
+    content.add(board);
+
+    const loop = new THREE.Mesh(
+      new THREE.TorusGeometry(0.55, 0.045, 10, 32),
+      new THREE.MeshStandardMaterial({ color: 0xffb347, emissive: 0x5a2d00 })
+    );
+    loop.rotation.x = Math.PI / 2;
+    loop.position.set(-2.2, 0.18, 0);
+    content.add(loop);
+
+    const victim = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.035, 0.035, 1.8, 8),
+      new THREE.MeshStandardMaterial({ color: 0x9fe7ff, emissive: 0x123a4a })
+    );
+    victim.position.set(2.4, 0.9, 0);
+    content.add(victim);
+
+    const shield = new THREE.Mesh(
+      new THREE.BoxGeometry(1.4, 1.4, 1.4),
+      new THREE.MeshStandardMaterial({ color: 0x8aa0b0, transparent: true, opacity: 0.28, metalness: 0.8, roughness: 0.3 })
+    );
+    shield.position.set(2.4, 0.9, 0);
+    content.add(shield);
+
+    const link = new THREE.Line(
+      new THREE.BufferGeometry().setFromPoints([
+        new THREE.Vector3(-1.65, 0.18, 0),
+        new THREE.Vector3(2.4, 0.9, 0)
+      ]),
+      new THREE.LineBasicMaterial({ color: 0x7fd1ff, transparent: true, opacity: 0.55 })
+    );
+    content.add(link);
+
+    this.loop = loop;
+    this.victim = victim;
+    this.shield = shield;
+    this.link = link;
+  },
+  update() {
+    const st = this.state;
+    const mu0 = 4 * Math.PI * 1e-7;
+    const c = 3e8;
+    const f = 1e8;
+    const k = 2 * Math.PI * f / c;
+    const A = st.area;
+    const I = st.current;
+    const r = st.dist;
+
+    const E1 = mu0 * A * I * k * k * c / (4 * Math.PI * r);
+    const se = st.shield === 'none' ? 0 : st.shield === 'thin' ? 20 : 45;
+    const E2 = E1 * Math.pow(10, -se / 20);
+    const margin = 20 * Math.log10(E2 / 1e-3);
+
+    setHud('EMI & Shielding', String.raw`$SE=20\log_{10}\frac{E_1}{E_2}$`, [
+      { k: 'Unshielded E', v: E1.toExponential(2) + ' V/m' },
+      { k: 'Shielded E', v: E2.toExponential(2) + ' V/m' },
+      { k: 'SE', v: se.toFixed(1) + ' dB' },
+      { k: 'Margin vs 1 mV/m', v: margin.toFixed(1) + ' dB' }
+    ]);
+
+    const ctx = chartEl.getContext('2d');
+    const W = chartEl.width, H = chartEl.height;
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = '#07131c';
+    ctx.fillRect(0, 0, W, H);
+
+    const pad = 42;
+    const x0 = pad, x1 = W - pad, y0 = H - pad, y1 = pad;
+    ctx.strokeStyle = '#2b4b5e';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(x0, y0); ctx.lineTo(x1, y0);
+    ctx.moveTo(x0, y0); ctx.lineTo(x0, y1);
+    ctx.stroke();
+
+    const rMin = 1, rMax = 20;
+    const logMin = Math.log10(1e-6), logMax = Math.log10(1e-1);
+    const px = rr => x0 + (Math.log10(rr) - Math.log10(rMin)) / (Math.log10(rMax) - Math.log10(rMin)) * (x1 - x0);
+    const py = ee => y0 - (Math.log10(ee) - logMin) / (logMax - logMin) * (y0 - y1);
+
+    const drawCurve = (color, factor) => {
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      for (let i = 0; i <= 120; i++) {
+        const rr = rMin * Math.pow(rMax / rMin, i / 120);
+        const ee = mu0 * A * I * k * k * c / (4 * Math.PI * rr) * factor;
+        const xx = px(rr), yy = py(Math.max(ee, 1e-7));
+        if (i === 0) ctx.moveTo(xx, yy); else ctx.lineTo(xx, yy);
+      }
+      ctx.stroke();
+    };
+
+    drawCurve('#ff9f43', 1);
+    drawCurve('#7fd1ff', Math.pow(10, -se / 20));
+
+    ctx.fillStyle = '#9fb7c8';
+    ctx.font = '12px sans-serif';
+    ctx.fillText('E (V/m)', 8, 18);
+    ctx.fillText('distance (m)', W - 105, H - 12);
+    ctx.fillStyle = '#ff9f43';
+    ctx.fillText('unshielded', x1 - 95, y1 + 18);
+    ctx.fillStyle = '#7fd1ff';
+    ctx.fillText('shielded', x1 - 95, y1 + 34);
+
+    this.loop.scale.setScalar(0.7 + 0.3 * Math.min(1, A / 1e-2));
+    this.victim.material.emissiveIntensity = 0.3 + 2.5 * Math.min(1, E2 / 1e-3);
+    this.shield.visible = st.shield !== 'none';
+    this.shield.material.opacity = st.shield === 'thick' ? 0.42 : 0.24;
+    this.link.geometry.setFromPoints([
+      new THREE.Vector3(-1.65, 0.18, 0),
+      new THREE.Vector3(2.4, 0.9, 0)
+    ]);
+  },
+  tick(dt) {
+    const t = performance.now() * 0.001;
+    this.loop.rotation.z = t * 1.2;
+    this.victim.rotation.y = Math.sin(t * 0.8) * 0.15;
+  },
+  lesson: String.raw`A digital edge drives a current loop; the radiated field grows with loop area, current, and edge rate, and falls as $1/r$ in the near field. A shield attenuates the field by $SE=20\log_{10}(E_1/E_2)$, so thicker metal or a closed grounded enclosure gives more dB. Keep loops small, return currents close to their traces, and ground shields at both ends to avoid cable antennas.`,
+  quiz: [
+    { q: 'Doubling the source loop area roughly changes the radiated E-field by:', options: ['2x', '0.5x', '4x', 'no change'], answer: 0 },
+    { q: 'A shield providing 40 dB SE reduces the field by a factor of:', options: ['10', '100', '1000', '40'], answer: 1 }
+  ]
+});
+modules.push({
+  id: 'capstone',
+  title: '14. Capstone Projects & Problems',
+  controls: [
+    { type: 'range', id: 'tr', label: 'Rise time tr (ns)', min: 0.1, max: 10, step: 0.1, value: 1.0 },
+    { type: 'range', id: 'L', label: 'Trace length L (m)', min: 0.05, max: 0.5, step: 0.01, value: 0.15 },
+    { type: 'range', id: 'Z0', label: 'Trace impedance Z0 (ohm)', min: 20, max: 150, step: 1, value: 50 },
+    { type: 'select', id: 'term', label: 'Termination', options: ['series', 'parallel', 'none'], value: 'parallel' },
+    { type: 'range', id: 'spacing', label: 'Victim spacing (mm)', min: 0.2, max: 3, step: 0.1, value: 1.0 }
+  ],
+  build() {
+    const st = this.state;
+    Object.assign(st, { tr: 1.0, L: 0.15, Z0: 50, term: 'parallel', spacing: 1.0, phase: 0 });
+
+    // Board
+    const board = new THREE.Mesh(
+      new THREE.BoxGeometry(1.6, 0.06, 1.0),
+      new THREE.MeshStandardMaterial({ color: 0x1b3a2a, roughness: 0.8, metalness: 0.1 })
+    );
+    board.position.set(0, -0.03, 0);
+    content.add(board);
+
+    // Driver chip
+    const chipMat = new THREE.MeshStandardMaterial({ color: 0x2a2a2a, roughness: 0.5, metalness: 0.4 });
+    const chip = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.14, 0.28), chipMat);
+    chip.position.set(-0.62, 0.07, 0);
+    content.add(chip);
+
+    // Trace group (driver trace)
+    const traceMat = new THREE.MeshStandardMaterial({ color: 0xc9a227, roughness: 0.35, metalness: 0.7 });
+    const traceGeo = new THREE.BoxGeometry(1, 0.025, 0.06);
+    const trace = new THREE.Mesh(traceGeo, traceMat);
+    trace.position.set(-0.05, 0.045, 0);
+    content.add(trace);
+
+    // Victim trace
+    const victim = new THREE.Mesh(traceGeo, new THREE.MeshStandardMaterial({ color: 0x8a8a8a, roughness: 0.4, metalness: 0.6 }));
+    victim.position.set(-0.05, 0.045, 0.28);
+    content.add(victim);
+
+    // Termination resistor
+    const termMat = new THREE.MeshStandardMaterial({ color: 0xd94a4a, roughness: 0.5 });
+    const term = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.16, 12), termMat);
+    term.rotation.z = Math.PI / 2;
+    term.position.set(0.55, 0.08, 0);
+    content.add(term);
+
+    // Radiating loop (antenna loop)
+    const loopPts = [];
+    for (let i = 0; i <= 32; i++) {
+      const a = (i / 32) * Math.PI * 2;
+      loopPts.push(new THREE.Vector3(0.55 + 0.12 * Math.cos(a), 0.16, 0.12 * Math.sin(a)));
+    }
+    const loop = new THREE.Line(
+      new THREE.BufferGeometry().setFromPoints(loopPts),
+      new THREE.LineBasicMaterial({ color: 0xff9f43 })
+    );
+    content.add(loop);
+
+    // Ground plane reference
+    const gnd = new THREE.Mesh(
+      new THREE.BoxGeometry(1.5, 0.01, 0.9),
+      new THREE.MeshStandardMaterial({ color: 0x555555, roughness: 0.9 })
+    );
+    gnd.position.set(0, -0.065, 0);
+    content.add(gnd);
+
+    // Field arrows placeholder
+    this.arrows = [];
+    for (let i = 0; i < 8; i++) {
+      this.arrows.push({
+        origin: new THREE.Vector3(-0.5 + i * 0.14, 0.12, 0.14),
+        dir: new THREE.Vector3(0, 1, 0),
+        len: 0.12
+      });
+    }
+    addArrowField(this.arrows, 0x7fd1ff);
+
+    // Chart setup
+    const ctx = chartEl.getContext('2d');
+    this.ctx = ctx;
+    this.chartW = chartEl.width;
+    this.chartH = chartEl.height;
+  },
+
+  update() {
+    const st = this.state;
+    const tr = st.tr * 1e-9;
+    const L = st.L;
+    const Z0 = st.Z0;
+    const spacing = st.spacing * 1e-3;
+
+    // Critical length: vp ~ 2e8 m/s (FR4 ~ 0.5c)
+    const vp = 2e8;
+    const Lc = vp * tr / 6;
+
+    // Termination reflection coefficient
+    let ZL;
+    if (st.term === 'parallel') ZL = Z0;
+    else if (st.term === 'series') ZL = Z0 * 2;
+    else ZL = 1e9;
+    const Gamma = (ZL - Z0) / (ZL + Z0);
+
+    // Near-end crosstalk (NEXT) approximate
+    const NEXT = 0.35 * (Z0 / 50) * (0.5 / (spacing / 1e-3 + 0.5)) * (1 - Math.exp(-L / Lc));
+
+    // EMI E-field estimate (loop area ~ spacing * L)
+    const loopArea = spacing * L;
+    const Efield = 1e-3 * loopArea * (1 / tr) * (1 + Math.abs(Gamma));
+
+    // Update trace length visually
+    const trace = content.children.find(c => c.geometry && c.geometry.type === 'BoxGeometry' && c.material.color.getHex() === 0xc9a227);
+    if (trace) {
+      trace.scale.x = L / 0.15;
+      trace.position.x = -0.62 + L / 2;
+    }
+    const victim = content.children.find(c => c.geometry && c.geometry.type === 'BoxGeometry' && c.material.color.getHex() === 0x8a8a8a);
+    if (victim) {
+      victim.scale.x = L / 0.15;
+      victim.position.x = -0.62 + L / 2;
+      victim.position.z = spacing * 0.3;
+    }
+
+    // Termination visual
+    const term = content.children.find(c => c.geometry && c.geometry.type === 'CylinderGeometry');
+    if (term) {
+      term.visible = st.term !== 'none';
+      term.position.x = -0.62 + L + 0.05;
+    }
+
+    // HUD
+    setHud(
+      'Capstone: Signal Integrity + EMI',
+      String.raw`$L_c=\frac{v_p t_r}{6},\ \Gamma=\frac{Z_L-Z_0}{Z_L+Z_0}$`,
+      [
+        { k: 'L / L_c', v: (L / Lc).toFixed(2) },
+        { k: 'Gamma', v: Gamma.toFixed(3) },
+        { k: 'NEXT', v: (NEXT * 100).toFixed(1) + '%' },
+        { k: 'E-field (rel.)', v: Efield.toFixed(3) }
+      ]
+    );
+
+    // Draw eye-diagram-like chart
+    const ctx = this.ctx;
+    const W = this.chartW, H = this.chartH;
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = '#0b1020';
+    ctx.fillRect(0, 0, W, H);
+
+    // Grid
+    ctx.strokeStyle = '#1e2a44';
+    ctx.lineWidth = 1;
+    for (let i = 0; i <= 8; i++) {
+      ctx.beginPath();
+      ctx.moveTo(0, (i / 8) * H);
+      ctx.lineTo(W, (i / 8) * H);
+      ctx.stroke();
+    }
+
+    // Load voltage waveform (eye overlay)
+    const t0 = performance.now() * 0.001;
+    ctx.strokeStyle = '#7fd1ff';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    for (let x = 0; x < W; x++) {
+      const t = x / W * 4;
+      const pulse = Math.exp(-Math.pow((t - 1) / (tr * 1e9 * 0.3 + 0.1), 2));
+      const v = 0.5 + 0.4 * pulse + 0.1 * Math.sin(t * 6 + t0);
+      const y = H * (0.75 - v * 0.5);
+      if (x === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // Crosstalk waveform
+    ctx.strokeStyle = '#ff9f43';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    for (let x = 0; x < W; x++) {
+      const t = x / W * 4;
+      const pulse = Math.exp(-Math.pow((t - 1.2) / 0.25, 2));
+      const v = NEXT * pulse;
+      const y = H * (0.75 - v * 0.5);
+      if (x === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // Labels
+    ctx.fillStyle = '#7fd1ff';
+    ctx.font = '12px monospace';
+    ctx.fillText('Load voltage', 10, 20);
+    ctx.fillStyle = '#ff9f43';
+    ctx.fillText('Crosstalk (NEXT)', 10, 38);
+  },
+
+  tick(dt) {
+    this.state.phase += dt;
+    // Animate radiating loop pulse
+    const loop = content.children.find(c => c.geometry && c.geometry.type === 'BufferGeometry' && c.material && c.material.color && c.material.color.getHex() === 0xff9f43);
+    if (loop) {
+      loop.material.opacity = 0.5 + 0.5 * Math.sin(this.state.phase * 3);
+      loop.material.transparent = true;
+    }
+  },
+
+  lesson: String.raw`Design checklist for high-speed links: keep the trace length below the critical length $L_c = v_p t_r / 6$ so the interconnect behaves electrically short; match terminations to minimize $\Gamma = (Z_L - Z_0)/(Z_L + Z_0)$; widen victim spacing to reduce near-end crosstalk; and minimize loop area to lower radiated EMI. A series termination damps reflections at the source, while a parallel termination absorbs energy at the load.
+
+The capstone integrates transmission-line theory, reflection, crosstalk, and EMI. Use the sliders to explore trade-offs: longer traces and faster edges increase $L/L_c$, mismatched terminations raise $\Gamma$, and tighter spacing raises NEXT and the radiated field.`,
+  quiz: [
+    {
+      q: 'A trace has $v_p = 2\times10^8$ m/s and $t_r = 1$ ns. What is the critical length $L_c$?',
+      options: ['0.033 m', '0.15 m', '0.33 m', '1.0 m'],
+      answer: 0
+    },
+    {
+      q: 'Which combination best reduces both crosstalk and EMI?',
+      options: ['Longer trace, tighter spacing, no termination', 'Shorter trace, wider spacing, matched termination', 'Faster rise time, series termination, narrow spacing', 'Higher Z0, parallel termination, long loop'],
+      answer: 1
+    }
+  ]
+});
 /* === UI CONTROLLER === */
 
 const moduleList = document.getElementById('moduleList');
@@ -3491,6 +3856,11 @@ function loadModule(mod) {
   content.clear();
   renderer.renderLists.dispose();
   mod.state = mod.state || {};
+  (mod.controls || []).forEach(c => {
+    if (mod.state[c.id] === undefined && c.value !== undefined) {
+      mod.state[c.id] = c.type === 'range' ? parseFloat(c.value) : (c.type === 'check' ? !!c.value : c.value);
+    }
+  });
   mod.build();
   lessonEl.innerHTML = mod.lesson || '';
   if (window.renderMathInElement) {
