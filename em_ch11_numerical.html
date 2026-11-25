@@ -1,0 +1,1071 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<link rel="icon" href="data:," />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Chapter 11: Numerical Methods — Kraus &amp; Fleisch, Electromagnetics and Applications</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" />
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+<script type="importmap">
+{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+               "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/" } }
+</script>
+<style>
+  :root { --bg:#0b1220; --panel:#111a2b; --ink:#e6edf7; --muted:#8fa3bf; --accent:#7fd1ff; }
+  * { box-sizing: border-box; }
+  html, body { margin:0; height:100%; background:var(--bg); color:var(--ink);
+               font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  #app { display:grid; grid-template-columns: 340px 1fr; height:100%; }
+  #sidebar { background:var(--panel); border-right:1px solid #1e2a3d; padding:14px; overflow:auto; }
+  #sidebar h1 { font-size:16px; margin:0 0 4px; }
+  #sidebar .sub { color:var(--muted); font-size:12px; margin-bottom:12px; }
+  #moduleList { list-style:none; padding:0; margin:0 0 12px; }
+  #moduleList li { padding:8px 10px; border-radius:8px; cursor:pointer; font-size:13px;
+                   border:1px solid transparent; margin-bottom:4px; }
+  #moduleList li:hover { background:#16233a; }
+  #moduleList li.active { background:#1b2c47; border-color:var(--accent); }
+  #controls { display:flex; flex-direction:column; gap:8px; margin-bottom:12px; }
+  .ctrl { display:flex; flex-direction:column; gap:4px; font-size:12px; }
+  .ctrl label { color:var(--muted); }
+  .ctrl input[type=range] { width:100%; accent-color:var(--accent); }
+  .ctrl select, .ctrl input[type=text] { background:#0e1726; color:var(--ink);
+        border:1px solid #24344d; border-radius:6px; padding:4px 6px; }
+  #hud { background:#0e1726; border:1px solid #24344d; border-radius:8px; padding:10px; margin-bottom:12px; }
+  #hudTitle { font-weight:600; font-size:13px; margin-bottom:6px; }
+  #hudEq { font-size:13px; margin-bottom:8px; }
+  #hudRows { display:grid; grid-template-columns:1fr 1fr; gap:4px 10px; font-size:12px; }
+  #hudRows .k { color:var(--muted); }
+  #lesson { font-size:12px; line-height:1.5; color:#c9d6e8; margin-bottom:12px; }
+  #quiz { font-size:12px; }
+  #quiz .q { margin-bottom:8px; }
+  #quiz .opts { display:flex; flex-direction:column; gap:4px; }
+  #quiz button { background:#16233a; color:var(--ink); border:1px solid #24344d;
+                 border-radius:6px; padding:6px 8px; text-align:left; cursor:pointer; }
+  #quiz button.correct { border-color:#3ddc84; }
+  #quiz button.wrong { border-color:#ff6b6b; }
+  #stage { position:relative; }
+  #stage > canvas:not(#chart) { width:100%; height:100%; display:block; touch-action:none; outline:none; }
+  #chart { position:absolute; right:12px; bottom:12px; width:320px; height:200px;
+           background:#0e1726; border:1px solid #24344d; border-radius:8px; }
+  #chartLabel { position:absolute; right:12px; bottom:216px; font-size:11px; color:var(--muted); }
+</style>
+</head>
+<body>
+<div id="app">
+  <aside id="sidebar">
+    <h1>Chapter 11: Numerical Methods</h1>
+    <div class="sub">Kraus &amp; Fleisch — Electromagnetics and Applications</div>
+    <ul id="moduleList"></ul>
+    <div id="controls"></div>
+    <div id="hud">
+      <div id="hudTitle"></div>
+      <div id="hudEq"></div>
+      <div id="hudRows"></div>
+    </div>
+    <div id="lesson"></div>
+    <div id="quiz"></div>
+  </aside>
+  <main id="stage">
+    <canvas id="chart"></canvas>
+    <div id="chartLabel">2D analytical plot</div>
+  </main>
+</div>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+const stage = document.getElementById('stage');
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setSize(stage.clientWidth, stage.clientHeight);
+stage.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0b1220);
+
+const camera = new THREE.PerspectiveCamera(45, stage.clientWidth / stage.clientHeight, 0.1, 200);
+camera.position.set(6, 5, 8);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.06;
+controls.minDistance = 0.8;
+controls.maxDistance = 80;
+controls.enableZoom = false;
+
+renderer.domElement.addEventListener('wheel', (e) => {
+  e.preventDefault();
+  const dir = Math.sign(e.deltaY);
+  if (!dir) return;
+  const offset = camera.position.clone().sub(controls.target);
+  const dist = Math.max(controls.minDistance, Math.min(controls.maxDistance, offset.length() * (dir > 0 ? 1.12 : 0.89)));
+  offset.setLength(dist);
+  camera.position.copy(controls.target).add(offset);
+}, { passive: false });
+
+scene.add(new THREE.AmbientLight(0xffffff, 0.55));
+const key = new THREE.DirectionalLight(0xffffff, 0.9);
+key.position.set(6, 10, 6);
+scene.add(key);
+
+const content = new THREE.Group();
+scene.add(content);
+
+const chartEl = document.getElementById('chart');
+const chartCtx = chartEl.getContext('2d');
+
+function addArrowField(vectors, color = 0x7fd1ff) {
+  const group = new THREE.Group();
+  const mat = new THREE.MeshBasicMaterial({ color });
+  const nextVecs = [];
+  function rebuild(vecs) {
+    while (group.children.length) {
+      const c = group.children.pop();
+      c.geometry?.dispose?.();
+      group.remove(c);
+    }
+    for (const v of vecs) {
+      const len = v.len ?? v.dir.length();
+      const dir = v.dir.clone().normalize();
+      const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, len, 6), mat);
+      shaft.position.copy(v.origin).addScaledVector(dir, len / 2);
+      shaft.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
+      const head = new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.16, 8), mat);
+      head.position.copy(v.origin).addScaledVector(dir, len);
+      head.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
+      group.add(shaft, head);
+    }
+  }
+  rebuild(vectors);
+  group.setVectors = (vecs) => { nextVecs.length = 0; nextVecs.push(...vecs); rebuild(vecs); };
+  return group;
+}
+
+function renderTex(el, opts) {
+  if (window.renderMathInElement) window.renderMathInElement(el, opts);
+}
+const KATEX_OPTS = {
+  delimiters: [
+    { left: '$$', right: '$$', display: true },
+    { left: '$', right: '$', display: false },
+    { left: '\\(', right: '\\)', display: false },
+    { left: '\\[', right: '\\]', display: true }
+  ],
+  throwOnError: false,
+  strict: false
+};
+
+function setHud(titleStr, latexEqStr, rows) {
+  document.getElementById('hudTitle').textContent = titleStr;
+  const eq = document.getElementById('hudEq');
+  eq.innerHTML = latexEqStr;
+  renderTex(eq, KATEX_OPTS);
+  const rowsEl = document.getElementById('hudRows');
+  rowsEl.innerHTML = '';
+  for (const r of rows) {
+    const k = document.createElement('div'); k.className = 'k'; k.textContent = r.k;
+    const v = document.createElement('div'); v.textContent = r.v;
+    rowsEl.appendChild(k); rowsEl.appendChild(v);
+  }
+}
+
+const modules = [];
+
+modules.push({
+  id: 'intro_numerical',
+  title: '1. Introduction to Numerical Methods',
+  controls: [
+    { type: 'range', id: 'N', label: 'Grid resolution N', min: 8, max: 64, step: 1, value: 16 },
+    { type: 'range', id: 'A', label: 'Amplitude A', min: 0.5, max: 2, step: 0.05, value: 1 }
+  ],
+  build() {
+    const st = this.state;
+    Object.assign(st, { N: 16, A: 1, err: 0 });
+    this.group = new THREE.Group();
+    content.add(this.group);
+    this.geo = new THREE.BufferGeometry();
+    this.mat = new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.95 });
+    this.lines = new THREE.LineSegments(this.geo, this.mat);
+    this.group.add(this.lines);
+    // base square outline
+    const sq = new THREE.LineLoop(
+      new THREE.BufferGeometry().setFromPoints([
+        new THREE.Vector3(0, 0, 0), new THREE.Vector3(1, 0, 0),
+        new THREE.Vector3(1, 0, 1), new THREE.Vector3(0, 0, 1)
+      ]),
+      new THREE.LineBasicMaterial({ color: 0x335577 })
+    );
+    this.group.add(sq);
+    this.group.position.set(-0.5, -0.35, -0.5);
+    this.rebuild();
+  },
+  rebuild() {
+    const st = this.state, N = st.N, A = st.A;
+    const pos = [], col = [];
+    const phi = (x, y) => A * Math.sin(Math.PI * x) * Math.sin(Math.PI * y);
+    const c = new THREE.Color();
+    const push = (x1, y1, x2, y2) => {
+      const v1 = phi(x1, y1), v2 = phi(x2, y2);
+      pos.push(x1, v1, y1, x2, v2, y2);
+      c.setHSL(0.62 - 0.42 * (v1 / Math.max(A, 1e-6)), 0.85, 0.55);
+      col.push(c.r, c.g, c.b);
+      c.setHSL(0.62 - 0.42 * (v2 / Math.max(A, 1e-6)), 0.85, 0.55);
+      col.push(c.r, c.g, c.b);
+    };
+    for (let i = 0; i <= N; i++) {
+      const x = i / N;
+      for (let j = 0; j < N; j++) push(x, j / N, x, (j + 1) / N);
+    }
+    for (let j = 0; j <= N; j++) {
+      const y = j / N;
+      for (let i = 0; i < N; i++) push(i / N, y, (i + 1) / N, y);
+    }
+    this.geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    this.geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+    this.geo.computeBoundingSphere();
+    // truncation error estimate: second-order central difference vs analytic
+    const h = 1 / N;
+    let maxE = 0;
+    for (let i = 1; i < N; i++) for (let j = 1; j < N; j++) {
+      const x = i / N, y = j / N;
+      const lap = (phi(x + h, y) + phi(x - h, y) + phi(x, y + h) + phi(x, y - h) - 4 * phi(x, y)) / (h * h);
+      const exact = -2 * Math.PI * Math.PI * phi(x, y);
+      maxE = Math.max(maxE, Math.abs(lap - exact));
+    }
+    st.err = maxE;
+  },
+  update() {
+    const st = this.state;
+    this.rebuild();
+    setHud('Discretization error', 'e_N \\approx C N^{-2}', [
+      { k: 'N', v: String(st.N) },
+      { k: 'max|e|', v: st.err.toFixed(3) }
+    ]);
+    this.drawChart();
+  },
+  drawChart() {
+    const st = this.state, ctx = chartEl.getContext('2d');
+    const W = chartEl.width, H = chartEl.height;
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = '#0b1220'; ctx.fillRect(0, 0, W, H);
+    const pad = 46, x0 = pad, y0 = H - pad, x1 = W - pad, y1 = pad;
+    const Ns = [], Es = [];
+    const phi = (x, y) => st.A * Math.sin(Math.PI * x) * Math.sin(Math.PI * y);
+    for (let N = 8; N <= 64; N *= 2) {
+      const h = 1 / N; let m = 0;
+      for (let i = 1; i < N; i++) for (let j = 1; j < N; j++) {
+        const x = i / N, y = j / N;
+        const lap = (phi(x + h, y) + phi(x - h, y) + phi(x, y + h) + phi(x, y - h) - 4 * phi(x, y)) / (h * h);
+        m = Math.max(m, Math.abs(lap + 2 * Math.PI * Math.PI * phi(x, y)));
+      }
+      Ns.push(N); Es.push(m);
+    }
+    const lx = v => x0 + (Math.log(v) - Math.log(8)) / (Math.log(64) - Math.log(8)) * (x1 - x0);
+    const lo = Math.log(Math.min(...Es)), hi = Math.log(Math.max(...Es));
+    const ly = v => y0 - (Math.log(v) - lo) / (hi - lo) * (y0 - y1);
+    ctx.strokeStyle = '#2a3b52'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y0); ctx.moveTo(x0, y0); ctx.lineTo(x0, y1); ctx.stroke();
+    ctx.strokeStyle = '#7fd1ff'; ctx.lineWidth = 2; ctx.beginPath();
+    Ns.forEach((N, i) => { const px = lx(N), py = ly(Es[i]); i ? ctx.lineTo(px, py) : ctx.moveTo(px, py); });
+    ctx.stroke();
+    ctx.fillStyle = '#7fd1ff';
+    Ns.forEach((N, i) => { ctx.beginPath(); ctx.arc(lx(N), ly(Es[i]), 3, 0, 6.283); ctx.fill(); });
+    // reference slope -2
+    ctx.strokeStyle = '#ff9f6b'; ctx.setLineDash([5, 5]); ctx.beginPath();
+    ctx.moveTo(lx(8), ly(Es[0])); ctx.lineTo(lx(64), ly(Es[0] * Math.pow(8, -2))); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#9fb6d0'; ctx.font = '12px sans-serif';
+    ctx.fillText('log N', x1 - 40, y0 + 22);
+    ctx.fillText('log max|e|', x0 - 30, y1 - 8);
+    ctx.fillStyle = '#ff9f6b'; ctx.fillText('slope -2', x1 - 90, y1 + 22);
+  },
+  tick(dt) {
+    this.group.rotation.y += dt * 0.15;
+  },
+  lesson: String.raw`Numerical methods replace continuous fields by finite samples. Discretizing $\phi(x,y)$ on an $N\times N$ grid turns a differential equation into a linear algebra problem.
+
+Two error sources compete:
+- **Truncation error**: from replacing derivatives by finite differences. A central second difference has error $O(h^2)=O(N^{-2})$, so $e_N \approx C N^{-2}$.
+- **Round-off error**: floating point noise grows like $\sim \epsilon/h^2 = \epsilon N^2$ as $h$ shrinks.
+
+Total error is roughly $C N^{-2} + \epsilon N^2$, minimized at $N \sim (C/\epsilon)^{1/4}$. Refining the grid helps only until round-off dominates.
+
+Convergence: a scheme is order $p$ if error scales as $h^p$. Laplace/Poisson solvers (Jacobi, SOR, conjugate gradient) exploit this: finer grids give more accuracy but larger systems and slower iteration counts.`,
+  quiz: [
+    { q: 'A central finite-difference Laplacian on a uniform grid has truncation error scaling as:', options: ['O(N^{-1})', 'O(N^{-2})', 'O(N^{-3})', 'O(N^{2})'], answer: 1 },
+    { q: 'Why does accuracy eventually stop improving as N grows?', options: ['Truncation error grows with N', 'Round-off error grows like epsilon N^2', 'The grid becomes non-uniform', 'Boundary conditions change'], answer: 1 }
+  ]
+});
+modules.push({
+  id: 'laplace_rect',
+  title: '2. Laplace\'s Equation in Rectangular Coordinates; Separation of Variables',
+  controls: [
+    { id: 'aspect', label: 'b/a (aspect)', type: 'range', min: 0.5, max: 3, step: 0.1, value: 1.5 },
+    { id: 'nmax', label: 'n_max (modes)', type: 'range', min: 1, max: 20, step: 1, value: 8 },
+    { id: 'V0', label: 'V0 (top potential)', type: 'range', min: 1, max: 10, step: 0.5, value: 5 }
+  ],
+  build() {
+    const st = this.state;
+    Object.assign(st, { aspect: 1.5, nmax: 8, V0: 5 });
+
+    const group = new THREE.Group();
+    this.group = group;
+    content.add(group);
+
+    // Box wireframe (unit width a=1, height b=aspect, depth 0.6)
+    const boxGeo = new THREE.BoxGeometry(1, 1, 0.6);
+    const boxMat = new THREE.MeshBasicMaterial({ color: 0x2a3a4a, transparent: true, opacity: 0.25, side: THREE.DoubleSide });
+    this.box = new THREE.Mesh(boxGeo, boxMat);
+    group.add(this.box);
+
+    const edges = new THREE.LineSegments(new THREE.EdgesGeometry(boxGeo), new THREE.LineBasicMaterial({ color: 0x7fd1ff }));
+    group.add(edges);
+
+    // Potential surface on top (y = b)
+    const segX = 40, segY = 30;
+    const surfGeo = new THREE.BufferGeometry();
+    const verts = [], colors = [], idx = [];
+    for (let i = 0; i <= segX; i++) {
+      for (let j = 0; j <= segY; j++) {
+        const x = i / segX;
+        const y = j / segY;
+        verts.push(x - 0.5, 0.5, y * 0.6 - 0.3);
+        colors.push(0, 0, 0);
+      }
+    }
+    for (let i = 0; i < segX; i++) {
+      for (let j = 0; j < segY; j++) {
+        const a = i * (segY + 1) + j;
+        const b = a + 1;
+        const c = a + (segY + 1);
+        const d = c + 1;
+        idx.push(a, b, c, b, d, c);
+      }
+    }
+    surfGeo.setAttribute('position', new THREE.Float32BufferAttribute(verts, 3));
+    surfGeo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+    surfGeo.setIndex(idx);
+    surfGeo.computeVertexNormals();
+    const surfMat = new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide, transparent: true, opacity: 0.9 });
+    this.surf = new THREE.Mesh(surfGeo, surfMat);
+    group.add(this.surf);
+
+    // Contour lines on top
+    this.contours = new THREE.Group();
+    group.add(this.contours);
+
+    // Chart canvas
+    this.chart = chartEl;
+    this.ctx = chartEl.getContext('2d');
+  },
+
+  update() {
+    const st = this.state;
+    const a = 1, b = st.aspect, V0 = st.V0, nmax = Math.round(st.nmax);
+
+    // Scale box to aspect
+    this.box.scale.set(1, b, 1);
+    this.box.position.y = 0;
+    this.surf.scale.set(1, 1, 1);
+    this.surf.position.y = b / 2;
+
+    // Compute potential on top surface
+    const pos = this.surf.geometry.attributes.position;
+    const col = this.surf.geometry.attributes.color;
+    const segX = 40, segY = 30;
+    const V = (x, y) => {
+      let s = 0;
+      for (let n = 1; n <= nmax; n++) {
+        const An = (n % 2 === 1) ? 4 * V0 / (n * Math.PI) : 0;
+        s += An * Math.sin(n * Math.PI * x / a) * Math.sinh(n * Math.PI * y / a) / Math.sinh(n * Math.PI * b / a);
+      }
+      return s;
+    };
+
+    for (let i = 0; i <= segX; i++) {
+      for (let j = 0; j <= segY; j++) {
+        const k = i * (segY + 1) + j;
+        const x = i / segX;
+        const y = j / segY;
+        const v = V(x, y * b);
+        pos.setY(k, b / 2 + v * 0.15);
+        const t = Math.min(1, Math.max(0, v / V0));
+        col.setXYZ(k, 0.2 + 0.8 * t, 0.4 + 0.4 * (1 - t), 0.9 - 0.6 * t);
+      }
+    }
+    pos.needsUpdate = true;
+    col.needsUpdate = true;
+    this.surf.geometry.computeVertexNormals();
+
+    // Contours
+    this.contours.clear();
+    const levels = [0.2, 0.4, 0.6, 0.8];
+    for (const lv of levels) {
+      const pts = [];
+      for (let i = 0; i <= segX; i++) {
+        const x = i / segX;
+        for (let j = 0; j <= segY; j++) {
+          const y = j / segY;
+          const v = V(x, y * b);
+          if (Math.abs(v / V0 - lv) < 0.03) {
+            pts.push(new THREE.Vector3(x - 0.5, b / 2 + v * 0.15 + 0.01, y * 0.6 - 0.3));
+          }
+        }
+      }
+      if (pts.length > 1) {
+        const geo = new THREE.BufferGeometry().setFromPoints(pts);
+        const mat = new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.5 });
+        this.contours.add(new THREE.Line(geo, mat));
+      }
+    }
+
+    // Chart: V(x, b/2) vs x
+    const ctx = this.ctx;
+    const W = this.chart.width, H = this.chart.height;
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = '#0b1220';
+    ctx.fillRect(0, 0, W, H);
+    ctx.strokeStyle = '#2a3a4a';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(40, H - 30);
+    ctx.lineTo(W - 20, H - 30);
+    ctx.moveTo(40, 20);
+    ctx.lineTo(40, H - 30);
+    ctx.stroke();
+
+    ctx.strokeStyle = '#7fd1ff';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    for (let i = 0; i <= 200; i++) {
+      const x = i / 200;
+      const v = V(x, b / 2);
+      const px = 40 + x * (W - 60);
+      const py = H - 30 - (v / V0) * (H - 60);
+      if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+    }
+    ctx.stroke();
+
+    ctx.fillStyle = '#9fb3c8';
+    ctx.font = '12px sans-serif';
+    ctx.fillText('V(x, b/2) vs x', 50, 18);
+    ctx.fillText('x', W - 30, H - 12);
+    ctx.fillText('V', 12, 30);
+
+    setHud('Separation of variables',
+      'V(x,y)=\\sum_n A_n \\sin(n\\pi x/a)\\frac{\\sinh(n\\pi y/a)}{\\sinh(n\\pi b/a)}',
+      [{ k: 'n_max', v: nmax }, { k: 'V0', v: V0 }, { k: 'b/a', v: b.toFixed(1) }]);
+  },
+
+  tick(dt) {
+    this.group.rotation.y += dt * 0.15;
+  },
+
+  lesson: String.raw`Laplace's equation $\nabla^2 V = 0$ in the rectangle $0<x<a$, $0<y<b$ with $V(0,y)=V(a,y)=0$, $V(x,0)=0$, $V(x,b)=V_0$.
+
+Separation $V=X(x)Y(y)$ gives $X''/X = -Y''/Y = -k^2$. The boundary conditions $X(0)=X(a)=0$ select $k=n\pi/a$ and $X_n=\sin(n\pi x/a)$. Then $Y_n=\sinh(n\pi y/a)$, and imposing $V(x,b)=V_0$ yields the Fourier sine series
+$$V(x,y)=\sum_{n=1}^{\infty} A_n \sin\!\left(\frac{n\pi x}{a}\right)\frac{\sinh(n\pi y/a)}{\sinh(n\pi b/a)}.$$
+For the top boundary $V_0$ constant, $A_n = \frac{4V_0}{n\pi}$ for odd $n$ and $0$ for even $n$. The $\sinh$ ratio enforces the top boundary condition and grows toward $y=b$. Truncating at $n_{\max}$ gives a Gibbs-like overshoot near the corners; increasing $n_{\max}$ improves convergence.`,
+
+  quiz: [
+    {
+      q: 'Which boundary condition selects the sine modes $\sin(n\pi x/a)$?',
+      options: [
+        'V(0,y)=V(a,y)=0',
+        'V(x,0)=0',
+        'V(x,b)=V0',
+        'V is periodic in x'
+      ],
+      answer: 0
+    },
+    {
+      q: 'For a constant top potential V0, which Fourier coefficients A_n are nonzero?',
+      options: [
+        'All n',
+        'Odd n only',
+        'Even n only',
+        'n = 1 only'
+      ],
+      answer: 1
+    }
+  ]
+});
+modules.push({
+  id: 'parallel_plate',
+  title: '3. Example 11-1: The Parallel-Plate Capacitor',
+  controls: [
+    { id: 'd', label: 'Plate separation d', type: 'range', min: 0.2, max: 2, step: 0.05, value: 1 },
+    { id: 'a', label: 'Plate width a', type: 'range', min: 1, max: 4, step: 0.1, value: 2.5 },
+    { id: 'V0', label: 'Plate voltage V0', type: 'range', min: 1, max: 10, step: 0.1, value: 5 }
+  ],
+  state: { d: 1, a: 2.5, V0: 5 },
+
+  V(x, y, st) {
+    const { a, d, V0 } = st;
+    let s = 0;
+    for (let n = 1; n <= 41; n += 2) {
+      s += (4 * V0 / (n * Math.PI)) *
+           Math.sin(n * Math.PI * x / a) *
+           Math.sinh(n * Math.PI * y / a) / Math.sinh(n * Math.PI * d / a);
+    }
+    return s;
+  },
+
+  build() {
+    const st = this.state;
+    const g = new THREE.Group();
+    g.name = 'ppGroup';
+    content.add(g);
+
+    // bottom plate (V = 0)
+    const bot = new THREE.Mesh(
+      new THREE.BoxGeometry(1, 0.04, 1),
+      new THREE.MeshStandardMaterial({ color: 0x2a6f97, metalness: 0.6, roughness: 0.35 })
+    );
+    bot.name = 'bottomPlate';
+    g.add(bot);
+
+    // top plate (V = V0)
+    const top = new THREE.Mesh(
+      new THREE.BoxGeometry(1, 0.04, 1),
+      new THREE.MeshStandardMaterial({ color: 0xd97706, metalness: 0.6, roughness: 0.35 })
+    );
+    top.name = 'topPlate';
+    g.add(top);
+
+    // side walls (grounded)
+    const wallMat = new THREE.MeshStandardMaterial({
+      color: 0x334155, metalness: 0.2, roughness: 0.8, transparent: true, opacity: 0.35
+    });
+    const wallGeo = new THREE.BoxGeometry(0.03, 1, 1);
+    const wl = new THREE.Mesh(wallGeo, wallMat); wl.name = 'wallL'; g.add(wl);
+    const wr = new THREE.Mesh(wallGeo, wallMat); wr.name = 'wallR'; g.add(wr);
+
+    // potential surface (wireframe grid)
+    const NX = 24, NY = 16;
+    const pos = [], idx = [];
+    for (let i = 0; i <= NX; i++) {
+      for (let j = 0; j <= NY; j++) {
+        pos.push(i / NX, j / NY, 0);
+      }
+    }
+    for (let i = 0; i < NX; i++) {
+      for (let j = 0; j < NY; j++) {
+        const p = i * (NY + 1) + j;
+        idx.push(p, p + 1, p + NY + 1, p + 1, p + NY + 2);
+      }
+    }
+    const surfGeo = new THREE.BufferGeometry();
+    surfGeo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    surfGeo.setIndex(idx);
+    const surf = new THREE.Mesh(
+      surfGeo,
+      new THREE.MeshStandardMaterial({
+        color: 0x7fd1ff, wireframe: true, transparent: true, opacity: 0.55,
+        side: THREE.DoubleSide
+      })
+    );
+    surf.name = 'potentialSurface';
+    g.add(surf);
+
+    // E-field arrows
+    this.arrows = [];
+    for (let i = 1; i <= 5; i++) {
+      for (let j = 1; j <= 4; j++) {
+        this.arrows.push({ u: i / 6, v: j / 5 });
+      }
+    }
+    this.arrowGroup = new THREE.Group();
+    g.add(this.arrowGroup);
+
+    this.group = g;
+    this.surf = surf;
+    this.bot = bot;
+    this.top = top;
+    this.wl = wl;
+    this.wr = wr;
+  },
+
+  update() {
+    const st = this.state;
+    const { d, a, V0 } = st;
+    const g = this.group;
+
+    // plates: x in [0,a], z in [-a/2, a/2], y = 0 and y = d
+    this.bot.scale.set(a, 1, a);
+    this.bot.position.set(a / 2, 0, 0);
+    this.top.scale.set(a, 1, a);
+    this.top.position.set(a / 2, d, 0);
+
+    this.wl.scale.set(1, d, a);
+    this.wl.position.set(0, d / 2, 0);
+    this.wr.scale.set(1, d, a);
+    this.wr.position.set(a, d / 2, 0);
+
+    // potential surface: x = u*a, y = v*d, z = V(x,y) scaled
+    const posAttr = this.surf.geometry.attributes.position;
+    const NX = 24, NY = 16;
+    const zScale = 0.35;
+    for (let i = 0; i <= NX; i++) {
+      for (let j = 0; j <= NY; j++) {
+        const k = i * (NY + 1) + j;
+        const x = (i / NX) * a;
+        const y = (j / NY) * d;
+        posAttr.setXYZ(k, x, y, this.V(x, y, st) * zScale);
+      }
+    }
+    posAttr.needsUpdate = true;
+    this.surf.geometry.computeVertexNormals();
+
+    // E = -grad V arrows
+    this.arrowGroup.clear();
+    const eps = 0.02;
+    const vecs = [];
+    for (const { u, v } of this.arrows) {
+      const x = u * a, y = v * d;
+      const Ex = -(this.V(x + eps, y, st) - this.V(x - eps, y, st)) / (2 * eps);
+      const Ey = -(this.V(x, y + eps, st) - this.V(x, y - eps, st)) / (2 * eps);
+      const dir = new THREE.Vector3(Ex, Ey, 0);
+      const mag = dir.length();
+      if (mag < 1e-6) continue;
+      dir.normalize();
+      vecs.push({
+        origin: new THREE.Vector3(x, y, this.V(x, y, st) * zScale),
+        dir,
+        len: Math.min(0.35, 0.05 + 0.12 * mag / Math.max(V0 / d, 1e-6))
+      });
+    }
+    addArrowField(vecs, 0xffb347);
+
+    // chart: V(x, d/2) and E_y(x, d/2)
+    const ctx = chartEl.getContext('2d');
+    const W = chartEl.width, H = chartEl.height;
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = '#0b1220';
+    ctx.fillRect(0, 0, W, H);
+
+    const pad = 40;
+    const plotW = W - 2 * pad, plotH = H - 2 * pad;
+
+    // axes
+    ctx.strokeStyle = '#334155';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(pad, pad); ctx.lineTo(pad, H - pad); ctx.lineTo(W - pad, H - pad);
+    ctx.stroke();
+
+    // V curve
+    const N = 200;
+    let vMax = 0, eMax = 0;
+    const vPts = [], ePts = [];
+    for (let i = 0; i <= N; i++) {
+      const x = (i / N) * a;
+      const Vv = this.V(x, d / 2, st);
+      const Ey = -(this.V(x, d / 2 + 0.01, st) - this.V(x, d / 2 - 0.01, st)) / 0.02;
+      vPts.push([x, Vv]);
+      ePts.push([x, Ey]);
+      vMax = Math.max(vMax, Math.abs(Vv));
+      eMax = Math.max(eMax, Math.abs(Ey));
+    }
+    vMax = Math.max(vMax, 1e-6);
+    eMax = Math.max(eMax, 1e-6);
+
+    // V (blue)
+    ctx.strokeStyle = '#7fd1ff';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    vPts.forEach(([x, v], i) => {
+      const px = pad + (x / a) * plotW;
+      const py = H - pad - (v / vMax) * plotH * 0.9;
+      i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+    });
+    ctx.stroke();
+
+    // E_y (orange)
+    ctx.strokeStyle = '#ffb347';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ePts.forEach(([x, e], i) => {
+      const px = pad + (x / a) * plotW;
+      const py = H - pad - (e / eMax) * plotH * 0.9;
+      i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+    });
+    ctx.stroke();
+
+    // labels
+    ctx.fillStyle = '#7fd1ff';
+    ctx.font = '12px sans-serif';
+    ctx.fillText('V(x, d/2)', pad + 6, pad + 14);
+    ctx.fillStyle = '#ffb347';
+    ctx.fillText('E_y(x, d/2)', pad + 6, pad + 30);
+    ctx.fillStyle = '#94a3b8';
+    ctx.fillText('x', W - pad - 10, H - pad + 16);
+    ctx.fillText('0', pad - 10, H - pad + 16);
+    ctx.fillText('a', W - pad - 6, H - pad + 16);
+
+    setHud(
+      'Parallel-plate capacitor',
+      'V(x,y)=\\sum_{n\\ odd}\\frac{4V_0}{n\\pi}\\sin\\frac{n\\pi x}{a}\\frac{\\sinh(n\\pi y/a)}{\\sinh(n\\pi d/a)}',
+      [{ k: 'd', v: d.toFixed(2) }, { k: 'a', v: a.toFixed(2) }, { k: 'V0', v: V0.toFixed(1) }]
+    );
+  },
+
+  tick(dt) {
+    // gentle rotation of the whole assembly for depth perception
+    if (this.group) this.group.rotation.y += dt * 0.15;
+  },
+
+  lesson: String.raw`The parallel-plate capacitor with grounded side walls is a classic boundary-value problem. The exact potential is
+$$V(x,y)=\sum_{n\ \text{odd}}\frac{4V_0}{n\pi}\sin\frac{n\pi x}{a}\frac{\sinh(n\pi y/a)}{\sinh(n\pi d/a)}.$$
+Only odd modes appear because the boundary conditions $V(0,y)=V(a,y)=0$ require $\sin(n\pi x/a)$ to vanish at both walls, and the top/bottom conditions select odd $n$. The field is $E=-\nabla V$, so near the side walls the potential is suppressed and the field lines bend outward: these are the edge effects. The series converges slowly near the corners because the hyperbolic sine ratio grows with $n$ and the $1/n$ factor decays slowly; many terms are needed for accuracy there. In the limit $a\gg d$, the interior field approaches the uniform value $V_0/d$, while the edges remain nonuniform.`,
+
+  quiz: [
+    {
+      q: 'Why does the exact series contain only odd n?',
+      options: [
+        'Because the side walls are grounded, so sin(n pi x/a) must vanish at x=0 and x=a, which holds only for integer n; the top/bottom conditions then select odd n.',
+        'Because the plates are at different potentials, which forces even n.',
+        'Because the hyperbolic sine is odd in n.',
+        'Because the field is uniform, so all n contribute equally.'
+      ],
+      answer: 0
+    },
+    {
+      q: 'What causes the edge effects near the corners of the plates?',
+      options: [
+        'The grounded side walls force V to zero there, so the field lines fringe outward and the potential is nonuniform near the edges.',
+        'The plates are infinitely large, so the field is uniform everywhere.',
+        'The voltage V0 is too small to produce a field.',
+        'The series converges so fast that edge effects vanish.'
+      ],
+      answer: 0
+    }
+  ]
+});
+modules.push({
+  id: 'finite_difference',
+  title: '4. Repetitive Laplace Solution or Finite Difference Method',
+  controls: [
+    { id: 'N', type: 'range', label: 'Grid N', min: 8, max: 64, step: 2, value: 24 },
+    { id: 'tol', type: 'range', label: 'Tolerance', min: 1e-6, max: 1e-2, step: 1e-6, value: 1e-4 },
+    { id: 'itersPerFrame', type: 'range', label: 'Iterations / frame', min: 1, max: 50, step: 1, value: 8 }
+  ],
+  build() {
+    const st = this.state;
+    Object.assign(st, { N: 24, tol: 1e-4, itersPerFrame: 8, iter: 0, residual: 1, V: null, hist: [], points: null, running: true });
+
+    // 3D node cloud
+    st.geo = new THREE.BufferGeometry();
+    st.mat = new THREE.PointsMaterial({ size: 0.16, vertexColors: true, transparent: true, opacity: 0.95 });
+    st.points = new THREE.Points(st.geo, st.mat);
+    content.add(st.points);
+
+    // boundary frame (Dirichlet walls)
+    const frameMat = new THREE.LineBasicMaterial({ color: 0x3a6ea5 });
+    const frameGeo = new THREE.BufferGeometry().setFromPoints([
+      new THREE.Vector3(-1, 0, -1), new THREE.Vector3(1, 0, -1),
+      new THREE.Vector3(1, 0, 1), new THREE.Vector3(-1, 0, 1), new THREE.Vector3(-1, 0, -1)
+    ]);
+    content.add(new THREE.Line(frameGeo, frameMat));
+
+    this.reset();
+  },
+
+  reset() {
+    const st = this.state;
+    const N = st.N;
+    st.V = new Float64Array(N * N);
+    st.iter = 0;
+    st.residual = 1;
+    st.hist = [];
+    // Dirichlet: left wall 0, right wall 100, top/bottom 0
+    for (let j = 0; j < N; j++) {
+      for (let i = 0; i < N; i++) {
+        const idx = j * N + i;
+        if (i === N - 1) st.V[idx] = 100;
+        else if (i === 0 || j === 0 || j === N - 1) st.V[idx] = 0;
+        else st.V[idx] = 50;
+      }
+    }
+    this.rebuildGeometry();
+  },
+
+  rebuildGeometry() {
+    const st = this.state;
+    const N = st.N;
+    const pos = new Float32Array(N * N * 3);
+    const col = new Float32Array(N * N * 3);
+    for (let j = 0; j < N; j++) {
+      for (let i = 0; i < N; i++) {
+        const k = j * N + i;
+        pos[3 * k] = (i / (N - 1)) * 2 - 1;
+        pos[3 * k + 1] = st.V[k] / 100 * 1.2;
+        pos[3 * k + 2] = (j / (N - 1)) * 2 - 1;
+      }
+    }
+    st.geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    st.geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+    st.geo.attributes.position.needsUpdate = true;
+    st.geo.attributes.color.needsUpdate = true;
+    this.colorize();
+  },
+
+  colorize() {
+    const st = this.state;
+    const N = st.N;
+    const col = st.geo.attributes.color.array;
+    for (let k = 0; k < N * N; k++) {
+      const t = Math.min(1, Math.max(0, st.V[k] / 100));
+      // blue -> cyan -> yellow
+      col[3 * k] = t * t;
+      col[3 * k + 1] = 0.35 + 0.65 * t;
+      col[3 * k + 2] = 1 - t;
+    }
+    st.geo.attributes.color.needsUpdate = true;
+  },
+
+  step() {
+    const st = this.state;
+    const N = st.N;
+    const V = st.V;
+    const Vn = new Float64Array(N * N);
+    let maxRes = 0;
+    for (let j = 1; j < N - 1; j++) {
+      for (let i = 1; i < N - 1; i++) {
+        const k = j * N + i;
+        const avg = 0.25 * (V[k + 1] + V[k - 1] + V[k + N] + V[k - N]);
+        Vn[k] = avg;
+        const r = Math.abs(avg - V[k]);
+        if (r > maxRes) maxRes = r;
+      }
+    }
+    // copy interior, keep boundaries
+    for (let j = 1; j < N - 1; j++) {
+      for (let i = 1; i < N - 1; i++) {
+        const k = j * N + i;
+        V[k] = Vn[k];
+      }
+    }
+    st.iter++;
+    st.residual = maxRes;
+    st.hist.push({ it: st.iter, r: Math.max(maxRes, 1e-12) });
+    if (st.hist.length > 400) st.hist.shift();
+  },
+
+  update() {
+    const st = this.state;
+    const N = parseInt(st.N);
+    if (N !== st._N) { st._N = N; this.reset(); }
+    if (st.running) {
+      const n = parseInt(st.itersPerFrame);
+      for (let s = 0; s < n; s++) {
+        if (st.residual < st.tol) break;
+        this.step();
+      }
+      this.rebuildGeometry();
+    }
+    setHud('Finite-difference Laplace',
+      'V_{i,j}=\\frac{1}{4}(V_{i+1,j}+V_{i-1,j}+V_{i,j+1}+V_{i,j-1})',
+      [
+        { k: 'N', v: String(N) },
+        { k: 'iter', v: String(st.iter) },
+        { k: 'residual', v: st.residual.toExponential(2) }
+      ]);
+    this.drawChart();
+  },
+
+  drawChart() {
+    const st = this.state;
+    const ctx = chartEl.getContext('2d');
+    const W = chartEl.width, H = chartEl.height;
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = '#0b1220';
+    ctx.fillRect(0, 0, W, H);
+
+    const pad = 40;
+    const x0 = pad, y0 = H - pad, x1 = W - pad, y1 = pad;
+    ctx.strokeStyle = '#2a3a52';
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y0); ctx.moveTo(x0, y0); ctx.lineTo(x0, y1); ctx.stroke();
+
+    const hist = st.hist;
+    if (hist.length < 2) return;
+    const maxIt = hist[hist.length - 1].it;
+    const logMin = -12, logMax = 0;
+    const mapX = it => x0 + (it / Math.max(maxIt, 1)) * (x1 - x0);
+    const mapY = r => y0 - ((Math.log10(r) - logMin) / (logMax - logMin)) * (y0 - y1);
+
+    // gridlines for decades
+    ctx.strokeStyle = '#1a2638';
+    for (let d = logMin; d <= logMax; d += 2) {
+      const y = mapY(Math.pow(10, d));
+      ctx.beginPath(); ctx.moveTo(x0, y); ctx.lineTo(x1, y); ctx.stroke();
+      ctx.fillStyle = '#6b8bb0'; ctx.font = '11px monospace';
+      ctx.fillText('1e' + d, x0 - 34, y + 4);
+    }
+
+    ctx.strokeStyle = '#7fd1ff';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    hist.forEach((p, i) => {
+      const x = mapX(p.it), y = mapY(p.r);
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    });
+    ctx.stroke();
+
+    // tolerance line
+    const ty = mapY(st.tol);
+    ctx.strokeStyle = '#ff9d5c'; ctx.setLineDash([4, 4]); ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(x0, ty); ctx.lineTo(x1, ty); ctx.stroke();
+    ctx.setLineDash([]);
+
+    ctx.fillStyle = '#cfe3ff'; ctx.font = '13px monospace';
+    ctx.fillText('residual vs iteration (log scale)', x0, y1 - 8);
+  },
+
+  tick(dt) {
+    // gentle rotation of the node cloud
+    const st = this.state;
+    if (st.points) st.points.rotation.y += dt * 0.15;
+  },
+
+  lesson: String.raw`The Laplace equation $\nabla^2 V = 0$ on a grid is discretized with the five-point stencil:
+$$V_{i,j}=\frac{1}{4}\left(V_{i+1,j}+V_{i-1,j}+V_{i,j+1}+V_{i,j-1}\right).$$
+Each interior node is the average of its four neighbours. Dirichlet boundaries fix the values on the edges (here $V=0$ on three walls and $V=100$ on the right wall), so only interior nodes are updated.
+
+Jacobi iteration computes all new values from the old array, then copies them back. Gauss-Seidel updates in place, using already-refreshed neighbours, which typically converges about twice as fast. The residual is the largest change between successive sweeps; iteration stops when it falls below the tolerance. Convergence is slow for large $N$ because the spectral radius of the Jacobi operator approaches $1 - O(1/N^2)$, so the number of iterations scales like $N^2$. The log-scale residual plot shows the roughly linear decay characteristic of a stationary iterative method.`,
+
+  quiz: [
+    { q: 'In the 5-point stencil for Laplace, an interior node equals:', options: ['the average of its four orthogonal neighbours', 'the sum of its four neighbours', 'the average of its eight neighbours', 'the maximum of its four neighbours'], answer: 0 },
+    { q: 'Compared with Jacobi, Gauss-Seidel generally:', options: ['converges faster because it uses updated values immediately', 'converges slower because it uses old values', 'has the same convergence rate for all grids', 'requires no boundary conditions'], answer: 0 }
+  ]
+});
+/* === UI CONTROLLER === */
+
+let active = null;
+const listEl = document.getElementById('moduleList');
+const controlsEl = document.getElementById('controls');
+const lessonEl = document.getElementById('lesson');
+const quizEl = document.getElementById('quiz');
+
+function buildControls(mod) {
+  controlsEl.innerHTML = '';
+  for (const c of mod.controls) {
+    const wrap = document.createElement('div');
+    wrap.className = 'ctrl';
+    const label = document.createElement('label');
+    label.textContent = c.label;
+    wrap.appendChild(label);
+    let input;
+    if (c.type === 'range') {
+      input = document.createElement('input');
+      input.type = 'range';
+      input.min = c.min; input.max = c.max; input.step = c.step; input.value = c.value;
+      input.addEventListener('input', () => {
+        mod.state[c.id] = parseFloat(input.value);
+        mod.update();
+      });
+    } else if (c.type === 'select') {
+      input = document.createElement('select');
+      for (const o of c.options) {
+        const opt = document.createElement('option');
+        opt.value = (typeof o === 'object' && o !== null) ? o.value : o;
+        opt.textContent = (typeof o === 'object' && o !== null) ? (o.label ?? o.value) : o;
+        input.appendChild(opt);
+      }
+      input.value = c.value;
+      input.addEventListener('change', () => {
+        mod.state[c.id] = input.value;
+        mod.update();
+      });
+    } else if (c.type === 'check') {
+      input = document.createElement('input');
+      input.type = 'checkbox';
+      input.checked = !!c.value;
+      input.addEventListener('change', () => {
+        mod.state[c.id] = input.checked;
+        mod.update();
+      });
+    }
+    wrap.appendChild(input);
+    controlsEl.appendChild(wrap);
+  }
+}
+
+function buildQuiz(mod) {
+  quizEl.innerHTML = '';
+  for (const item of mod.quiz) {
+    const q = document.createElement('div');
+    q.className = 'q';
+    q.textContent = item.q;
+    const opts = document.createElement('div');
+    opts.className = 'opts';
+    item.options.forEach((opt, i) => {
+      const b = document.createElement('button');
+      b.textContent = opt;
+      b.addEventListener('click', () => {
+        if (i === item.answer) b.classList.add('correct');
+        else b.classList.add('wrong');
+      });
+      opts.appendChild(b);
+    });
+    q.appendChild(opts);
+    quizEl.appendChild(q);
+  }
+}
+
+function loadModule(mod) {
+  active = mod;
+  controls.target.set(0, 0, 0);
+  if (Number.isNaN(camera.position.x)) camera.position.set(6, 5, 8);
+  content.clear();
+  mod.state = mod.state || {};
+  for (const c of mod.controls) {
+    if (!(c.id in mod.state)) {
+      mod.state[c.id] = c.type === 'range' ? parseFloat(c.value) : (c.type === 'check' ? !!c.value : c.value);
+    }
+  }
+  mod.build();
+  mod.update();
+  lessonEl.innerHTML = mod.lesson;
+  renderTex(lessonEl, KATEX_OPTS);
+  buildControls(mod);
+  buildQuiz(mod);
+  listEl.querySelectorAll('li').forEach(li => li.classList.toggle('active', li.dataset.id === mod.id));
+}
+
+for (const mod of modules) {
+  const li = document.createElement('li');
+  li.textContent = mod.title;
+  li.dataset.id = mod.id;
+  li.addEventListener('click', () => loadModule(mod));
+  listEl.appendChild(li);
+}
+if (modules.length) loadModule(modules[0]);
+
+function resize() {
+  const w = stage.clientWidth, h = stage.clientHeight;
+  renderer.setSize(w, h);
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+}
+window.addEventListener('resize', resize);
+
+let last = performance.now();
+function animate(now) {
+  requestAnimationFrame(animate);
+  const dt = Math.min((now - last) / 1000, 0.05);
+  last = now;
+  if (active && typeof active.tick === 'function') {
+    try { active.tick(dt); } catch (e) { console.error('tick error:', e); active.tick = null; }
+  }
+  controls.update();
+  renderer.render(scene, camera);
+}
+requestAnimationFrame(animate);
+</script>
+</body>
+</html>
