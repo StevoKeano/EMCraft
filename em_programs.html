@@ -1467,6 +1467,210 @@ The post radius controls the coupling strength: larger $r/a$ gives stronger scat
     { q: 'For a lossless post, increasing the post radius generally causes:', options: ['|S11| to decrease and |S21| to increase', '|S11| to increase and |S21| to decrease', 'No change in scattering', '|S11| and |S21| both to increase'], answer: 1 }
   ]
 });
+modules.push({
+  id: 'lossy_line',
+  title: '10. Lossy Line: Attenuation & Complex Impedance',
+  controls: [
+    { id: 'alpha', label: 'alpha (Np/m)', type: 'range', min: 0, max: 0.2, step: 0.005, value: 0.05 },
+    { id: 'beta', label: 'beta (rad/m)', type: 'range', min: 1, max: 10, step: 0.1, value: 4 },
+    { id: 'length', label: 'length (m)', type: 'range', min: 0.1, max: 5, step: 0.1, value: 3 }
+  ],
+  build() {
+    const st = this.state;
+    Object.assign(st, { alpha: 0.05, beta: 4, length: 3 });
+
+    const g = new THREE.Group();
+    content.add(g);
+
+    // line axis
+    const axisGeo = new THREE.CylinderGeometry(0.035, 0.035, 5, 16);
+    axisGeo.rotateZ(Math.PI / 2);
+    const axis = new THREE.Mesh(axisGeo, new THREE.MeshStandardMaterial({ color: 0x334455, metalness: 0.6, roughness: 0.4 }));
+    axis.position.set(2.5, 0, 0);
+    g.add(axis);
+
+    // decaying wave envelope (two mirrored curves)
+    const envMat = new THREE.LineBasicMaterial({ color: 0x7fd1ff });
+    const envGeo = new THREE.BufferGeometry();
+    const envPts = [];
+    for (let i = 0; i <= 120; i++) {
+      const z = (i / 120) * 5;
+      envPts.push(new THREE.Vector3(z, 0.55 * Math.exp(-st.alpha * z), 0));
+    }
+    envGeo.setFromPoints(envPts);
+    const envTop = new THREE.Line(envGeo, envMat);
+    g.add(envTop);
+    const envBot = new THREE.Line(envGeo.clone(), envMat);
+    envBot.scale.y = -1;
+    g.add(envBot);
+
+    // oscillating wave inside envelope
+    const waveMat = new THREE.LineBasicMaterial({ color: 0xffb347 });
+    const waveGeo = new THREE.BufferGeometry();
+    const wavePts = [];
+    for (let i = 0; i <= 240; i++) {
+      const z = (i / 240) * 5;
+      wavePts.push(new THREE.Vector3(z, 0.55 * Math.exp(-st.alpha * z) * Math.cos(st.beta * z), 0));
+    }
+    waveGeo.setFromPoints(wavePts);
+    const wave = new THREE.Line(waveGeo, waveMat);
+    g.add(wave);
+
+    // complex impedance spiral in the y-z plane (real -> y, imag -> z)
+    const spiralMat = new THREE.LineBasicMaterial({ color: 0xff6b9d });
+    const spiralGeo = new THREE.BufferGeometry();
+    const spiralPts = [];
+    const Z0 = 50;
+    for (let i = 0; i <= 200; i++) {
+      const z = (i / 200) * st.length;
+      const th = 2 * st.beta * z;
+      const r = Z0 * Math.exp(-2 * st.alpha * z);
+      spiralPts.push(new THREE.Vector3(z, r * Math.cos(th) * 0.02, r * Math.sin(th) * 0.02));
+    }
+    spiralGeo.setFromPoints(spiralPts);
+    const spiral = new THREE.Line(spiralGeo, spiralMat);
+    g.add(spiral);
+
+    // markers
+    const markerMat = new THREE.MeshStandardMaterial({ color: 0xff6b9d, emissive: 0x441122 });
+    const marker = new THREE.Mesh(new THREE.SphereGeometry(0.06, 12, 12), markerMat);
+    g.add(marker);
+
+    this.group = g;
+    this.envTop = envTop;
+    this.envBot = envBot;
+    this.wave = wave;
+    this.spiral = spiral;
+    this.marker = marker;
+    this.Z0 = Z0;
+
+    g.position.set(-2.5, 0, 0);
+  },
+  update() {
+    const st = this.state;
+    const a = st.alpha, b = st.beta, L = st.length;
+
+    // envelope
+    const envPts = [];
+    for (let i = 0; i <= 120; i++) {
+      const z = (i / 120) * 5;
+      envPts.push(new THREE.Vector3(z, 0.55 * Math.exp(-a * z), 0));
+    }
+    this.envTop.geometry.setFromPoints(envPts);
+    this.envBot.geometry.setFromPoints(envPts.map(p => new THREE.Vector3(p.x, -p.y, 0)));
+
+    // wave
+    const wavePts = [];
+    for (let i = 0; i <= 240; i++) {
+      const z = (i / 240) * 5;
+      wavePts.push(new THREE.Vector3(z, 0.55 * Math.exp(-a * z) * Math.cos(b * z), 0));
+    }
+    this.wave.geometry.setFromPoints(wavePts);
+
+    // spiral
+    const spiralPts = [];
+    for (let i = 0; i <= 200; i++) {
+      const z = (i / 200) * L;
+      const th = 2 * b * z;
+      const r = this.Z0 * Math.exp(-2 * a * z);
+      spiralPts.push(new THREE.Vector3(z, r * Math.cos(th) * 0.02, r * Math.sin(th) * 0.02));
+    }
+    this.spiral.geometry.setFromPoints(spiralPts);
+
+    // marker at end of spiral
+    const zEnd = L;
+    const thEnd = 2 * b * zEnd;
+    const rEnd = this.Z0 * Math.exp(-2 * a * zEnd);
+    this.marker.position.set(zEnd, rEnd * Math.cos(thEnd) * 0.02, rEnd * Math.sin(thEnd) * 0.02);
+
+    // HUD
+    const zin = this.Z0 * Math.exp(-2 * a * L) * Math.cos(2 * b * L);
+    setHud('Lossy line', '\\gamma=\\alpha+j\\beta,\\quad V(z)=V_0 e^{-\\alpha z}', [
+      { k: 'alpha', v: a.toFixed(3) + ' Np/m' },
+      { k: 'beta', v: b.toFixed(2) + ' rad/m' },
+      { k: 'Z_in', v: zin.toFixed(1) + ' \u03a9' }
+    ]);
+
+    // chart
+    const ctx = chartEl.getContext('2d');
+    const W = chartEl.width, H = chartEl.height;
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = '#0b1020';
+    ctx.fillRect(0, 0, W, H);
+
+    // envelope plot (left half)
+    const pad = 30;
+    const plotW = W * 0.55 - pad;
+    const plotH = H - 2 * pad;
+    ctx.strokeStyle = '#2a3a55';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(pad, pad);
+    ctx.lineTo(pad, H - pad);
+    ctx.lineTo(W * 0.55 - pad, H - pad);
+    ctx.stroke();
+
+    ctx.strokeStyle = '#7fd1ff';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    for (let i = 0; i <= 100; i++) {
+      const z = (i / 100) * 5;
+      const y = 0.55 * Math.exp(-a * z);
+      const px = pad + (z / 5) * plotW;
+      const py = H - pad - (y / 0.55) * plotH;
+      if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+    }
+    ctx.stroke();
+
+    ctx.strokeStyle = '#ffb347';
+    ctx.beginPath();
+    for (let i = 0; i <= 200; i++) {
+      const z = (i / 200) * 5;
+      const y = 0.55 * Math.exp(-a * z) * Math.cos(b * z);
+      const px = pad + (z / 5) * plotW;
+      const py = H - pad - (y / 0.55) * plotH;
+      if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+    }
+    ctx.stroke();
+
+    ctx.fillStyle = '#9fb3d1';
+    ctx.font = '12px monospace';
+    ctx.fillText('V(z) envelope', pad, pad - 8);
+
+    // impedance spiral (right half)
+    const cx = W * 0.55 + pad + (W * 0.45 - 2 * pad) / 2;
+    const cy = H / 2;
+    const R = Math.min(W * 0.45 - 2 * pad, H - 2 * pad) / 2;
+    ctx.strokeStyle = '#2a3a55';
+    ctx.beginPath();
+    ctx.arc(cx, cy, R, 0, Math.PI * 2);
+    ctx.stroke();
+
+    ctx.strokeStyle = '#ff6b9d';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    for (let i = 0; i <= 200; i++) {
+      const z = (i / 200) * L;
+      const th = 2 * b * z;
+      const r = this.Z0 * Math.exp(-2 * a * z);
+      const px = cx + (r / this.Z0) * R * Math.cos(th);
+      const py = cy - (r / this.Z0) * R * Math.sin(th);
+      if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+    }
+    ctx.stroke();
+
+    ctx.fillStyle = '#9fb3d1';
+    ctx.fillText('Z_in spiral', cx - 40, pad - 8);
+  },
+  tick(dt) {
+    this.group.rotation.y += dt * 0.15;
+  },
+  lesson: String.raw`A lossy transmission line has propagation constant $\gamma=\alpha+j\beta$. The attenuation constant $\alpha$ (Np/m) comes from conductor and dielectric loss, while the phase constant $\beta$ (rad/m) sets the wavelength $\lambda=2\pi/\beta$. A wave decays as $V(z)=V_0 e^{-\alpha z}$ and its phase rotates by $\beta z$. The characteristic impedance is complex, $Z_0=R_0+jX_0$, and the input impedance spirals in the complex plane as the line length grows: $Z_{in}(L)=Z_0\tanh(\gamma L)$ for a terminated line. Larger $\alpha$ shrinks the spiral radius, while larger $\beta$ tightens the spiral pitch. This is dispersion plus loss: the signal both attenuates and changes phase.`,
+  quiz: [
+    { q: 'Which parameter controls how quickly the wave amplitude decays with distance?', options: ['beta', 'alpha', 'length', 'Z_0'], answer: 1 },
+    { q: 'As line length increases, the input impedance in the complex plane:', options: ['moves in a straight line', 'spirals inward', 'stays fixed', 'spirals outward'], answer: 1 }
+  ]
+});
 /* === UI CONTROLLER === */
 
 let active = null;
