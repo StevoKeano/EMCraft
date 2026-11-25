@@ -212,6 +212,7 @@
 
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
+controls.zoomSpeed = 0.45;
 
     scene.add(new THREE.AmbientLight(0xffffff, 0.75));
     const dirLight = new THREE.DirectionalLight(0xffffff, 1.1);
@@ -3316,7 +3317,7 @@ modules.push({
           (c.options || []).forEach((o) => {
             const opt = document.createElement('option');
             if (typeof o === 'string') { opt.value = o; opt.textContent = o; }
-            else { opt.value = o.value; opt.textContent = o.label; }
+            else { opt.value = (typeof o === 'object' && o !== null) ? o.value : o; opt.textContent = (typeof o === 'object' && o !== null) ? (o.label ?? o.value) : o; }
             if (opt.value === mod.state[c.id]) opt.selected = true;
             sel.appendChild(opt);
           });

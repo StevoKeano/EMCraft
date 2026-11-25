@@ -394,7 +394,7 @@ When the user uploads `CONTEXTCUT-LAB-FACTORY_3_5.md` and provides **Author(s), 
 ## Hardening Rules (Mandatory Overrides)
 
 1. **Invocation Mode & Thinking Budget:**
-   - Run ContextCut-PRO in **Chat mode** (disable `read_file` tool loops) and emit **only** `/tmp/build_<slug>.py` and `/tmp/watch_<slug>.sh`—reuse `/home/steve/keanapps/bioelectromagnetics.html` (with old `modules.push(...)` blocks stripped and `<title>`/`<h1>` updated) instead of regenerating the HTML shell.
+   - Run ContextCut-PRO in **Chat mode** (disable `read_file` tool loops) and emit **only** `/tmp/build_<slug>.py` and `/tmp/watch_<slug>.sh`—reuse `/home/steve/keanapps/em-<slug>.html` (with old `modules.push(...)` blocks stripped and `<title>`/`<h1>` updated) instead of regenerating the HTML shell.
    - Set `"reasoning_effort": "low", "reasoning_budget_tokens": 64` in `stream_completion()`.
 
 2. **Baseline HTML Shell Requirements:**
