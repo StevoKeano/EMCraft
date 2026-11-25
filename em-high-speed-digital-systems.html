@@ -100,7 +100,19 @@ camera.lookAt(0, 0, 0);
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
 controls.dampingFactor = 0.06;
-controls.zoomSpeed = 0.45;
+controls.minDistance = 0.8;
+controls.maxDistance = 80;
+controls.enableZoom = false; // handled via normalized wheel listener below so 1 click never collapses distance to 0
+
+viewport.addEventListener('wheel', (e) => {
+  e.preventDefault();
+  const dir = Math.sign(e.deltaY);
+  if (!dir) return;
+  const offset = camera.position.clone().sub(controls.target);
+  const dist = Math.max(controls.minDistance, Math.min(controls.maxDistance, offset.length() * (dir > 0 ? 1.12 : 0.89)));
+  offset.setLength(dist);
+  camera.position.copy(controls.target).add(offset);
+}, { passive: false });
 
 scene.add(new THREE.AmbientLight(0xffffff, 0.55));
 const key = new THREE.DirectionalLight(0xffffff, 1.1);
