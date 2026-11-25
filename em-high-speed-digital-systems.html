@@ -3164,6 +3164,236 @@ modules.push({
     { q: 'Increasing dielectric thickness h while keeping w fixed generally does what to Z0?', options: ['Increases Z0', 'Decreases Z0', 'Leaves Z0 unchanged', 'Makes Z0 zero'], answer: 0 }
   ]
 });
+modules.push({
+  id: 'crosstalk',
+  title: '12. Cross Talk',
+  controls: [
+    { type: 'range', id: 'spacing', label: 'Trace spacing s (mm)', min: 0.2, max: 3.0, step: 0.05, value: 1.0 },
+    { type: 'range', id: 'length', label: 'Parallel length (m)', min: 0.05, max: 0.5, step: 0.01, value: 0.25 },
+    { type: 'range', id: 'tr', label: 'Rise time tr (ns)', min: 0.1, max: 10, step: 0.1, value: 2.0 },
+    { type: 'range', id: 'k', label: 'Coupling coefficient k', min: 0.01, max: 0.3, step: 0.005, value: 0.12 }
+  ],
+
+  build() {
+    const st = this.state;
+
+    // ---- 3D: two parallel traces ----
+    const traceMat = new THREE.MeshStandardMaterial({ color: 0xc9a227, metalness: 0.75, roughness: 0.35 });
+    const traceGeo = new THREE.BoxGeometry(0.06, 0.02, 1.0);
+
+    const traceA = new THREE.Mesh(traceGeo, traceMat);
+    traceA.position.set(-0.35, 0, 0);
+    content.add(traceA);
+
+    const traceB = new THREE.Mesh(traceGeo, traceMat);
+    traceB.position.set(0.35, 0, 0);
+    content.add(traceB);
+
+    // ground plane
+    const ground = new THREE.Mesh(
+      new THREE.BoxGeometry(2.2, 0.02, 1.4),
+      new THREE.MeshStandardMaterial({ color: 0x1b2a3a, roughness: 0.9 })
+    );
+    ground.position.set(0, -0.12, 0);
+    content.add(ground);
+
+    // source / load markers
+    const srcMat = new THREE.MeshStandardMaterial({ color: 0x7fd1ff, emissive: 0x1a4a66 });
+    const src = new THREE.Mesh(new THREE.SphereGeometry(0.05, 16, 12), srcMat);
+    src.position.set(-0.35, 0.06, -0.55);
+    content.add(src);
+
+    const loadMat = new THREE.MeshStandardMaterial({ color: 0xff8a5c, emissive: 0x5a2410 });
+    const load = new THREE.Mesh(new THREE.SphereGeometry(0.05, 16, 12), loadMat);
+    load.position.set(-0.35, 0.06, 0.55);
+    content.add(load);
+
+    // ---- coupling field arrows between traces ----
+    this._arrows = [];
+    for (let i = 0; i < 9; i++) {
+      const z = -0.4 + i * 0.1;
+      this._arrows.push({
+        origin: new THREE.Vector3(-0.35, 0.05, z),
+        dir: new THREE.Vector3(1, 0, 0),
+        len: 0.5
+      });
+    }
+    addArrowField(this._arrows, 0x7fd1ff);
+
+    // ---- chart ----
+    this._chart = chartEl;
+    this._ctx = chartEl.getContext('2d');
+
+    // ---- HUD ----
+    setHud('Crosstalk', String.raw`$V_{\mathrm{NE}}\propto k\,\frac{dV}{dt}$`, [
+      { k: 'NEXT', v: '-' },
+      { k: 'FEXT', v: '-' },
+      { k: 'spacing', v: '-' }
+    ]);
+  },
+
+  update() {
+    const st = this.state;
+    const s = st.spacing;      // mm
+    const L = st.length;       // m
+    const tr = st.tr;          // ns
+    const k = st.k;
+
+    // Coupling falls roughly as 1/(1 + (s/s0)^2); s0 ~ 0.6 mm
+    const s0 = 0.6;
+    const coupling = k / (1 + Math.pow(s / s0, 2));
+
+    // NEXT: near-end, proportional to coupling and dV/dt (1/tr), weakly length dependent
+    const dvdt = 1 / tr; // ns^-1
+    const NEXT = 100 * coupling * dvdt * 0.35; // percent-ish scale
+
+    // FEXT: far-end, grows with parallel length (accumulates), also 1/tr
+    const FEXT = 100 * coupling * dvdt * L * 0.55;
+
+    // clamp for display
+    const NEXTc = Math.min(NEXT, 100);
+    const FEXTc = Math.min(FEXT, 100);
+
+    // ---- 3D spacing update ----
+    const half = 0.15 + s * 0.18;
+    const traceA = content.children[0];
+    const traceB = content.children[1];
+    traceA.position.x = -half;
+    traceB.position.x = half;
+
+    // arrows between traces
+    for (const a of this._arrows) {
+      a.origin.x = -half;
+      a.len = 2 * half;
+    }
+
+    // ---- chart: NEXT & FEXT vs spacing ----
+    const ctx = this._ctx;
+    const W = chartEl.width, H = chartEl.height;
+    ctx.clearRect(0, 0, W, H);
+
+    // background
+    ctx.fillStyle = '#0b1220';
+    ctx.fillRect(0, 0, W, H);
+
+    // axes
+    const padL = 55, padR = 20, padT = 30, padB = 45;
+    const x0 = padL, x1 = W - padR;
+    const y0 = H - padB, y1 = padT;
+
+    ctx.strokeStyle = '#2a3a52';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(x0, y0); ctx.lineTo(x1, y0);
+    ctx.moveTo(x0, y0); ctx.lineTo(x0, y1);
+    ctx.stroke();
+
+    // grid
+    ctx.strokeStyle = '#162234';
+    for (let i = 1; i <= 4; i++) {
+      const y = y0 - (y0 - y1) * i / 4;
+      ctx.beginPath(); ctx.moveTo(x0, y); ctx.lineTo(x1, y); ctx.stroke();
+    }
+
+    // labels
+    ctx.fillStyle = '#9fb3c8';
+    ctx.font = '12px sans-serif';
+    ctx.fillText('Crosstalk (%)', x0 - 40, y1 - 8);
+    ctx.fillText('Spacing s (mm)', (x0 + x1) / 2 - 40, H - 12);
+
+    // x ticks
+    for (let i = 0; i <= 6; i++) {
+      const sm = 0.2 + i * (2.8 / 6);
+      const x = x0 + (x1 - x0) * i / 6;
+      ctx.fillStyle = '#6f8296';
+      ctx.fillText(sm.toFixed(1), x - 8, y0 + 16);
+    }
+
+    // curves
+    const plot = (fn, color) => {
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      for (let i = 0; i <= 120; i++) {
+        const sm = 0.2 + (2.8) * i / 120;
+        const c = k / (1 + Math.pow(sm / s0, 2));
+        const val = Math.min(fn(c), 100);
+        const x = x0 + (x1 - x0) * i / 120;
+        const y = y0 - (y0 - y1) * (val / 100);
+        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+    };
+
+    plot(c => 100 * c * dvdt * 0.35, '#7fd1ff');       // NEXT
+    plot(c => 100 * c * dvdt * L * 0.55, '#ff8a5c');   // FEXT
+
+    // legend
+    ctx.fillStyle = '#7fd1ff';
+    ctx.fillRect(x1 - 120, y1 + 6, 12, 4);
+    ctx.fillStyle = '#9fb3c8';
+    ctx.fillText('NEXT', x1 - 104, y1 + 12);
+
+    ctx.fillStyle = '#ff8a5c';
+    ctx.fillRect(x1 - 120, y1 + 22, 12, 4);
+    ctx.fillStyle = '#9fb3c8';
+    ctx.fillText('FEXT', x1 - 104, y1 + 28);
+
+    // current marker
+    const xm = x0 + (x1 - x0) * ((s - 0.2) / 2.8);
+    ctx.strokeStyle = '#ffffff55';
+    ctx.setLineDash([4, 4]);
+    ctx.beginPath(); ctx.moveTo(xm, y0); ctx.lineTo(xm, y1); ctx.stroke();
+    ctx.setLineDash([]);
+
+    // ---- HUD ----
+    setHud('Crosstalk', String.raw`$V_{\mathrm{NE}}\propto k\,\frac{dV}{dt}$`, [
+      { k: 'NEXT', v: NEXTc.toFixed(1) + ' %' },
+      { k: 'FEXT', v: FEXTc.toFixed(1) + ' %' },
+      { k: 'spacing', v: s.toFixed(2) + ' mm' }
+    ]);
+  },
+
+  tick(dt) {
+    // gentle pulse on source marker
+    const t = performance.now() * 0.001;
+    const src = content.children[2];
+    if (src) src.scale.setScalar(1 + 0.15 * Math.sin(t * 3));
+  },
+
+  lesson: String.raw`
+Cross talk is unwanted coupling between adjacent traces. Two mechanisms matter:
+
+1. **Near-end crosstalk (NEXT)** - measured at the driven end. It is driven by the mutual capacitance and mutual inductance and scales with the rate of change of the signal:
+$$V_{\mathrm{NE}} \propto k\,\frac{dV}{dt}$$
+Because it depends on $dV/dt$, faster edges (smaller $t_r$) produce more NEXT.
+
+2. **Far-end crosstalk (FEXT)** - measured at the far end of the victim trace. In a homogeneous medium the forward-coupled contributions accumulate along the parallel length, so FEXT grows roughly linearly with the parallel run length $L$:
+$$V_{\mathrm{FE}} \propto k\,\frac{dV}{dt}\,L$$
+This is why long parallel runs are dangerous even when spacing is modest.
+
+**The 3W rule.** Keep traces at least three times the trace width apart (edge-to-edge) to reduce coupling substantially. Coupling falls rapidly with spacing - roughly as $1/(1+(s/s_0)^2)$ in this model.
+
+**Guard traces.** A grounded guard trace between aggressor and victim intercepts field lines and can reduce both NEXT and FEXT, but it must be stitched to ground frequently or it becomes another coupling path.
+
+**Why FEXT grows with length.** Each infinitesimal segment of the victim trace receives a small forward-traveling contribution from the aggressor. These contributions add in phase at the far end, so the total scales with $L$. NEXT, by contrast, is dominated by the local coupling near the driven end and does not accumulate the same way.
+
+Practical rules: shorten parallel runs, increase spacing, slow edge rates where possible, and use guard traces or differential routing to control coupling.
+`,
+
+  quiz: [
+    {
+      q: 'Which crosstalk component grows approximately linearly with the parallel length of the traces?',
+      options: ['Near-end crosstalk (NEXT)', 'Far-end crosstalk (FEXT)', 'Both grow equally with length', 'Neither depends on length'],
+      answer: 1
+    },
+    {
+      q: 'The 3W rule recommends keeping traces apart by at least:',
+      options: ['One trace width', 'Two trace widths', 'Three trace widths', 'Ten trace widths'],
+      answer: 2
+    }
+  ]
+});
 /* === UI CONTROLLER === */
 
 const moduleList = document.getElementById('moduleList');
