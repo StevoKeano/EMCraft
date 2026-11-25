@@ -576,6 +576,171 @@ modules.push({
     { q: 'The load voltage staircase converges toward:', options: ['ZL/(ZS+ZL)', 'ZS/(ZS+ZL)', '1', '0'], answer: 0 }
   ]
 });
+modules.push({
+  id: 'traveling_waves',
+  title: '4. Traveling Waves: Forward & Backward Phasors',
+  controls: [
+    { type: 'range', id: 'ratio', label: '|V-|/|V+|', min: 0, max: 1, step: 0.01, value: 0.5 },
+    { type: 'range', id: 'alpha', label: 'alpha (Np/m)', min: 0, max: 0.2, step: 0.005, value: 0.05 },
+    { type: 'range', id: 'beta', label: 'beta (rad/m)', min: 1, max: 10, step: 0.1, value: 4 }
+  ],
+  build() {
+    const st = this.state;
+    Object.assign(st, { ratio: 0.5, alpha: 0.05, beta: 4 });
+
+    this.group = new THREE.Group();
+    content.add(this.group);
+
+    // forward helix (blue) and backward helix (orange)
+    this.helixF = new THREE.Line(
+      new THREE.BufferGeometry(),
+      new THREE.LineBasicMaterial({ color: 0x4fa8ff })
+    );
+    this.helixB = new THREE.Line(
+      new THREE.BufferGeometry(),
+      new THREE.LineBasicMaterial({ color: 0xff9a4f })
+    );
+    this.group.add(this.helixF, this.helixB);
+
+    // vector sum curve (green) - the actual V(z) phasor tip
+    this.sumLine = new THREE.Line(
+      new THREE.BufferGeometry(),
+      new THREE.LineBasicMaterial({ color: 0x7dff9a, linewidth: 2 })
+    );
+    this.group.add(this.sumLine);
+
+    // axis
+    const axisGeo = new THREE.BufferGeometry().setFromPoints([
+      new THREE.Vector3(0, 0, -6), new THREE.Vector3(0, 0, 6)
+    ]);
+    this.group.add(new THREE.Line(axisGeo, new THREE.LineBasicMaterial({ color: 0x334455 })));
+
+    this.zMin = -6; this.zMax = 6; this.N = 240;
+    this._buildCurves();
+  },
+
+  _buildCurves() {
+    const st = this.state;
+    const { ratio, alpha, beta } = st;
+    const zMin = this.zMin, zMax = this.zMax, N = this.N;
+
+    const fPts = [], bPts = [], sPts = [];
+    for (let i = 0; i <= N; i++) {
+      const z = zMin + (zMax - zMin) * i / N;
+      const att = Math.exp(-alpha * z);
+      const ph = beta * z;
+      // forward phasor: V+ e^{-alpha z} e^{-j beta z}
+      const fx = att * Math.cos(-ph), fy = att * Math.sin(-ph);
+      // backward phasor: V- e^{+alpha z} e^{+j beta z}
+      const bx = ratio * Math.exp(alpha * z) * Math.cos(ph);
+      const by = ratio * Math.exp(alpha * z) * Math.sin(ph);
+      fPts.push(new THREE.Vector3(fx, fy, z));
+      bPts.push(new THREE.Vector3(bx, by, z));
+      sPts.push(new THREE.Vector3(fx + bx, fy + by, z));
+    }
+    this.helixF.geometry.dispose();
+    this.helixF.geometry = new THREE.BufferGeometry().setFromPoints(fPts);
+    this.helixB.geometry.dispose();
+    this.helixB.geometry = new THREE.BufferGeometry().setFromPoints(bPts);
+    this.sumLine.geometry.dispose();
+    this.sumLine.geometry = new THREE.BufferGeometry().setFromPoints(sPts);
+  },
+
+  update() {
+    const st = this.state;
+    this._buildCurves();
+    setHud('Traveling waves',
+      'V(z)=V^{+}e^{-\\gamma z}+V^{-}e^{+\\gamma z}',
+      [
+        { k: '|V-|/|V+|', v: st.ratio.toFixed(2) },
+        { k: 'alpha', v: st.alpha.toFixed(3) },
+        { k: 'beta', v: st.beta.toFixed(2) }
+      ]);
+    this._drawChart();
+  },
+
+  _drawChart() {
+    const st = this.state;
+    const ctx = chartEl.getContext('2d');
+    const W = chartEl.width, H = chartEl.height;
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = '#0b1220'; ctx.fillRect(0, 0, W, H);
+
+    const zMin = this.zMin, zMax = this.zMax;
+    const pad = 40;
+    const x0 = pad, x1 = W - pad, y0 = H - pad, y1 = pad;
+    const yMax = 1 + st.ratio;
+
+    const mapX = z => x0 + (z - zMin) / (zMax - zMin) * (x1 - x0);
+    const mapY = v => y0 - (v / yMax) * (y0 - y1);
+
+    // grid
+    ctx.strokeStyle = '#1c2a3d'; ctx.lineWidth = 1;
+    for (let k = -1; k <= 1; k += 0.5) {
+      const y = mapY(k);
+      ctx.beginPath(); ctx.moveTo(x0, y); ctx.lineTo(x1, y); ctx.stroke();
+    }
+    ctx.strokeStyle = '#2a3a52';
+    ctx.beginPath(); ctx.moveTo(x0, mapY(0)); ctx.lineTo(x1, mapY(0)); ctx.stroke();
+
+    // real part of V(z)
+    ctx.strokeStyle = '#7dff9a'; ctx.lineWidth = 2;
+    ctx.beginPath();
+    for (let i = 0; i <= 400; i++) {
+      const z = zMin + (zMax - zMin) * i / 400;
+      const re = Math.exp(-st.alpha * z) * Math.cos(-st.beta * z)
+               + st.ratio * Math.exp(st.alpha * z) * Math.cos(st.beta * z);
+      const px = mapX(z), py = mapY(re);
+      i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+    }
+    ctx.stroke();
+
+    // envelope |V+| e^{-alpha z} + |V-| e^{+alpha z}
+    ctx.strokeStyle = '#ff9a4f'; ctx.lineWidth = 1.5; ctx.setLineDash([6, 4]);
+    ctx.beginPath();
+    for (let i = 0; i <= 400; i++) {
+      const z = zMin + (zMax - zMin) * i / 400;
+      const env = Math.exp(-st.alpha * z) + st.ratio * Math.exp(st.alpha * z);
+      const px = mapX(z), py = mapY(env);
+      i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+    }
+    ctx.stroke();
+    ctx.beginPath();
+    for (let i = 0; i <= 400; i++) {
+      const z = zMin + (zMax - zMin) * i / 400;
+      const env = -(Math.exp(-st.alpha * z) + st.ratio * Math.exp(st.alpha * z));
+      const px = mapX(z), py = mapY(env);
+      i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+    }
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // labels
+    ctx.fillStyle = '#9fb3c8'; ctx.font = '12px monospace';
+    ctx.fillText('Re V(z)', x0 + 6, y1 + 14);
+    ctx.fillStyle = '#ff9a4f';
+    ctx.fillText('envelope', x1 - 80, y1 + 14);
+    ctx.fillStyle = '#6b7f95';
+    ctx.fillText('z (m)', x1 - 30, y0 + 18);
+  },
+
+  tick(dt) {
+    this.group.rotation.y += dt * 0.15;
+  },
+
+  lesson: String.raw`A phasor is a complex number $V = |V|e^{j\phi}$ representing amplitude and phase. Along a line, a forward wave is $V^{+}e^{-\gamma z}$ and a backward wave is $V^{-}e^{+\gamma z}$, with $\gamma=\alpha+j\beta$.
+
+Superposition gives $V(z)=V^{+}e^{-\alpha z}e^{-j\beta z}+V^{-}e^{+\alpha z}e^{+j\beta z}$. The two phasors rotate in opposite senses: the forward one clockwise in $z$, the backward one counter-clockwise.
+
+If $|V^{-}|=0$ the result is a pure traveling wave: constant amplitude $|V^{+}|e^{-\alpha z}$ and linear phase $\beta z$. If $|V^{-}|=|V^{+}|$ and $\alpha=0$ the result is a pure standing wave: nodes where the two phasors cancel and antinodes where they add, spaced $\lambda/2=\pi/\beta$ apart.
+
+For $0<|V^{-}|/|V^{+}|<1$ the pattern is a mixed wave: a traveling component plus a standing ripple. The envelope is $|V^{+}|e^{-\alpha z}+|V^{-}|e^{+\alpha z}$, so attenuation $\alpha>0$ shrinks the forward phasor and grows the backward one, tilting the envelope. The standing-wave ratio is $(1+r)/(1-r)$ with $r=|V^{-}|/|V^{+}|$.`,
+
+  quiz: [
+    { q: 'Two equal-amplitude phasors rotating in opposite directions with alpha = 0 produce:', options: ['a pure traveling wave', 'a pure standing wave with nodes', 'zero field everywhere', 'an exponentially growing wave'], answer: 1 },
+    { q: 'Increasing alpha while keeping |V-|/|V+| fixed causes the envelope to:', options: ['stay flat', 'become asymmetric, decaying toward +z', 'grow without bound', 'oscillate faster'], answer: 1 }
+  ]
+});
 /* === UI CONTROLLER === */
 
 let active = null;
