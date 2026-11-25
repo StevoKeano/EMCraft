@@ -1225,6 +1225,152 @@ modules.push({
     { q: 'On the side y=0, which term must equal V1 while the others vanish?', options: ['G1', 'G2', 'G3', 'G4'], answer: 0 }
   ]
 });
+modules.push({
+  id: 'line_charge_mm',
+  title: '7. Line Charge Distribution: The Integral Equation and the Moment Method (MM)',
+  controls: [
+    { id: 'N', type: 'range', label: 'Segments N', min: 4, max: 32, step: 1, value: 16 },
+    { id: 'Q', type: 'range', label: 'Total charge Q', min: 0.1, max: 2, step: 0.1, value: 1 },
+    { id: 'd', type: 'range', label: 'Observation distance', min: 0.5, max: 3, step: 0.1, value: 1.5 }
+  ],
+  build() {
+    const st = this.state;
+    Object.assign(st, { N: 16, Q: 1, d: 1.5, L: 2, rho: [], V: [], segs: [] });
+    const g = new THREE.Group();
+    st.lineGroup = g; content.add(g);
+    st.mat = new THREE.MeshStandardMaterial({ color: 0x7fd1ff, emissive: 0x113355, roughness: 0.4 });
+    st.obsMat = new THREE.MeshStandardMaterial({ color: 0xffb347, emissive: 0x442200 });
+    st.obs = new THREE.Mesh(new THREE.SphereGeometry(0.06, 16, 12), st.obsMat);
+    content.add(st.obs);
+    st.axis = new THREE.Line(
+      new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(-1.2, 0, 0), new THREE.Vector3(1.2, 0, 0)]),
+      new THREE.LineBasicMaterial({ color: 0x445566 })
+    );
+    content.add(st.axis);
+    st.ctx = chartEl.getContext('2d');
+  },
+  update() {
+    const st = this.state, N = st.N, L = st.L, Q = st.Q, d = st.d;
+    const h = L / N, eps0 = 8.854e-12, k = 1 / (4 * Math.PI * eps0);
+    // Moment method: pulse basis, Z I = V (V = 1 on conductor segments)
+    const Z = [], Vv = [];
+    for (let i = 0; i < N; i++) {
+      const xi = -L / 2 + (i + 0.5) * h;
+      Z.push([]); Vv.push(1);
+      for (let j = 0; j < N; j++) {
+        const xj = -L / 2 + (j + 0.5) * h;
+        const dx = Math.abs(xi - xj);
+        // analytic integral of 1/|x-x'| over pulse segment (singularity handled exactly)
+        const a = xj - h / 2, b = xj + h / 2;
+        let val;
+        if (dx < 1e-9) val = 2 * Math.log(h / 2 + 1e-12) - 2 * Math.log(1e-12);
+        else {
+          const f = (x) => Math.log(Math.abs(xi - x));
+          val = f(a) - f(b);
+          if (xi > a && xi < b) val = Math.log(Math.abs(xi - a)) + Math.log(Math.abs(b - xi));
+        }
+        Z[i].push(k * val);
+      }
+    }
+    // Gaussian elimination
+    const A = Z.map((r, i) => r.concat([Vv[i]]));
+    for (let c = 0; c < N; c++) {
+      let p = c;
+      for (let r = c + 1; r < N; r++) if (Math.abs(A[r][c]) > Math.abs(A[p][c])) p = r;
+      [A[c], A[p]] = [A[p], A[c]];
+      const piv = A[c][c] || 1e-12;
+      for (let r = c + 1; r < N; r++) {
+        const f = A[r][c] / piv;
+        for (let q = c; q <= N; q++) A[r][q] -= f * A[c][q];
+      }
+    }
+    const I = new Array(N).fill(0);
+    for (let r = N - 1; r >= 0; r--) {
+      let s = A[r][N];
+      for (let c = r + 1; c < N; c++) s -= A[r][c] * I[c];
+      I[r] = s / (A[r][r] || 1e-12);
+    }
+    // normalize so total charge = Q
+    const sum = I.reduce((a, b) => a + b, 0) || 1;
+    st.rho = I.map(v => v * Q / sum);
+    // potential along the line at height d
+    st.V = [];
+    for (let i = 0; i < N; i++) {
+      const xi = -L / 2 + (i + 0.5) * h;
+      let pot = 0;
+      for (let j = 0; j < N; j++) {
+        const xj = -L / 2 + (j + 0.5) * h;
+        pot += st.rho[j] * h / Math.sqrt((xi - xj) ** 2 + d * d);
+      }
+      st.V.push(k * pot);
+    }
+    // rebuild 3D segments
+    st.lineGroup.clear();
+    st.segs = [];
+    for (let i = 0; i < N; i++) {
+      const xi = -L / 2 + (i + 0.5) * h;
+      const r = Math.max(0.02, Math.abs(st.rho[i]) * 0.25);
+      const m = new THREE.Mesh(new THREE.SphereGeometry(r, 12, 10), st.mat);
+      m.position.set(xi, 0, 0);
+      st.lineGroup.add(m);
+      st.segs.push(m);
+    }
+    st.obs.position.set(0, d, 0);
+    // field arrows from line to observation plane
+    const vecs = [];
+    for (let i = 0; i < N; i += 2) {
+      const xi = -L / 2 + (i + 0.5) * h;
+      const dir = new THREE.Vector3(-xi, d, 0).normalize();
+      vecs.push({ origin: new THREE.Vector3(xi, 0, 0), dir, len: 0.35 });
+    }
+    addArrowField(vecs, 0x7fd1ff);
+    setHud('Moment method',
+      'V(r)=\\frac{1}{4\\pi\\varepsilon_0}\\int \\frac{\\rho_l(x^{\\prime})}{|r-r^{\\prime}|}dx^{\\prime}',
+      [{ k: 'N', v: String(N) }, { k: 'Q', v: Q.toFixed(2) }, { k: 'd', v: d.toFixed(2) }]);
+    this.drawChart();
+  },
+  drawChart() {
+    const st = this.state, ctx = st.ctx, W = chartEl.width, H = chartEl.height;
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = '#0b1220'; ctx.fillRect(0, 0, W, H);
+    const N = st.N, L = st.L;
+    const pad = 40, plotW = W - 2 * pad, plotH = H - 2 * pad;
+    const rmax = Math.max(...st.rho.map(Math.abs), 1e-6);
+    const vmax = Math.max(...st.V, 1e-6);
+    // axes
+    ctx.strokeStyle = '#334455'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(pad, pad); ctx.lineTo(pad, pad + plotH); ctx.lineTo(pad + plotW, pad + plotH); ctx.stroke();
+    // rho_l(x)
+    ctx.strokeStyle = '#7fd1ff'; ctx.lineWidth = 2; ctx.beginPath();
+    for (let i = 0; i < N; i++) {
+      const x = pad + (i + 0.5) / N * plotW;
+      const y = pad + plotH - (st.rho[i] / rmax) * plotH * 0.45;
+      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+    // V(x)
+    ctx.strokeStyle = '#ffb347'; ctx.lineWidth = 2; ctx.beginPath();
+    for (let i = 0; i < N; i++) {
+      const x = pad + (i + 0.5) / N * plotW;
+      const y = pad + plotH - (st.V[i] / vmax) * plotH * 0.45;
+      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+    ctx.fillStyle = '#7fd1ff'; ctx.font = '12px monospace';
+    ctx.fillText('rho_l(x)', pad + 6, pad + 14);
+    ctx.fillStyle = '#ffb347'; ctx.fillText('V(x) at height d', pad + 6, pad + 30);
+    ctx.fillStyle = '#8899aa'; ctx.fillText('x  [-L/2 .. L/2]', pad + plotW - 110, pad + plotH + 22);
+  },
+  tick(dt) {
+    const st = this.state;
+    st.obs.position.y = st.d + 0.05 * Math.sin(performance.now() * 0.002);
+  },
+  lesson: String.raw`The line-charge integral equation reads $V(r)=\frac{1}{4\pi\varepsilon_0}\int \frac{\rho_l(x^{\prime})}{|r-r^{\prime}|}dx^{\prime}$. Discretizing the segment into $N$ pulses (basis functions equal to 1 on one segment, 0 elsewhere) turns it into the matrix equation $ZI=V$, where $Z_{ij}=\frac{1}{4\pi\varepsilon_0}\int_{seg_j}\frac{dx^{\prime}}{|x_i-x^{\prime}|}$. The diagonal entries are singular but integrable: $\int_{a}^{b}\frac{dx^{\prime}}{|x_i-x^{\prime}|}=\ln|b-x_i|+\ln|x_i-a|$ when $x_i$ lies inside the pulse. Solving $ZI=V$ with Gaussian elimination gives the pulse amplitudes, i.e. the moment-method approximation of $\rho_l$. Increasing $N$ refines the basis and improves accuracy; the total charge is normalized to $Q$.`,
+  quiz: [
+    { q: 'In the moment method with pulse basis functions, the matrix element $Z_{ij}$ represents:', options: ['The charge on segment j', 'The potential at segment i due to unit charge on segment j', 'The electric field at segment i', 'The capacitance of segment j'], answer: 1 },
+    { q: 'Why is the self-term $Z_{ii}$ finite despite the $1/|r-r^{\prime}|$ singularity?', options: ['The singularity is removed by a delta function', 'The integral of $1/|x-x^{\prime}|$ over a finite pulse segment converges', 'Pulse basis functions are zero on the diagonal', 'The observation point is always outside the segment'], answer: 1 }
+  ]
+});
 /* === UI CONTROLLER === */
 
 let active = null;
