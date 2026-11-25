@@ -946,6 +946,145 @@ Jacobi iteration computes all new values from the old array, then copies them ba
     { q: 'Compared with Jacobi, Gauss-Seidel generally:', options: ['converges faster because it uses updated values immediately', 'converges slower because it uses old values', 'has the same convergence rate for all grids', 'requires no boundary conditions'], answer: 0 }
   ]
 });
+modules.push({
+  id: 'square_trough_lid',
+  title: '5. Example 11-2: The Infinite Square Trough with Lid',
+  controls: [
+    { id: 'a', type: 'range', label: 'Side a', min: 1, max: 4, step: 0.1, value: 2 },
+    { id: 'V0', type: 'range', label: 'Lid potential V0', min: 1, max: 10, step: 0.5, value: 5 },
+    { id: 'nmax', type: 'range', label: 'n_max (odd terms)', min: 1, max: 20, step: 1, value: 9 }
+  ],
+  build() {
+    Object.assign(this.state, { a: 2, V0: 5, nmax: 9 });
+    this.group = new THREE.Group();
+    content.add(this.group);
+
+    // open-top trough walls (three grounded sides) + lid at y=a
+    const wallMat = new THREE.MeshStandardMaterial({ color: 0x2b3a55, metalness: 0.4, roughness: 0.6, side: THREE.DoubleSide });
+    const lidMat = new THREE.MeshStandardMaterial({ color: 0x8fb6ff, metalness: 0.3, roughness: 0.4, transparent: true, opacity: 0.55, side: THREE.DoubleSide });
+    this.walls = [];
+    const mkWall = (w, h, d, x, y, z, mat) => {
+      const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
+      m.position.set(x, y, z); this.group.add(m); this.walls.push(m); return m;
+    };
+    // base at y=0, sides x=0, x=a, y=0
+    this.base = mkWall(1, 0.04, 1, 0, -0.02, 0, wallMat);
+    this.sideX0 = mkWall(0.04, 1, 1, -0.5, 0.5, 0, wallMat);
+    this.sideXa = mkWall(0.04, 1, 1, 0.5, 0.5, 0, wallMat);
+    this.sideY0 = mkWall(1, 1, 0.04, 0, 0.5, -0.5, wallMat);
+    this.lid = mkWall(1, 0.04, 1, 0, 1.02, 0, lidMat);
+
+    // potential surface inside trough
+    const geo = new THREE.PlaneGeometry(1, 1, 40, 40);
+    geo.rotateX(-Math.PI / 2);
+    this.surfMat = new THREE.MeshStandardMaterial({ color: 0x4fd1ff, emissive: 0x123a55, side: THREE.DoubleSide, transparent: true, opacity: 0.9 });
+    this.surf = new THREE.Mesh(geo, this.surfMat);
+    this.surf.position.y = 0.02;
+    this.group.add(this.surf);
+
+    // wireframe outline of potential surface
+    const wire = new THREE.LineSegments(new THREE.WireframeGeometry(geo), new THREE.LineBasicMaterial({ color: 0x9fe8ff, transparent: true, opacity: 0.35 }));
+    wire.position.y = 0.02;
+    this.group.add(wire);
+
+    // axes / frame
+    const frame = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(1, 1, 1)), new THREE.LineBasicMaterial({ color: 0x6f8fb8 }));
+    frame.position.set(0, 0.5, 0);
+    this.group.add(frame);
+
+    // lights
+    const l1 = new THREE.DirectionalLight(0xffffff, 1.1); l1.position.set(3, 5, 4); this.group.add(l1);
+    const l2 = new THREE.DirectionalLight(0x88bbff, 0.6); l2.position.set(-4, 2, -3); this.group.add(l2);
+    this.group.add(new THREE.AmbientLight(0x334455, 0.8));
+
+    // camera setup
+    camera.position.set(2.6, 2.4, 3.2);
+    camera.lookAt(0, 0.5, 0);
+
+    this.update();
+  },
+  update() {
+    const st = this.state;
+    const a = st.a, V0 = st.V0, nmax = st.nmax;
+
+    // scale trough to side a (centered at origin, base y=0)
+    const s = a;
+    this.base.scale.set(s, 1, s); this.base.position.set(0, -0.02, 0);
+    this.sideX0.scale.set(1, s, s); this.sideX0.position.set(-s / 2, s / 2, 0);
+    this.sideXa.scale.set(1, s, s); this.sideXa.position.set(s / 2, s / 2, 0);
+    this.sideY0.scale.set(s, s, 1); this.sideY0.position.set(0, s / 2, -s / 2);
+    this.lid.scale.set(s, 1, s); this.lid.position.set(0, s + 0.02, 0);
+
+    // potential surface: V(x,y) with x,y in [0,a], mapped to [-a/2,a/2]
+    const pos = this.surf.geometry.attributes.position;
+    const N = 40;
+    for (let i = 0; i <= N; i++) {
+      for (let j = 0; j <= N; j++) {
+        const idx = i * (N + 1) + j;
+        const x = (i / N) * a;
+        const y = (j / N) * a;
+        let V = 0;
+        for (let n = 1; n <= nmax; n += 2) {
+          V += (4 * V0 / (n * Math.PI)) * Math.sin(n * Math.PI * x / a) * Math.sinh(n * Math.PI * y / a) / Math.sinh(n * Math.PI);
+        }
+        pos.setXYZ(idx, x - a / 2, 0.02 + V * 0.08, y - a / 2);
+      }
+    }
+    pos.needsUpdate = true;
+    this.surf.geometry.computeVertexNormals();
+
+    // wireframe follows surface
+    this.group.children.forEach(c => {
+      if (c.isLineSegments && c.geometry.type === 'WireframeGeometry') {
+        c.geometry.dispose();
+        c.geometry = new THREE.WireframeGeometry(this.surf.geometry);
+        c.position.y = 0;
+      }
+    });
+
+    // chart: V(x, a/2) vs x
+    const ctx = chartEl.getContext('2d');
+    const W = chartEl.width, H = chartEl.height;
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = '#0b1220'; ctx.fillRect(0, 0, W, H);
+    ctx.strokeStyle = '#2a3a55'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(40, H - 30); ctx.lineTo(W - 20, H - 30); ctx.moveTo(40, 20); ctx.lineTo(40, H - 30); ctx.stroke();
+
+    const x0 = 40, x1 = W - 20, y0 = H - 30, y1 = 20;
+    const Vmax = V0 * 1.05;
+    ctx.strokeStyle = '#4fd1ff'; ctx.lineWidth = 2;
+    ctx.beginPath();
+    for (let k = 0; k <= 200; k++) {
+      const x = (k / 200) * a;
+      let V = 0;
+      for (let n = 1; n <= nmax; n += 2) {
+        V += (4 * V0 / (n * Math.PI)) * Math.sin(n * Math.PI * x / a) * Math.sinh(n * Math.PI * 0.5) / Math.sinh(n * Math.PI);
+      }
+      const px = x0 + (x / a) * (x1 - x0);
+      const py = y0 - (V / Vmax) * (y0 - y1);
+      if (k === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+    }
+    ctx.stroke();
+
+    ctx.fillStyle = '#9fe8ff'; ctx.font = '12px monospace';
+    ctx.fillText('V(x, a/2)', 45, 16);
+    ctx.fillText('x', W - 30, H - 12);
+    ctx.fillText('0', 30, H - 30);
+    ctx.fillText(a.toFixed(1), W - 40, H - 12);
+
+    setHud('Square trough with lid',
+      'V(x,y)=\\sum_{n\\ odd}\\frac{4V_0}{n\\pi}\\sin\\frac{n\\pi x}{a}\\frac{\\sinh(n\\pi y/a)}{\\sinh(n\\pi)}',
+      [{ k: 'a', v: a.toFixed(2) }, { k: 'V0', v: V0.toFixed(1) }, { k: 'n_max', v: nmax }]);
+  },
+  tick(dt) {
+    this.group.rotation.y += dt * 0.15;
+  },
+  lesson: String.raw`The square trough has three grounded walls at $x=0$, $x=a$, and $y=0$, while the lid at $y=a$ is held at $V_0$. Separation of variables gives $V(x,y)=\sum_{n}\frac{4V_0}{n\pi}\sin\frac{n\pi x}{a}\frac{\sinh(n\pi y/a)}{\sinh(n\pi)}$ with only odd $n$ surviving because the lid condition requires $\sin(n\pi x/a)$ to match a constant on $0<x<a$. The $y=0$ boundary forces the $\sinh$ form, and the lid fixes the coefficient. Convergence is fast: the $1/n$ amplitude and $\sinh(n\pi y/a)/\sinh(n\pi)$ decay make higher odd modes small except near the lid.`,
+  quiz: [
+    { q: 'Which boundary condition selects only odd n in the series?', options: ['V=0 on x=0 and x=a', 'V=V0 on y=a', 'V=0 on y=0', 'V=0 on all four sides'], answer: 1 },
+    { q: 'At y=a/2, the potential is symmetric about x=a/2 because:', options: ['only odd sine modes contribute', 'the lid is grounded', 'the trough is infinite', 'V0 is zero'], answer: 0 }
+  ]
+});
 /* === UI CONTROLLER === */
 
 let active = null;
