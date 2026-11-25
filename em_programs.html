@@ -322,6 +322,139 @@ Below $f_c$ the line is single-mode; above it, TE11 propagates and the line beco
     { q: 'The TE11 cutoff frequency scales as:', options: ['1/(a+b)', 'a+b', '1/(ab)', 'ln(b/a)'], answer: 0 }
   ]
 });
+modules.push({
+  id: 'vswr',
+  title: '2. VSWR: Voltage Standing Wave Ratio',
+  controls: [
+    { type: 'range', id: 'ratio', label: 'ZL / Z0', min: 0.1, max: 10, step: 0.1, value: 2 },
+    { type: 'range', id: 'len', label: 'Electrical length (lambda)', min: 1, max: 10, step: 0.1, value: 4 },
+    { type: 'range', id: 'freq', label: 'Frequency (relative)', min: 0.1, max: 10, step: 0.1, value: 1 }
+  ],
+  build() {
+    const st = this.state;
+    Object.assign(st, { ratio: 2, len: 4, freq: 1, phase: 0 });
+
+    const lineGeo = new THREE.CylinderGeometry(0.045, 0.045, 1, 12);
+    lineGeo.rotateX(Math.PI / 2);
+    const line = new THREE.Mesh(lineGeo, new THREE.MeshStandardMaterial({ color: 0x9fb6c9, metalness: 0.6, roughness: 0.35 }));
+    line.position.z = 0.5;
+    content.add(line);
+
+    const load = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.22, 0.12), new THREE.MeshStandardMaterial({ color: 0xffb347, metalness: 0.4, roughness: 0.4 }));
+    load.position.set(0, 0, 1.06);
+    content.add(load);
+
+    const src = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.18, 0.1), new THREE.MeshStandardMaterial({ color: 0x7fd1ff, metalness: 0.5, roughness: 0.4 }));
+    src.position.set(0, 0, -0.06);
+    content.add(src);
+
+    const incMat = new THREE.MeshStandardMaterial({ color: 0x7fd1ff, transparent: true, opacity: 0.55, side: THREE.DoubleSide });
+    const refMat = new THREE.MeshStandardMaterial({ color: 0xff6b8a, transparent: true, opacity: 0.55, side: THREE.DoubleSide });
+    const inc = new THREE.Mesh(new THREE.PlaneGeometry(1, 1, 1, 1), incMat);
+    const ref = new THREE.Mesh(new THREE.PlaneGeometry(1, 1, 1, 1), refMat);
+    content.add(inc, ref);
+
+    const envMat = new THREE.LineBasicMaterial({ color: 0xffe066 });
+    const envGeo = new THREE.BufferGeometry();
+    envGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(2 * 121 * 3), 3));
+    const env = new THREE.Line(envGeo, envMat);
+    content.add(env);
+
+    st.inc = inc; st.ref = ref; st.env = env; st.envGeo = envGeo;
+    st.line = line; st.load = load;
+  },
+  update() {
+    const st = this.state;
+    const r = st.ratio;
+    const g = (r - 1) / (r + 1);
+    const ag = Math.abs(g);
+    const swr = (1 + ag) / (1 - ag);
+    const L = st.len;
+    const k = 2 * Math.PI * st.freq;
+
+    const inc = st.inc, ref = st.ref;
+    inc.scale.set(0.28, 1, L);
+    inc.position.set(0, 0.16, L / 2);
+    ref.scale.set(0.28 * ag, 1, L);
+    ref.position.set(0, -0.16, L / 2);
+
+    const pos = st.envGeo.attributes.position.array;
+    const N = 121;
+    for (let i = 0; i < N; i++) {
+      const z = (i / (N - 1)) * L;
+      const v = Math.sqrt(1 + ag * ag + 2 * ag * Math.cos(2 * k * z + Math.PI));
+      pos[i * 3] = 0;
+      pos[i * 3 + 1] = 0.16 + 0.22 * v;
+      pos[i * 3 + 2] = z;
+      pos[(N + i) * 3] = 0;
+      pos[(N + i) * 3 + 1] = -0.16 - 0.22 * v;
+      pos[(N + i) * 3 + 2] = z;
+    }
+    st.envGeo.attributes.position.needsUpdate = true;
+    st.envGeo.computeBoundingSphere();
+
+    st.load.position.z = L + 0.06;
+    st.line.scale.z = L;
+    st.line.position.z = L / 2;
+
+    setHud('Voltage standing wave ratio', '\\mathrm{SWR}=\\frac{1+|\\Gamma|}{1-|\\Gamma|}', [
+      { k: '|Gamma|', v: ag.toFixed(3) },
+      { k: 'SWR', v: swr.toFixed(3) }
+    ]);
+
+    const ctx = chartEl.getContext('2d');
+    const W = chartEl.width, H = chartEl.height;
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = '#0b1220'; ctx.fillRect(0, 0, W, H);
+    const pad = 40, x0 = pad, x1 = W - pad, y0 = H - pad, y1 = pad;
+    ctx.strokeStyle = '#2a3a52'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y0); ctx.moveTo(x0, y0); ctx.lineTo(x0, y1); ctx.stroke();
+
+    const vmax = 1 + ag, vmin = 1 - ag;
+    const yOf = v => y0 - (v / (vmax + 0.15)) * (y0 - y1);
+    ctx.strokeStyle = '#ffe066'; ctx.lineWidth = 2;
+    ctx.beginPath();
+    for (let i = 0; i <= 200; i++) {
+      const z = (i / 200) * L;
+      const v = Math.sqrt(1 + ag * ag + 2 * ag * Math.cos(2 * k * z + Math.PI));
+      const x = x0 + (z / L) * (x1 - x0);
+      if (i === 0) ctx.moveTo(x, yOf(v)); else ctx.lineTo(x, yOf(v));
+    }
+    ctx.stroke();
+
+    ctx.setLineDash([4, 4]);
+    ctx.strokeStyle = '#7fd1ff';
+    ctx.beginPath(); ctx.moveTo(x0, yOf(vmax)); ctx.lineTo(x1, yOf(vmax)); ctx.stroke();
+    ctx.strokeStyle = '#ff6b8a';
+    ctx.beginPath(); ctx.moveTo(x0, yOf(vmin)); ctx.lineTo(x1, yOf(vmin)); ctx.stroke();
+    ctx.setLineDash([]);
+
+    ctx.fillStyle = '#7fd1ff'; ctx.font = '12px monospace';
+    ctx.fillText('Vmax = ' + vmax.toFixed(2), x0 + 6, yOf(vmax) - 6);
+    ctx.fillStyle = '#ff6b8a';
+    ctx.fillText('Vmin = ' + vmin.toFixed(2), x0 + 6, yOf(vmin) + 14);
+    ctx.fillStyle = '#9fb6c9';
+    ctx.fillText('|V(z)| envelope', x0 + 6, y1 + 14);
+    ctx.fillText('z / lambda', x1 - 70, y0 + 22);
+  },
+  tick(dt) {
+    const st = this.state;
+    st.phase += dt * st.freq * 2;
+    if (st.inc) {
+      st.inc.rotation.z = Math.sin(st.phase) * 0.12;
+      st.ref.rotation.z = -Math.sin(st.phase) * 0.12;
+    }
+  },
+  lesson: String.raw`A transmission line of characteristic impedance $Z_0$ terminated by a load $Z_L$ reflects part of the incident wave. The reflection coefficient is $\Gamma=(Z_L-Z_0)/(Z_L+Z_0)$, and the voltage standing wave ratio is $\mathrm{SWR}=(1+|\Gamma|)/(1-|\Gamma|)$.
+
+For a matched load $Z_L=Z_0$, $\Gamma=0$ and $\mathrm{SWR}=1$: no standing wave, only the forward wave. For a short or open circuit, $|\Gamma|=1$ and $\mathrm{SWR}\to\infty$: total reflection and a pure standing wave with $V_{\min}=0$.
+
+The total voltage is $V(z)=V^+ e^{-jkz}+V^- e^{+jkz}$, so $|V(z)|$ oscillates between $V_{\max}=|V^+|(1+|\Gamma|)$ and $V_{\min}=|V^+|(1-|\Gamma|)$. Adjacent maxima and minima are separated by $\lambda/4$, and successive maxima by $\lambda/2$. The ratio $V_{\max}/V_{\min}=\mathrm{SWR}$ measures the mismatch.`,
+  quiz: [
+    { q: 'A perfectly matched load has which SWR?', options: ['0', '1', '2', 'infinity'], answer: 1 },
+    { q: 'The spacing between a voltage maximum and the adjacent minimum is:', options: ['lambda/8', 'lambda/4', 'lambda/2', 'lambda'], answer: 1 }
+  ]
+});
 /* === UI CONTROLLER === */
 
 let active = null;
