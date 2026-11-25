@@ -2002,6 +2002,138 @@ In the 3D view the Gamma disk is the unit circle in the plane, the blue circles 
     { q: 'Moving a distance d along a lossless line rotates Gamma by which phase?', options: ['+2 beta d', '-2 beta d', '+beta d', '0'], answer: 1 }
   ]
 });
+modules.push({
+  id: 'qwt',
+  title: '13. QWT: Quarter-Wave Transformer Matching',
+  controls: [
+    { id: 'zl', type: 'range', label: 'ZL/Z0', min: 0.1, max: 10, step: 0.1, value: 4 },
+    { id: 'fr', type: 'range', label: 'f/f0', min: 0.5, max: 1.5, step: 0.01, value: 1 },
+    { id: 'len', type: 'range', label: 'Section length (lambda)', min: 0.2, max: 0.3, step: 0.005, value: 0.25 }
+  ],
+  build() {
+    const st = this.state;
+    Object.assign(st, { zl: 4, fr: 1, len: 0.25 });
+
+    const g = new THREE.Group();
+    content.add(g);
+
+    const lineMat = new THREE.MeshStandardMaterial({ color: 0x2f6f9f, metalness: 0.3, roughness: 0.5 });
+    const secMat = new THREE.MeshStandardMaterial({ color: 0xffb347, metalness: 0.4, roughness: 0.35 });
+
+    const line = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.055, 6, 16), lineMat);
+    line.rotation.z = Math.PI / 2;
+    line.position.x = -1.5;
+    g.add(line);
+
+    const sec = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.075, 1.5, 16), secMat);
+    sec.rotation.z = Math.PI / 2;
+    sec.position.x = 0.75;
+    g.add(sec);
+
+    const load = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.35, 0.35), new THREE.MeshStandardMaterial({ color: 0xd94f4f }));
+    load.position.x = 3.1;
+    g.add(load);
+
+    const swGeo = new THREE.BufferGeometry();
+    const swPos = new Float32Array(240 * 3);
+    swGeo.setAttribute('position', new THREE.BufferAttribute(swPos, 3));
+    const sw = new THREE.Line(swGeo, new THREE.LineBasicMaterial({ color: 0x7fd1ff }));
+    g.add(sw);
+
+    this.group = g;
+    this.sw = sw;
+    this.swPos = swPos;
+    this.sec = sec;
+  },
+
+  update() {
+    const st = this.state;
+    const zl = st.zl;
+    const fr = st.fr;
+    const L = st.len;
+
+    const zq = Math.sqrt(zl);
+    const beta = 2 * Math.PI * fr;
+    const theta = beta * L;
+
+    const num = zq * zq - zl;
+    const den = zq * zq + zl;
+    const g0 = Math.abs(num / den);
+
+    const re = num * Math.cos(theta);
+    const im = num * Math.sin(theta);
+    const dr = den * Math.cos(theta);
+    const di = den * Math.sin(theta);
+    const gamma = Math.hypot(re - dr, im - di) / Math.hypot(dr, di);
+
+    this.sec.scale.x = L / 0.25;
+
+    const pos = this.swPos;
+    for (let i = 0; i < 240; i++) {
+      const x = -3 + (i / 239) * 6;
+      const amp = 0.22 * Math.sin(beta * (x + 3)) * (1 + 0.35 * gamma);
+      pos[i * 3] = x;
+      pos[i * 3 + 1] = amp;
+      pos[i * 3 + 2] = 0;
+    }
+    this.sw.geometry.attributes.position.needsUpdate = true;
+
+    setHud('Quarter-wave transformer',
+      'Z_Q=\\sqrt{Z_0 Z_L},\\quad |\\Gamma|=\\left|\\frac{Z_Q^{2}-Z_0 Z_L}{Z_Q^{2}+Z_0 Z_L}\\right|',
+      [{ k: 'ZQ/Z0', v: zq.toFixed(3) }, { k: '|Gamma|', v: gamma.toFixed(3) }]);
+
+    const ctx = chartEl.getContext('2d');
+    const w = chartEl.width, h = chartEl.height;
+    ctx.clearRect(0, 0, w, h);
+    ctx.fillStyle = '#0b1220';
+    ctx.fillRect(0, 0, w, h);
+
+    ctx.strokeStyle = '#2a3b55';
+    ctx.lineWidth = 1;
+    for (let i = 0; i <= 10; i++) {
+      const x = 40 + (i / 10) * (w - 80);
+      ctx.beginPath(); ctx.moveTo(x, 20); ctx.lineTo(x, h - 30); ctx.stroke();
+    }
+    for (let i = 0; i <= 5; i++) {
+      const y = 20 + (i / 5) * (h - 50);
+      ctx.beginPath(); ctx.moveTo(40, y); ctx.lineTo(w - 40, y); ctx.stroke();
+    }
+
+    ctx.strokeStyle = '#7fd1ff';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    for (let i = 0; i <= 200; i++) {
+      const f = 0.5 + (i / 200) * 1.0;
+      const th = 2 * Math.PI * f * L;
+      const rr = num * Math.cos(th);
+      const ii = num * Math.sin(th);
+      const drr = den * Math.cos(th);
+      const dii = den * Math.sin(th);
+      const gg = Math.hypot(rr - drr, ii - dii) / Math.hypot(drr, dii);
+      const x = 40 + (i / 200) * (w - 80);
+      const y = h - 30 - gg * (h - 50);
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    ctx.fillStyle = '#9fb3c8';
+    ctx.font = '12px sans-serif';
+    ctx.fillText('|Gamma| vs f/f0', 44, 16);
+    ctx.fillText('f/f0', w - 70, h - 8);
+    ctx.fillText('|Gamma|', 8, 30);
+  },
+
+  tick(dt) {
+    this.group.rotation.y += dt * 0.15;
+  },
+
+  lesson: String.raw`A quarter-wave transformer matches a real load $Z_L$ to a feed line $Z_0$ when its characteristic impedance is $Z_Q=\sqrt{Z_0 Z_L}$ and its length is $\lambda/4$ at the design frequency. At that frequency the input impedance of the section is $Z_Q^2/Z_L=Z_0$, so the reflection coefficient vanishes. Away from $f_0$, the electrical length $\theta=2\pi (f/f_0)(L/\lambda)$ changes and the reflection coefficient becomes $|\Gamma|=\left|\frac{Z_Q^2 e^{j2\theta}-Z_0 Z_L}{Z_Q^2 e^{j2\theta}+Z_0 Z_L}\right|$. The bandwidth shrinks as the impedance ratio $Z_L/Z_0$ grows, because the transformer must produce a larger impedance step. A shorter or longer section than $\lambda/4$ also detunes the match, shifting the minimum of $|\Gamma|$ away from $f_0$.`,
+
+  quiz: [
+    { q: 'What is the quarter-wave matching condition for a real load?', options: ['Z_Q = sqrt(Z_0 Z_L) and L = lambda/4', 'Z_Q = Z_0 + Z_L and L = lambda/2', 'Z_Q = Z_0 Z_L and L = lambda/4', 'Z_Q = sqrt(Z_0/Z_L) and L = lambda/8'], answer: 0 },
+    { q: 'How does bandwidth change as ZL/Z0 increases?', options: ['Bandwidth increases', 'Bandwidth decreases', 'Bandwidth is independent of ZL/Z0', 'Bandwidth becomes infinite'], answer: 1 }
+  ]
+});
 /* === UI CONTROLLER === */
 
 let active = null;
