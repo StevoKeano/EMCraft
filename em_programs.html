@@ -1186,6 +1186,134 @@ Jacobi updates all nodes from the old array; Gauss-Seidel updates in place, usin
     ], answer: 0 }
   ]
 });
+modules.push({
+  id: 'charged_plates',
+  title: '8. Charged Plates: Finite Parallel-Plate Fringing',
+  controls: [
+    { id: 'N', label: 'Sub-areas N', type: 'range', min: 4, max: 32, step: 1, value: 16 },
+    { id: 'd', label: 'Separation d', type: 'range', min: 0.1, max: 2, step: 0.05, value: 0.6 },
+    { id: 'V0', label: 'Voltage V0', type: 'range', min: 1, max: 10, step: 0.5, value: 5 }
+  ],
+  build() {
+    const st = this.state;
+    Object.assign(st, { N: 16, d: 0.6, V0: 5, L: 2, W: 1.2, sigma: [], xs: [] });
+    const g = new THREE.Group();
+    const plateGeo = new THREE.BoxGeometry(st.L, 0.04, st.W);
+    const matTop = new THREE.MeshStandardMaterial({ color: 0x2a6f9e, metalness: 0.6, roughness: 0.35 });
+    const matBot = new THREE.MeshStandardMaterial({ color: 0x9e4a2a, metalness: 0.6, roughness: 0.35 });
+    st.top = new THREE.Mesh(plateGeo, matTop);
+    st.bot = new THREE.Mesh(plateGeo, matBot);
+    st.top.position.y = st.d / 2;
+    st.bot.position.y = -st.d / 2;
+    g.add(st.top, st.bot);
+    st.surfGeo = new THREE.PlaneGeometry(st.L, st.W, 32, 8);
+    st.surfMat = new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide, transparent: true, opacity: 0.9 });
+    st.surf = new THREE.Mesh(st.surfGeo, st.surfMat);
+    st.surf.rotation.x = -Math.PI / 2;
+    st.surf.position.y = st.d / 2 + 0.025;
+    g.add(st.surf);
+    st.surf2 = new THREE.Mesh(st.surfGeo.clone(), st.surfMat.clone());
+    st.surf2.rotation.x = Math.PI / 2;
+    st.surf2.position.y = -st.d / 2 - 0.025;
+    g.add(st.surf2);
+    content.add(g);
+    st.group = g;
+    st.colors = new Float32Array(st.surfGeo.attributes.position.count * 3);
+    st.surfGeo.setAttribute('color', new THREE.BufferAttribute(st.colors, 3));
+    st.surf2.geometry.setAttribute('color', new THREE.BufferAttribute(st.colors, 3));
+  },
+  solve() {
+    const st = this.state, N = st.N, L = st.L, d = st.d, V0 = st.V0;
+    const dx = L / N, xs = [], sig = [];
+    for (let i = 0; i < N; i++) xs.push(-L / 2 + (i + 0.5) * dx);
+    // Green's function matrix: potential at plate i due to charge on plate j (both plates)
+    const A = [], b = [];
+    const eps0 = 1;
+    for (let i = 0; i < N; i++) {
+      A.push(new Array(N).fill(0));
+      for (let j = 0; j < N; j++) {
+        const dxij = xs[i] - xs[j];
+        const r1 = Math.sqrt(dxij * dxij + d * d);
+        const r2 = Math.sqrt(dxij * dxij + 1e-8);
+        // self term regularized by sub-area width
+        const self = (i === j) ? (dx / (2 * Math.PI * eps0)) * Math.log(dx / (2 * Math.max(dx, 1e-6))) : 0;
+        A[i][j] = (dx / (2 * Math.PI * eps0)) * (1 / r1 - 1 / r2) + self;
+      }
+      b.push(V0 / 2);
+    }
+    // solve linear system (Gaussian elimination)
+    const M = A.map((row, i) => row.concat(b[i]));
+    for (let k = 0; k < N; k++) {
+      let p = k;
+      for (let i = k + 1; i < N; i++) if (Math.abs(M[i][k]) > Math.abs(M[p][k])) p = i;
+      [M[k], M[p]] = [M[p], M[k]];
+      const piv = M[k][k] || 1e-12;
+      for (let j = k; j <= N; j++) M[k][j] /= piv;
+      for (let i = 0; i < N; i++) if (i !== k) {
+        const f = M[i][k];
+        for (let j = k; j <= N; j++) M[i][j] -= f * M[k][j];
+      }
+    }
+    for (let i = 0; i < N; i++) sig.push(M[i][N]);
+    st.xs = xs; st.sigma = sig;
+  },
+  update() {
+    const st = this.state;
+    st.top.position.y = st.d / 2;
+    st.bot.position.y = -st.d / 2;
+    st.surf.position.y = st.d / 2 + 0.025;
+    st.surf2.position.y = -st.d / 2 - 0.025;
+    this.solve();
+    const sig = st.sigma, xs = st.xs;
+    const maxS = Math.max(...sig.map(Math.abs), 1e-9);
+    const pos = st.surfGeo.attributes.position;
+    const col = st.surfGeo.attributes.color;
+    for (let i = 0; i < pos.count; i++) {
+      const x = pos.getX(i);
+      const idx = Math.min(st.N - 1, Math.max(0, Math.floor((x + st.L / 2) / (st.L / st.N))));
+      const s = sig[idx] / maxS;
+      const t = Math.min(1, Math.abs(s));
+      col.setXYZ(i, 0.2 + 0.8 * t, 0.5 - 0.3 * t, 1 - 0.8 * t);
+    }
+    col.needsUpdate = true;
+    st.surf2.geometry.attributes.color.needsUpdate = true;
+    setHud('Charged plates', '\\sigma(x)=\\sum_{n} a_n \\phi_n(x)', [
+      { k: 'N', v: String(st.N) },
+      { k: 'd', v: st.d.toFixed(2) },
+      { k: 'V0', v: st.V0.toFixed(1) }
+    ]);
+    // chart
+    const ctx = chartEl.getContext('2d');
+    const w = chartEl.width, h = chartEl.height;
+    ctx.clearRect(0, 0, w, h);
+    ctx.fillStyle = '#0b1220'; ctx.fillRect(0, 0, w, h);
+    ctx.strokeStyle = '#2a3a55'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(40, h - 30); ctx.lineTo(w - 20, h - 30); ctx.moveTo(40, 20); ctx.lineTo(40, h - 30); ctx.stroke();
+    ctx.strokeStyle = '#7fd1ff'; ctx.lineWidth = 2;
+    ctx.beginPath();
+    for (let i = 0; i < st.N; i++) {
+      const px = 40 + (xs[i] + st.L / 2) / st.L * (w - 60);
+      const py = h - 30 - (sig[i] / maxS) * (h - 70);
+      if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+    }
+    ctx.stroke();
+    ctx.fillStyle = '#9fb3c8'; ctx.font = '12px sans-serif';
+    ctx.fillText('sigma(x) across plate (edge peaking)', 50, 18);
+  },
+  tick(dt) {
+    const st = this.state;
+    st.group.rotation.y += dt * 0.15;
+  },
+  lesson: String.raw`<b>Method of moments (MoM)</b> discretizes each finite plate into $N$ sub-areas of width $\Delta x = L/N$. The unknown is the charge density $\sigma(x)$ on each sub-area, expanded in pulse basis functions $\phi_n(x)$: $\sigma(x)=\sum_n a_n\phi_n(x)$.
+
+The Green's-function matrix couples sub-areas: $A_{ij}=\frac{\Delta x}{2\pi\epsilon_0}\left(\frac{1}{r_{ij}}-\frac{1}{r_{ij}^{\prime}}\right)$, where $r_{ij}$ is the distance between sub-areas on opposite plates and $r_{ij}^{\prime}$ the in-plane distance. Solving $A\mathbf a=\mathbf b$ with $\mathbf b=V_0/2$ gives the charge distribution.
+
+<b>Edge singularity:</b> on a finite plate the charge density diverges as $x\to\pm L/2$ (like $1/\sqrt{L/2-|x|}$), so $\sigma$ peaks at the edges. This is the fringing field: field lines bulge outward beyond the plate gap. The total charge $Q=\sum_n a_n\Delta x$ exceeds the ideal infinite-plate value $Q_{\rm ideal}=\epsilon_0 V_0 A/d$, giving a fringing capacitance larger than the parallel-plate estimate. Increasing $N$ refines the edge peak; increasing $d$ spreads the fringing.`,
+  quiz: [
+    { q: 'Why does the computed charge density peak at the plate edges?', options: ['Because the edge is a geometric singularity where the field diverges', 'Because the plate is grounded', 'Because the voltage is zero there', 'Because the sub-areas are larger at the edges'], answer: 0 },
+    { q: 'In the method of moments, what are the basis functions used here?', options: ['Pulse (sub-area) functions', 'Sine functions', 'Legendre polynomials', 'Delta functions only at the edges'], answer: 0 }
+  ]
+});
 /* === UI CONTROLLER === */
 
 let active = null;
