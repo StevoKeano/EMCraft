@@ -1314,6 +1314,159 @@ The Green's-function matrix couples sub-areas: $A_{ij}=\frac{\Delta x}{2\pi\epsi
     { q: 'In the method of moments, what are the basis functions used here?', options: ['Pulse (sub-area) functions', 'Sine functions', 'Legendre polynomials', 'Delta functions only at the edges'], answer: 0 }
   ]
 });
+modules.push({
+  id: 'waveguide_post',
+  title: '9. Post: Rectangular Waveguide Inductive/Capacitive Post',
+  controls: [
+    { id: 'String.raw`, type: `range', label: 'Post radius r/a', min: 0.02, max: 0.3, step: 0.01, value: 0.12 },
+    { id: 'x', type: 'range', label: 'Post offset x/a', min: 0, max: 0.5, step: 0.01, value: 0.25 },
+    { id: 'f', type: 'range', label: 'Frequency f/fc', min: 0.8, max: 1.4, step: 0.01, value: 1.1 }
+  ],
+  build() {
+    const st = this.state;
+    Object.assign(st, { r: 0.12, x: 0.25, f: 1.1, s11: 0, s21: 1 });
+
+    const a = 2, b = 1, L = 6;
+    const wallMat = new THREE.MeshStandardMaterial({ color: 0x8fa3b8, metalness: 0.75, roughness: 0.35, side: THREE.DoubleSide });
+    const postMat = new THREE.MeshStandardMaterial({ color: 0xffb347, metalness: 0.9, roughness: 0.25 });
+
+    const box = new THREE.Mesh(new THREE.BoxGeometry(a, b, L), wallMat);
+    box.position.set(0, 0, 0);
+    content.add(box);
+
+    const post = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, b, 32), postMat);
+    post.rotation.x = Math.PI / 2;
+    post.position.set(0, 0, 0);
+    content.add(post);
+
+    const fieldGroup = new THREE.Group();
+    content.add(fieldGroup);
+
+    const grid = new THREE.GridHelper(8, 16, 0x2a4a66, 0x1b3348);
+    grid.position.y = -0.55;
+    content.add(grid);
+
+    this.post = post;
+    this.fieldGroup = fieldGroup;
+    this.a = a; this.b = b; this.L = L;
+  },
+
+  update() {
+    const st = this.state;
+    const a = this.a, b = this.b;
+    const r = st.r, x = st.x, f = st.f;
+
+    this.post.scale.set(r * a, 1, r * a);
+    this.post.position.set((x - 0.5) * a, 0, 0);
+
+    const fc = 1;
+    const beta = Math.sqrt(Math.max(0.001, f * f - 1));
+    const k = 2 * Math.PI * f / a;
+
+    const phase = k * (x - 0.5) * a;
+    const coupling = Math.sin(Math.PI * x) * (r / 0.3);
+    const react = (x < 0.5 ? 1 : -1) * coupling * 1.6;
+    const s11 = Math.min(0.95, Math.abs(react) * 0.55 + 0.05 * r);
+    const s21 = Math.sqrt(Math.max(0, 1 - s11 * s11));
+    st.s11 = s11; st.s21 = s21;
+
+    this.fieldGroup.clear();
+    const arrows = [];
+    for (let i = 0; i < 18; i++) {
+      const z = -2.6 + i * 0.3;
+      const amp = 0.35 * Math.sin(Math.PI * (0.5 + 0.25 * Math.sin(z * 1.2 + phase)));
+      const dir = new THREE.Vector3(0, amp, 0.15);
+      arrows.push({ origin: new THREE.Vector3((x - 0.5) * a + 0.25 * Math.sin(z), 0.15, z), dir, len: 0.35 });
+    }
+    addArrowField(arrows, 0x7fd1ff);
+
+    setHud('Waveguide post', '|S_{11}|^{2}+|S_{21}|^{2}=1', [
+      { k: 'r/a', v: r.toFixed(2) },
+      { k: 'x/a', v: x.toFixed(2) },
+      { k: '|S11|', v: s11.toFixed(3) }
+    ]);
+
+    this.drawChart(r, x, f);
+  },
+
+  drawChart(r, x, f) {
+    const ctx = chartEl.getContext('2d');
+    const W = chartEl.width, H = chartEl.height;
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = '#0b1220'; ctx.fillRect(0, 0, W, H);
+
+    const pad = 40;
+    const plotW = W - 2 * pad, plotH = H - 2 * pad;
+    ctx.strokeStyle = '#2a4a66'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(pad, pad); ctx.lineTo(pad, H - pad); ctx.lineTo(W - pad, H - pad); ctx.stroke();
+
+    ctx.fillStyle = '#9fb3c8'; ctx.font = '12px monospace';
+    ctx.fillText('|S| vs r/a', pad, pad - 12);
+    ctx.fillText('r/a', W - pad - 20, H - pad + 20);
+    ctx.fillText('1.0', pad - 25, pad + 5);
+    ctx.fillText('0.0', pad - 25, H - pad + 5);
+
+    const rMin = 0.02, rMax = 0.3;
+    const s11 = [], s21 = [];
+    for (let i = 0; i <= 100; i++) {
+      const rr = rMin + (rMax - rMin) * i / 100;
+      const c = Math.sin(Math.PI * x) * (rr / 0.3);
+      const re = (x < 0.5 ? 1 : -1) * c * 1.6;
+      const a11 = Math.min(0.95, Math.abs(re) * 0.55 + 0.05 * rr);
+      s11.push(a11);
+      s21.push(Math.sqrt(Math.max(0, 1 - a11 * a11)));
+    }
+
+    const px = rr => pad + (rr - rMin) / (rMax - rMin) * plotW;
+    const py = v => H - pad - v * plotH;
+
+    ctx.strokeStyle = '#ff6b6b'; ctx.lineWidth = 2;
+    ctx.beginPath();
+    for (let i = 0; i <= 100; i++) {
+      const rr = rMin + (rMax - rMin) * i / 100;
+      const X = px(rr), Y = py(s11[i]);
+      i === 0 ? ctx.moveTo(X, Y) : ctx.lineTo(X, Y);
+    }
+    ctx.stroke();
+
+    ctx.strokeStyle = '#4ecdc4'; ctx.lineWidth = 2;
+    ctx.beginPath();
+    for (let i = 0; i <= 100; i++) {
+      const rr = rMin + (rMax - rMin) * i / 100;
+      const X = px(rr), Y = py(s21[i]);
+      i === 0 ? ctx.moveTo(X, Y) : ctx.lineTo(X, Y);
+    }
+    ctx.stroke();
+
+    const curR = r;
+    ctx.fillStyle = '#ffd166';
+    ctx.beginPath(); ctx.arc(px(curR), py(Math.min(0.95, Math.abs(Math.sin(Math.PI * x) * (curR / 0.3) * 1.6) * 0.55 + 0.05 * curR)), 4, 0, Math.PI * 2); ctx.fill();
+
+    ctx.fillStyle = '#ff6b6b'; ctx.fillText('|S11|', W - pad - 80, pad + 15);
+    ctx.fillStyle = '#4ecdc4'; ctx.fillText('|S21|', W - pad - 80, pad + 32);
+  },
+
+  tick(dt) {
+    const st = this.state;
+    const t = performance.now() * 0.001;
+    this.fieldGroup.rotation.z = 0.05 * Math.sin(t * 1.5);
+  },
+
+  lesson: String.raw`A metallic post in a rectangular waveguide is a classic **scattering obstacle**. The incident $TE_{10}$ mode induces currents on the post; the post reradiates a scattered field, producing reflection $S_{11}$ and transmission $S_{21}$.
+
+**Equivalent circuit.** A thin post can be modeled as a shunt reactance across the guide. Its sign depends on position:
+- Near the side wall ($x/a \to 0$ or $1$), the post is mainly **inductive** ($X>0$).
+- Near the center ($x/a \to 0.5$), where the electric field is maximum, it behaves **capacitively** ($X<0$).
+
+The post radius controls the coupling strength: larger $r/a$ gives stronger scattering. Energy conservation requires $|S_{11}|^{2}+|S_{21}|^{2}=1$ for a lossless post.
+
+**Matching application.** A post placed at the right offset and radius can cancel a mismatch, acting as a waveguide **matching element** (similar to a shunt susceptance in transmission-line matching).`,
+
+  quiz: [
+    { q: 'A thin metallic post near the center of a rectangular waveguide (maximum E-field) is best modeled as:', options: ['A shunt inductive reactance', 'A shunt capacitive reactance', 'A series resistor', 'An ideal open circuit'], answer: 1 },
+    { q: 'For a lossless post, increasing the post radius generally causes:', options: ['|S11| to decrease and |S21| to increase', '|S11| to increase and |S21| to decrease', 'No change in scattering', '|S11| and |S21| both to increase'], answer: 1 }
+  ]
+});
 /* === UI CONTROLLER === */
 
 let active = null;
