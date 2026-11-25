@@ -1371,6 +1371,178 @@ modules.push({
     { q: 'Why is the self-term $Z_{ii}$ finite despite the $1/|r-r^{\prime}|$ singularity?', options: ['The singularity is removed by a delta function', 'The integral of $1/|x-x^{\prime}|$ over a finite pulse segment converges', 'Pulse basis functions are zero on the diagonal', 'The observation point is always outside the segment'], answer: 1 }
   ]
 });
+modules.push({
+  id: 'gmt',
+  title: '8. The Generalized Multipole Technique (GMT)',
+  controls: [
+    { id: 'M', type: 'range', label: 'Multipoles M', min: 2, max: 12, step: 1, value: 6 },
+    { id: 'nmax', type: 'range', label: 'Truncation n_max', min: 1, max: 8, step: 1, value: 4 },
+    { id: 'R', type: 'range', label: 'Boundary radius', min: 1, max: 3, step: 0.1, value: 1.6 }
+  ],
+  build() {
+    const st = this.state;
+    this.group = new THREE.Group();
+    content.add(this.group);
+
+    // scatterer / boundary contour
+    this.boundary = new THREE.Mesh(
+      new THREE.SphereGeometry(1, 48, 32),
+      new THREE.MeshStandardMaterial({ color: 0x2b6cb0, transparent: true, opacity: 0.28, roughness: 0.5 })
+    );
+    this.group.add(this.boundary);
+    this.wire = new THREE.LineSegments(
+      new THREE.WireframeGeometry(new THREE.SphereGeometry(1, 24, 16)),
+      new THREE.LineBasicMaterial({ color: 0x7fd1ff, transparent: true, opacity: 0.35 })
+    );
+    this.group.add(this.wire);
+
+    // multipole source markers
+    this.srcGroup = new THREE.Group();
+    this.group.add(this.srcGroup);
+    this.srcMat = new THREE.MeshStandardMaterial({ color: 0xffb347, emissive: 0x552200, roughness: 0.4 });
+    this.srcGeo = new THREE.SphereGeometry(0.075, 12, 10);
+
+    // matching points on the contour
+    this.matchGroup = new THREE.Group();
+    this.group.add(this.matchGroup);
+    this.matchMat = new THREE.MeshBasicMaterial({ color: 0x9ef0a0 });
+    this.matchGeo = new THREE.SphereGeometry(0.045, 8, 8);
+
+    // residual field arrows
+    this.arrows = new THREE.Group();
+    this.group.add(this.arrows);
+
+    this.light = new THREE.DirectionalLight(0xffffff, 1.1);
+    this.light.position.set(4, 6, 5);
+    this.group.add(this.light);
+    this.group.add(new THREE.AmbientLight(0x8899bb, 0.7));
+
+    Object.assign(st, { M: 6, nmax: 4, R: 1.6 });
+  },
+
+  update() {
+    const st = this.state;
+    const M = st.M, nmax = st.nmax, R = st.R;
+
+    this.boundary.scale.setScalar(R);
+    this.wire.scale.setScalar(R);
+
+    // rebuild source markers on a ring of radius R*1.35
+    this.srcGroup.clear();
+    const ringR = R * 1.35;
+    for (let m = 0; m < M; m++) {
+      const a = (2 * Math.PI * m) / M;
+      const s = new THREE.Mesh(this.srcGeo, this.srcMat);
+      s.position.set(ringR * Math.cos(a), 0.35 * Math.sin(2 * a), ringR * Math.sin(a));
+      this.srcGroup.add(s);
+    }
+
+    // matching points on the contour
+    this.matchGroup.clear();
+    const Np = Math.max(8, 2 * (nmax + 1) * 2);
+    for (let i = 0; i < Np; i++) {
+      const a = (2 * Math.PI * i) / Np;
+      const p = new THREE.Mesh(this.matchGeo, this.matchMat);
+      p.position.set(R * Math.cos(a), R * 0.55 * Math.sin(2 * a), R * Math.sin(a));
+      this.matchGroup.add(p);
+    }
+
+    // residual: over-determined system -> residual shrinks with M and nmax
+    const dof = M * (nmax + 1);
+    const resid = Math.max(0.02, 1.6 / (dof + 1)) * (1 + 0.25 * Math.abs(R - 1.6));
+
+    // residual arrows pointing outward from contour
+    this.arrows.clear();
+    const nA = 16;
+    const vecs = [];
+    for (let i = 0; i < nA; i++) {
+      const a = (2 * Math.PI * i) / nA;
+      const dir = new THREE.Vector3(Math.cos(a), 0.35 * Math.sin(3 * a), Math.sin(a)).normalize();
+      vecs.push({
+        origin: new THREE.Vector3(R * Math.cos(a), R * 0.55 * Math.sin(2 * a), R * Math.sin(a)),
+        dir,
+        len: 0.25 + resid * 1.4
+      });
+    }
+    addArrowField(vecs, 0xff7f7f);
+
+    this.resid = resid;
+    this.dof = dof;
+    setHud('Generalized multipole technique',
+      'V(\\mathbf r)=\\sum_{m}\\sum_{n} a_{mn}\\,\\Phi_{mn}(\\mathbf r)',
+      [{ k: 'M', v: String(M) }, { k: 'n_max', v: String(nmax) }, { k: 'residual', v: resid.toFixed(3) }]);
+  },
+
+  tick(dt) {
+    this.group.rotation.y += dt * 0.25;
+    this.drawChart();
+  },
+
+  drawChart() {
+    const ctx = chartEl.getContext('2d');
+    const W = chartEl.width, H = chartEl.height;
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = '#0b1220'; ctx.fillRect(0, 0, W, H);
+
+    const st = this.state;
+    const pad = 46;
+    const x0 = pad, y0 = H - pad, x1 = W - pad, y1 = pad;
+
+    ctx.strokeStyle = '#2a3a55'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y0); ctx.moveTo(x0, y0); ctx.lineTo(x0, y1); ctx.stroke();
+
+    ctx.fillStyle = '#9fb6d6'; ctx.font = '13px sans-serif';
+    ctx.fillText('boundary residual vs M', x0 + 6, y1 - 8);
+    ctx.fillText('M', x1 - 14, y0 + 20);
+    ctx.fillText('residual', x0 - 30, y1 + 12);
+
+    const nmax = st.nmax, R = st.R;
+    const residOf = (M) => Math.max(0.02, 1.6 / (M * (nmax + 1) + 1)) * (1 + 0.25 * Math.abs(R - 1.6));
+    const rmax = residOf(2);
+
+    ctx.strokeStyle = '#7fd1ff'; ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    for (let M = 2; M <= 12; M++) {
+      const x = x0 + ((M - 2) / 10) * (x1 - x0);
+      const y = y0 - (residOf(M) / rmax) * (y0 - y1);
+      if (M === 2) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // current M marker
+    const M = st.M;
+    const xc = x0 + ((M - 2) / 10) * (x1 - x0);
+    const yc = y0 - (residOf(M) / rmax) * (y0 - y1);
+    ctx.fillStyle = '#ffb347';
+    ctx.beginPath(); ctx.arc(xc, yc, 5, 0, 2 * Math.PI); ctx.fill();
+
+    ctx.fillStyle = '#9fb6d6'; ctx.font = '12px monospace';
+    ctx.fillText('M=' + M + '  residual=' + residOf(M).toFixed(3), x0 + 6, y0 - 10);
+  },
+
+  lesson: String.raw`<h3>The Generalized Multipole Technique (GMT)</h3>
+<p>GMT expands the scattered field as a superposition of <b>multipole basis functions</b> centred at discrete source points placed outside (or inside) the scatterer:</p>
+<p>$V(\mathbf r)=\sum_{m}\sum_{n} a_{mn}\,\Phi_{mn}(\mathbf r)$</p>
+<p>In 2D the natural basis is the cylindrical multipole $\Phi_{mn}=r^{n}e^{in\theta}$ (plus $\ln r$ terms for the monopole). In 3D one uses spherical harmonics $r^{n}Y_{n}^{m}(\theta,\phi)$ or their regularized counterparts.</p>
+<p><b>Matching:</b> the total field (incident + multipole sum) must satisfy the boundary condition on the contour. Sampling the contour at $N_p$ points gives an over-determined linear system $A a = b$; it is solved in a least-squares sense. The <b>residual</b> $\|Aa-b\|$ measures how well the boundary condition is met.</p>
+<p><b>Conditioning:</b> increasing $M$ and $n_{max}$ adds degrees of freedom and lowers the residual, but the basis becomes nearly linearly dependent (ill-conditioned) when sources are close together or orders are high. Practical GMT therefore balances accuracy against conditioning, often using singular-value filtering.</p>
+<p>In the lab, the orange spheres are multipole centres, the green dots are matching points on the contour, and the red arrows show the residual field. The chart plots residual versus $M$.</p>`,
+
+  quiz: [
+    { q: 'What is the GMT field representation?', options: [
+        'A sum of multipole expansions centred at discrete points',
+        'A single plane wave',
+        'A finite-element mesh of tetrahedra',
+        'A boundary integral of surface currents'
+      ], answer: 0 },
+    { q: 'How are the multipole coefficients determined?', options: [
+        'By matching the boundary condition at sampled contour points (least squares)',
+        'By solving the wave equation analytically everywhere',
+        'By measuring the far field only',
+        'By minimizing the number of sources'
+      ], answer: 0 }
+  ]
+});
 /* === UI CONTROLLER === */
 
 let active = null;
