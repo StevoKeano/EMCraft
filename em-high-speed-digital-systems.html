@@ -153,7 +153,7 @@ function setHud(titleStr, latexEqStr, rowsArray) {
   hudTitle.textContent = titleStr;
   hudEq.innerHTML = latexEqStr;
   if (window.renderMathInElement) {
-    renderMathInElement(hudEq, { throwOnError: false, strict: false });
+    renderMathInElement(hudEq, { delimiters: [{left: '$$', right: '$$', display: true}, {left: '$', right: '$', display: false}, {left: '\\(', right: '\\)', display: false}, {left: '\\[', right: '\\]', display: true}], throwOnError: false, strict: false });
   }
   hudRows.innerHTML = '';
   (rowsArray || []).forEach(r => {
@@ -2278,7 +2278,7 @@ function loadModule(mod) {
   mod.build();
   lessonEl.innerHTML = mod.lesson || '';
   if (window.renderMathInElement) {
-    renderMathInElement(lessonEl, { throwOnError: false, strict: false });
+    renderMathInElement(lessonEl, { delimiters: [{left: '$$', right: '$$', display: true}, {left: '$', right: '$', display: false}, {left: '\\(', right: '\\)', display: false}, {left: '\\[', right: '\\]', display: true}], throwOnError: false, strict: false });
   }
   buildControls(mod);
   buildQuiz(mod);
