@@ -1037,6 +1037,155 @@ The broadside maximum occurs when $\psi=0$, i.e. $\cos\theta=-\delta/(k d)$: a p
     { q: 'The main beam is steered off broadside by:', options: ['a progressive phase delta between elements', 'changing N only', 'reducing d below lambda/2', 'removing the feed line'], answer: 0 }
   ]
 });
+modules.push({
+  id: 'laplace_grid',
+  title: '7. LAPLACE: 2D Finite-Difference Potential Solver',
+  controls: [
+    { type: 'range', id: 'N', label: 'Grid N', min: 8, max: 64, step: 2, value: 24 },
+    { type: 'range', id: 'tol', label: 'Tolerance', min: 1e-6, max: 1e-2, step: 1e-6, value: 1e-4 },
+    { type: 'range', id: 'iters', label: 'Iterations / frame', min: 1, max: 50, step: 1, value: 8 }
+  ],
+  build() {
+    const st = this.state;
+    st.N = 24; st.tol = 1e-4; st.iters = 8;
+    st.V = []; st.it = 0; st.res = 1; st.hist = [];
+    st.mesh = null; st.geo = null; st.colors = null;
+
+    const makeGrid = () => {
+      const N = st.N;
+      st.V = new Float32Array(N * N);
+      // Dirichlet boundaries: top/bottom 0, left 0, right 1 (plus a hot spot)
+      for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
+        const idx = j * N + i;
+        if (i === 0) st.V[idx] = 0;
+        else if (i === N - 1) st.V[idx] = 1;
+        else if (j === 0 || j === N - 1) st.V[idx] = 0;
+        else st.V[idx] = 0.5;
+      }
+      st.it = 0; st.res = 1; st.hist = [];
+      if (st.mesh) { content.remove(st.mesh); st.geo.dispose(); st.mesh.material.dispose(); }
+      st.geo = new THREE.BufferGeometry();
+      const pos = new Float32Array(N * N * 3);
+      st.colors = new Float32Array(N * N * 3);
+      for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
+        const k = (j * N + i) * 3;
+        pos[k] = (i / (N - 1) - 0.5) * 4;
+        pos[k + 1] = (j / (N - 1) - 0.5) * 4;
+        pos[k + 2] = 0;
+      }
+      st.geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+      st.geo.setAttribute('color', new THREE.BufferAttribute(st.colors, 3));
+      const mat = new THREE.PointsMaterial({ size: 0.09, vertexColors: true, transparent: true, opacity: 0.95 });
+      st.mesh = new THREE.Points(st.geo, mat);
+      content.add(st.mesh);
+      st.pos = pos;
+    };
+
+    makeGrid();
+    st.rebuild = makeGrid;
+
+    // wireframe boundary box
+    const box = new THREE.LineSegments(
+      new THREE.EdgesGeometry(new THREE.BoxGeometry(4, 4, 0.02)),
+      new THREE.LineBasicMaterial({ color: 0x335577 })
+    );
+    content.add(box);
+  },
+
+  update() {
+    const st = this.state;
+    if (st.N !== st._N) { st._N = st.N; st.rebuild(); }
+    if (st.tol !== st._tol) { st._tol = st.tol; }
+    if (st.iters !== st._iters) { st._iters = st.iters; }
+  },
+
+  tick(dt) {
+    const st = this.state;
+    const N = st.N, V = st.V;
+    const steps = st.iters;
+    let res = 0;
+    for (let s = 0; s < steps; s++) {
+      res = 0;
+      // Gauss-Seidel in-place relaxation (converges ~2x faster than Jacobi)
+      for (let j = 1; j < N - 1; j++) {
+        for (let i = 1; i < N - 1; i++) {
+          const idx = j * N + i;
+          const nv = 0.25 * (V[idx + 1] + V[idx - 1] + V[idx + N] + V[idx - N]);
+          const d = nv - V[idx];
+          V[idx] = nv;
+          if (Math.abs(d) > res) res = Math.abs(d);
+        }
+      }
+      st.it++;
+      st.hist.push(res);
+      if (res < st.tol) break;
+    }
+    st.res = res;
+
+    // colors: blue -> cyan -> yellow -> red
+    const c = st.colors;
+    for (let k = 0; k < N * N; k++) {
+      const v = Math.min(1, Math.max(0, V[k]));
+      const r = Math.min(1, Math.max(0, 2 * v - 0.5));
+      const g = Math.min(1, Math.max(0, 1.5 - Math.abs(2 * v - 1) * 1.5));
+      const b = Math.min(1, Math.max(0, 1.2 - 2 * v));
+      c[k * 3] = r; c[k * 3 + 1] = g; c[k * 3 + 2] = b;
+    }
+    st.geo.attributes.color.needsUpdate = true;
+
+    // chart: residual vs iteration (log scale)
+    const ctx = chartEl.getContext('2d');
+    const W = chartEl.width, H = chartEl.height;
+    ctx.fillStyle = '#0b1220'; ctx.fillRect(0, 0, W, H);
+    ctx.strokeStyle = '#1e2a3a'; ctx.lineWidth = 1;
+    for (let g = 0; g <= 4; g++) {
+      const y = 20 + (H - 40) * g / 4;
+      ctx.beginPath(); ctx.moveTo(40, y); ctx.lineTo(W - 20, y); ctx.stroke();
+    }
+    const hist = st.hist;
+    if (hist.length > 1) {
+      const maxIt = hist.length;
+      const logMin = -7, logMax = 0;
+      ctx.strokeStyle = '#7fd1ff'; ctx.lineWidth = 2;
+      ctx.beginPath();
+      for (let k = 0; k < maxIt; k++) {
+        const x = 40 + (W - 60) * k / (maxIt - 1);
+        const lr = Math.log10(Math.max(hist[k], 1e-9));
+        const y = 20 + (H - 40) * (logMax - lr) / (logMax - logMin);
+        if (k === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+    }
+    ctx.fillStyle = '#9fb3c8'; ctx.font = '12px monospace';
+    ctx.fillText('log10 residual vs iteration', 44, 16);
+    ctx.fillText('iter=' + st.it, W - 120, H - 8);
+
+    setHud('Laplace relaxation',
+      'V_{i,j}=\\frac{1}{4}(V_{i+1,j}+V_{i-1,j}+V_{i,j+1}+V_{i,j-1})',
+      [{ k: 'N', v: String(N) }, { k: 'iter', v: String(st.it) }, { k: 'residual', v: st.res.toExponential(2) }]);
+  },
+
+  lesson: String.raw`The 5-point stencil discretizes $\nabla^2 V = 0$ on a square grid:
+$V_{i,j} = \frac{1}{4}(V_{i+1,j}+V_{i-1,j}+V_{i,j+1}+V_{i,j-1})$.
+Each interior node is the average of its four neighbors. Dirichlet boundaries are fixed (left $0$, right $1$, top/bottom $0$), so only interior nodes update.
+
+Jacobi updates all nodes from the old array; Gauss-Seidel updates in place, using fresh values immediately. Gauss-Seidel typically converges about twice as fast. The residual $\max|\Delta V|$ decays roughly geometrically, so a log plot is nearly a straight line. Smaller $N$ and looser tolerance converge in fewer iterations.`,
+
+  quiz: [
+    { q: 'The 5-point Laplace stencil at an interior node is:', options: [
+      'the average of its four nearest neighbors',
+      'the sum of its four nearest neighbors',
+      'the difference of opposite neighbors',
+      'the product of its four neighbors'
+    ], answer: 0 },
+    { q: 'Compared with Jacobi, Gauss-Seidel relaxation usually:', options: [
+      'converges about twice as fast because it uses updated values immediately',
+      'converges slower because it needs two arrays',
+      'has the same convergence rate exactly',
+      'diverges for Dirichlet boundaries'
+    ], answer: 0 }
+  ]
+});
 /* === UI CONTROLLER === */
 
 let active = null;
