@@ -1792,6 +1792,122 @@ modules.push({
     { q: 'For a linear triangular element, the stiffness entry K_ij is proportional to:', options: ['the dot product of the element shape-function gradients', 'the triangle perimeter', 'the nodal potential difference', 'the element area squared'], answer: 0 }
   ]
 });
+modules.push({
+  id: 'cw_reflections',
+  title: '11. Continuous Wave (CW) Reflections and FEM',
+  controls: [
+    { type: 'range', id: 'eps_r1', label: 'eps_r1', min: 1, max: 4, step: 0.1, value: 1.5 },
+    { type: 'range', id: 'eps_r2', label: 'eps_r2', min: 1, max: 8, step: 0.1, value: 4 },
+    { type: 'range', id: 'theta', label: 'incidence angle (deg)', min: 0, max: 60, step: 1, value: 30 }
+  ],
+  build() {
+    const st = this.state;
+    const g = new THREE.Group();
+    const mat1 = new THREE.MeshStandardMaterial({ color: 0x2a6f97, transparent: true, opacity: 0.35, roughness: 0.4 });
+    const mat2 = new THREE.MeshStandardMaterial({ color: 0x9b5de5, transparent: true, opacity: 0.35, roughness: 0.4 });
+    const s1 = new THREE.Mesh(new THREE.BoxGeometry(4, 3, 3), mat1);
+    s1.position.set(-2, 0, 0);
+    const s2 = new THREE.Mesh(new THREE.BoxGeometry(4, 3, 3), mat2);
+    s2.position.set(2, 0, 0);
+    g.add(s1, s2);
+    const iface = new THREE.Mesh(new THREE.PlaneGeometry(3, 3), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.25, side: THREE.DoubleSide }));
+    iface.rotation.y = Math.PI / 2;
+    g.add(iface);
+    const waveMat = new THREE.LineBasicMaterial({ color: 0x7fd1ff });
+    const refMat = new THREE.LineBasicMaterial({ color: 0xffb703 });
+    const transMat = new THREE.LineBasicMaterial({ color: 0x90e0ef });
+    const incLine = new THREE.Line(new THREE.BufferGeometry(), waveMat);
+    const refLine = new THREE.Line(new THREE.BufferGeometry(), refMat);
+    const transLine = new THREE.Line(new THREE.BufferGeometry(), transMat);
+    g.add(incLine, refLine, transLine);
+    content.add(g);
+    this.group = g; this.incLine = incLine; this.refLine = refLine; this.transLine = transLine;
+    this.arrowGroup = new THREE.Group(); content.add(this.arrowGroup);
+  },
+  update() {
+    const st = this.state;
+    const e1 = st.eps_r1, e2 = st.eps_r2, th = st.theta * Math.PI / 180;
+    const n1 = Math.sqrt(e1), n2 = Math.sqrt(e2);
+    const s2 = n1 * Math.sin(th) / n2;
+    const tir = s2 > 1;
+    const ct = tir ? 0 : Math.sqrt(1 - s2 * s2);
+    const ci = Math.cos(th);
+    const R = tir ? 1 : (n1 * ci - n2 * ct) / (n1 * ci + n2 * ct);
+    const T = tir ? 0 : (2 * n1 * ci) / (n1 * ci + n2 * ct);
+    const absR = Math.abs(R);
+    const N = 80, L = 4;
+    const mk = (line, x0, x1, amp, dirSign, phase) => {
+      const pts = [];
+      for (let i = 0; i <= N; i++) {
+        const t = i / N;
+        const x = x0 + (x1 - x0) * t;
+        const y = amp * Math.sin(2 * Math.PI * 2 * t + phase);
+        pts.push(new THREE.Vector3(x, y, 0));
+      }
+      line.geometry.dispose();
+      line.geometry = new THREE.BufferGeometry().setFromPoints(pts);
+    };
+    mk(this.incLine, -4, 0, 0.5, 1, 0);
+    mk(this.refLine, -4, 0, 0.5 * absR, -1, Math.PI);
+    mk(this.transLine, 0, 4, 0.5 * T, 1, 0);
+    this.refLine.material.color.setHex(tir ? 0xff4d6d : 0xffb703);
+    this.transLine.visible = !tir;
+    this.arrowGroup.clear();
+    const arrows = [];
+    const dirIn = new THREE.Vector3(Math.cos(th), Math.sin(th), 0);
+    const dirRef = new THREE.Vector3(-Math.cos(th), Math.sin(th), 0);
+    const dirTr = tir ? new THREE.Vector3(1, 0, 0) : new THREE.Vector3(Math.cos(Math.asin(s2)), Math.sin(Math.asin(s2)), 0);
+    arrows.push({ origin: new THREE.Vector3(-3.5, 0, 0), dir: dirIn, len: 1.2 });
+    arrows.push({ origin: new THREE.Vector3(-1.2, 0, 0), dir: dirRef, len: 1.2 * absR });
+    if (!tir) arrows.push({ origin: new THREE.Vector3(1.2, 0, 0), dir: dirTr, len: 1.2 * T });
+    addArrowField(arrows, 0x7fd1ff);
+    setHud('CW reflection', 'R=\\frac{\\sqrt{\\varepsilon_1}\\cos\\theta_i-\\sqrt{\\varepsilon_2}\\cos\\theta_t}{\\sqrt{\\varepsilon_1}\\cos\\theta_i+\\sqrt{\\varepsilon_2}\\cos\\theta_t}', [
+      { k: 'eps_r1', v: e1.toFixed(2) },
+      { k: 'eps_r2', v: e2.toFixed(2) },
+      { k: 'theta', v: st.theta.toFixed(0) + ' deg' },
+      { k: '|R|', v: absR.toFixed(3) },
+      { k: 'TIR', v: tir ? 'yes' : 'no' }
+    ]);
+    this.drawChart(e1, e2, st.theta);
+  },
+  drawChart(e1, e2, thetaDeg) {
+    const ctx = chartEl.getContext('2d');
+    const W = chartEl.width, H = chartEl.height;
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = '#0b1220'; ctx.fillRect(0, 0, W, H);
+    const pad = 40, gw = W - 2 * pad, gh = H - 2 * pad;
+    ctx.strokeStyle = '#334155'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(pad, pad); ctx.lineTo(pad, H - pad); ctx.lineTo(W - pad, H - pad); ctx.stroke();
+    ctx.fillStyle = '#94a3b8'; ctx.font = '12px sans-serif';
+    ctx.fillText('|R|', 8, pad + 4); ctx.fillText('theta_i (deg)', W - 110, H - 12);
+    const n1 = Math.sqrt(e1), n2 = Math.sqrt(e2);
+    ctx.strokeStyle = '#7fd1ff'; ctx.lineWidth = 2; ctx.beginPath();
+    for (let i = 0; i <= 120; i++) {
+      const th = i / 120 * Math.PI / 2;
+      const s2 = n1 * Math.sin(th) / n2;
+      const R = s2 > 1 ? 1 : Math.abs((n1 * Math.cos(th) - n2 * Math.sqrt(1 - s2 * s2)) / (n1 * Math.cos(th) + n2 * Math.sqrt(1 - s2 * s2)));
+      const x = pad + (i / 120) * gw;
+      const y = H - pad - R * gh;
+      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+    const xm = pad + (thetaDeg / 90) * gw;
+    ctx.strokeStyle = '#ffb703'; ctx.setLineDash([4, 4]);
+    ctx.beginPath(); ctx.moveTo(xm, pad); ctx.lineTo(xm, H - pad); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#ffb703'; ctx.fillText('current', xm + 4, pad + 14);
+  },
+  tick(dt) {
+    this.group.rotation.y = Math.sin(performance.now() * 0.0003) * 0.15;
+  },
+  lesson: String.raw`<b>CW reflection and FEM matching.</b> A continuous wave hits a dielectric interface. The Fresnel reflection coefficient is
+$R=\frac{\sqrt{\varepsilon_1}\cos\theta_i-\sqrt{\varepsilon_2}\cos\theta_t}{\sqrt{\varepsilon_1}\cos\theta_i+\sqrt{\varepsilon_2}\cos\theta_t}$.
+Snell's law gives $\sin\theta_t=\frac{\sqrt{\varepsilon_1}}{\sqrt{\varepsilon_2}}\sin\theta_i$. FEM solves the Helmholtz equation in each slab and enforces continuity of tangential $E$ and $H$ at the interface, reproducing the same $R$ and $T$. When $\sin\theta_t>1$, total internal reflection occurs and $|R|=1$.`,
+  quiz: [
+    { q: 'For normal incidence (theta_i = 0), the Fresnel reflection coefficient magnitude is:', options: ['|(n1-n2)/(n1+n2)|', '|(n1+n2)/(n1-n2)|', '1 always', '0 always'], answer: 0 },
+    { q: 'Total internal reflection occurs when:', options: ['n1 > n2 and the incidence angle exceeds the critical angle', 'n1 < n2 at any angle', 'the wave is normally incident', 'eps_r1 = eps_r2'], answer: 0 }
+  ]
+});
 /* === UI CONTROLLER === */
 
 let active = null;
