@@ -400,7 +400,7 @@ When the user uploads `CONTEXTCUT-LAB-FACTORY_3_5.md` and provides **Author(s), 
 2. **Baseline HTML Shell Requirements:**
    - Byte 0 MUST be `<!DOCTYPE html>` (strip any leading characters/BOM before writing).
    - Include `<link rel="icon" href="data:," />` in `<head>`.
-   - Map `"three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"` in `<script type="importmap">`, import `{ OrbitControls } from 'three/addons/controls/OrbitControls.js'`, instantiate `const controls = new OrbitControls(camera, renderer.domElement); controls.enableDamping = true; controls.dampingFactor = 0.06; controls.zoomSpeed = 0.05;`, and call `controls.update()` inside `animate()`.
+   - Map `"three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"` in `<script type="importmap">`, import `{ OrbitControls } from 'three/addons/controls/OrbitControls.js'`, instantiate `const controls = new OrbitControls(camera, renderer.domElement); controls.enableDamping = true; controls.dampingFactor = 0.06; controls.zoomSpeed = 0.45;`, and call `controls.update()` inside `animate()`.
    - Load `https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js` after `katex.min.js` and invoke `renderMathInElement` inside **both** `setHud()` (on `hudEq`) and `loadModule()` (on `lessonEl` right after setting `lessonEl.innerHTML`) using explicit single-`$` delimiters:
      `renderMathInElement(el, { delimiters: [{left: '$$', right: '$$', display: true}, {left: '$', right: '$', display: false}, {left: '\\(', right: '\\)', display: false}, {left: '\\[', right: '\\]', display: true}], throwOnError: false, strict: false })`
    - Attach `.setVectors(nextVecs)` (disposing old child geometries) to the `THREE.Group` returned by `addArrowField()`.
@@ -427,4 +427,4 @@ When the user uploads `CONTEXTCUT-LAB-FACTORY_3_5.md` and provides **Author(s), 
 Before building modules onto a cloned base HTML shell, ensure the shell's module loader and control builder include these three safeguards:
 1. **Pre-seed `mod.state` before `mod.build()`:** Inside `loadModule(mod)`, initialize `mod.state = mod.state || {};` and copy every control's default `c.value` (parsed via `parseFloat` for `'range'` and `!!` for `'check'`) into `mod.state[c.id]` **before** `mod.build()` or `mod.update()` runs.
 2. **Support string or object `<select>` options:** In `buildControls(mod)`, normalize each option `o` as `const val = (typeof o === 'object' && o !== null) ? o.value : o;` and `const lbl = (typeof o === 'object' && o !== null) ? (o.label ?? o.value) : o;` so both `['2', '4', '6']` and `[{ value, label }]` render properly.
-3. **Smooth wheel zoom:** Set `controls.zoomSpeed = 0.05;` on `OrbitControls`.
+3. **Smooth wheel zoom:** Set `controls.zoomSpeed = 0.45;` on `OrbitControls`.
