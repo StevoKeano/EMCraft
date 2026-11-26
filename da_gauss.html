@@ -20,7 +20,18 @@
   #app { display:grid; grid-template-columns: 340px 1fr; height:100%; }
   #sidebar { background:var(--panel); border-right:1px solid #1e2a3d; padding:14px; overflow:auto; }
   #sidebar h1 { font-size:16px; margin:0 0 4px; }
-  #sidebar .sub { color:var(--muted); font-size:12px; margin-bottom:12px; }
+  #sidebar .sub { color:var(--muted); font-size:12px; margin-bottom:8px; }
+  .help-bar { display:flex; gap:6px; margin-bottom:12px; }
+  .help-btn { background:#16233a; color:var(--accent); border:1px solid #2b4466; border-radius:6px;
+              padding:5px 10px; font-size:12px; cursor:pointer; font-weight:600; }
+  .help-btn:hover { background:#1e3150; border-color:var(--accent); }
+  #helpPanel { display:none; background:#0b1322; border:1px solid var(--accent); border-radius:8px;
+               padding:10px 12px; margin-bottom:12px; font-size:12px; line-height:1.5; color:#d7e3f4; }
+  #helpPanel.open { display:block; }
+  #helpPanel h3 { margin:0 0 6px; font-size:13px; color:var(--accent); }
+  #helpPanel .hsec { margin-bottom:8px; }
+  #helpPanel .hsec b { color:#ffd166; }
+  #helpPanel .all-item { border-top:1px solid #1e2a3d; padding-top:8px; margin-top:8px; }
   #moduleList { list-style:none; padding:0; margin:0 0 12px; }
   #moduleList li { padding:8px 10px; border-radius:8px; cursor:pointer; font-size:13px;
                    border:1px solid transparent; margin-bottom:4px; }
@@ -57,6 +68,11 @@
   <aside id="sidebar">
     <h1>Disquisitiones Arithmeticae (1801)</h1>
     <div class="sub">Carl Friedrich Gauss — Number Theory Interactive Lab</div>
+    <div class="help-bar">
+      <button id="helpToggleBtn" class="help-btn" type="button">? Plain-English Guide</button>
+      <button id="helpAllBtn" class="help-btn" type="button" style="display:none;">Show All 8 Sections</button>
+    </div>
+    <div id="helpPanel"></div>
     <ul id="moduleList"></ul>
     <div id="controls"></div>
     <div id="hud">
@@ -1582,8 +1598,108 @@ function buildQuiz(mod) {
   }
 }
 
+const PLAIN_GUIDES = {
+  sec1_congruences: {
+    title: "1. Congruent Numbers (Clock Arithmetic)",
+    idea: "Two integers are congruent modulo m when they leave the exact same remainder after dividing by m—like 17:00 and 5:00 pointing to the same hour on a 12-hour clock.",
+    view3d: "A circular clock with m ticks. Cyan and orange pointers show where a and b land, and the red arc measures the shortest modular distance between them.",
+    tryIt: "Set m = 12, a = 17, b = 5 to see both pointers overlap ('congruent: yes'). Switch residue convention to 'absolutely least' to see numbers wrap into (-m/2, m/2]."
+  },
+  sec2_linear_crt: {
+    title: "2. Linear Congruences & Chinese Remainder Theorem",
+    idea: "Solving ax ≡ b (mod m) is modular division. The Chinese Remainder Theorem (CRT) reconstructs one hidden number x from its remainders on two different clocks (m1 and m2).",
+    view3d: "Two perpendicular clocks—horizontal mod m1 and vertical mod m2—with red dots marking target remainders and a floating red beacon showing their combined 3D intersection.",
+    tryIt: "Set m1 = 5, m2 = 7, a = 1, b = 2 to see CRT x = 23 (mod 35). Then set m1 = 6, m2 = 8 (not coprime) to see when two clocks cannot agree."
+  },
+  sec3_power_residues: {
+    title: "3. Power Residues & Primitive Roots",
+    idea: "Instead of adding around a clock, you multiply repeatedly by a base g (g¹, g², g³... mod p). A primitive root g visits every non-zero number 1..p-1 before returning to 1—turning multiplication into addition via discrete logs.",
+    view3d: "The p-1 non-zero remainders arranged around a circle, with an orange orbit path tracing the jumps of g^k mod p.",
+    tryIt: "Keep p = 11 and compare g = 2 (primitive root—visits all 10 vertices) against g = 10 (order 2—bounces back and forth between just 1 and 10)."
+  },
+  sec4_quadratic_reciprocity: {
+    title: "4. Quadratic Reciprocity (Gauss's Golden Theorem)",
+    idea: "When does a number have a modular square root (x² ≡ a mod p)? Gauss discovered a mirror symmetry between odd primes p and q: whether p is a square mod q matches whether q is a square mod p, unless both leave remainder 3 mod 4 (in which case they flip).",
+    view3d: "Ring p (left) and ring q (right) with tall glowing spokes on perfect squares mod each prime. The central plane turns green when (p/q) and (q/p) match, and red when they flip.",
+    tryIt: "Compare p = 5, q = 13 (green plane) with p = 3, q = 7 (red plane). Drag 'residue a' around ring p to see green root orbs appear underneath whenever a has modular square roots."
+  },
+  sec5a_binary_forms: {
+    title: "5A. Binary Quadratic Forms",
+    idea: "Gauss studied which whole numbers can be written as f(x,y) = ax² + 2bxy + cy². Equivalent formulas produce the exact same integers after a grid shift; Gauss reduction shrinks (a, b, c) to one canonical simplest form.",
+    view3d: "The curve ax² + 2bxy + cy² = 1 on the integer grid—a closed ellipse when D = b² - ac < 0 (positive definite) and an open hyperbola when D > 0 (indefinite), with gold dots on integer solutions.",
+    tryIt: "Slide a, b, and c while watching the HUD's 'reduced' triple stay constant across equivalent forms, or switch form type to 'indefinite' to snap the ellipse open into a hyperbola."
+  },
+  sec5b_composition_genera: {
+    title: "5B. Form Composition & Genera",
+    idea: "For a discriminant D, there are finitely many reduced forms—counted by the class number h(D). Gauss discovered how to 'multiply' two quadratic forms to get a third, forming a finite abelian group decades before group theory was named.",
+    view3d: "Each sphere is one equivalence class of quadratic forms arranged in a group ring, with arrows showing composition steps and horizontal planes grouping classes into genera.",
+    tryIt: "Compare D = -23 (h(D) = 3 classes) with D = -3 (h(D) = 1 class, where every form reduces to x² + xy + y²)."
+  },
+  sec6_factoring_sieve: {
+    title: "6. Mechanical Factoring & Exclusions",
+    idea: "To factor N without slow trial division, write N as a difference of squares: x² - N = y². You rapidly eliminate impossible x candidates by checking if x² - N is a legal square mod 3, 5, 7, 11, 13, 17—cutting ~50% of candidates per prime.",
+    view3d: "A 10×10 grid of the first 100 candidates x ≥ √N. Increasing sieve depth drops excluded tiles down; any tile where x² - N is a true square rises in bright green and reveals the factors.",
+    tryIt: "Set N = 899 (where 30² - 899 = 1² → 29 × 31) or N = 1001 and step sieve depth from 1 to 6 to watch impossible candidates drop away."
+  },
+  sec7_cyclotomic_17gon: {
+    title: "7. Cyclotomic Equations & the Regular 17-Gon",
+    idea: "At age 18, Gauss proved the regular 17-gon can be constructed with compass and straightedge by grouping the 16 non-trivial roots of x¹⁷ - 1 = 0 into nested Gaussian periods (halving 16 → 8 → 4 → 2 → 1) solvable by square roots.",
+    view3d: "The n roots of unity around the unit circle, with colored polygons linking conjugate roots inside each Gaussian period and elevated octahedron markers at each period's center of mass.",
+    tryIt: "Keep n = 17 and step 'Gaussian period size' through 8, 4, 2, and 1 to watch Gauss's tower of quadratic extensions split the 16 roots into 2, 4, 8, and 16 individual vertices."
+  }
+};
+
+let helpOpen = false;
+let helpShowAll = false;
+const helpPanelEl = document.getElementById('helpPanel');
+const helpToggleBtn = document.getElementById('helpToggleBtn');
+const helpAllBtn = document.getElementById('helpAllBtn');
+
+function renderHelp() {
+  if (!helpPanelEl) return;
+  helpPanelEl.classList.toggle('open', helpOpen);
+  if (helpAllBtn) {
+    helpAllBtn.style.display = helpOpen ? 'inline-block' : 'none';
+    helpAllBtn.textContent = helpShowAll ? 'Current Section Only' : 'Show All 8 Sections';
+  }
+  if (helpToggleBtn) {
+    helpToggleBtn.textContent = helpOpen ? '✕ Close Guide' : '? Plain-English Guide';
+  }
+  if (!helpOpen) return;
+
+  const renderOne = (g, isExtra = false) => `
+    <div class="${isExtra ? 'all-item' : ''}">
+      <h3>${g.title}</h3>
+      <div class="hsec"><b>The Big Idea:</b> ${g.idea}</div>
+      <div class="hsec"><b>What You See in 3D:</b> ${g.view3d}</div>
+      <div class="hsec" style="margin-bottom:0;"><b>Try This:</b> ${g.tryIt}</div>
+    </div>`;
+
+  if (helpShowAll) {
+    helpPanelEl.innerHTML = Object.values(PLAIN_GUIDES).map((g, i) => renderOne(g, i > 0)).join('');
+  } else {
+    const g = (active && PLAIN_GUIDES[active.id]) || Object.values(PLAIN_GUIDES)[0];
+    helpPanelEl.innerHTML = renderOne(g, false);
+  }
+}
+
+if (helpToggleBtn) {
+  helpToggleBtn.addEventListener('click', () => {
+    helpOpen = !helpOpen;
+    if (!helpOpen) helpShowAll = false;
+    renderHelp();
+  });
+}
+if (helpAllBtn) {
+  helpAllBtn.addEventListener('click', () => {
+    helpShowAll = !helpShowAll;
+    renderHelp();
+  });
+}
+
 function loadModule(mod) {
   active = mod;
+  renderHelp();
   controls.target.set(0, 0, 0);
   if (Number.isNaN(camera.position.x)) camera.position.set(6, 5, 8);
   content.clear();
