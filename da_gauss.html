@@ -828,32 +828,66 @@ modules.push({
     const mp = (b, e, m) => { let r = 1; b %= m; while (e > 0) { if (e & 1) r = (r * b) % m; b = (b * b) % m; e >>= 1; } return r; };
     const leg = (x, m) => { x = ((x % m) + m) % m; if (x === 0) return 0; const v = mp(x, (m - 1) / 2, m); return v === 1 ? 1 : -1; };
     const pq = leg(p, q), qp = leg(q, p), ap = leg(a, p);
-    const sgn = ((p - 1) / 2 * ((q - 1) / 2)) % 2 === 0 ? 1 : -1;
-    // rebuild arrows
+    const sgn = (p === q) ? 0 : (((p - 1) / 2 * ((q - 1) / 2)) % 2 === 0 ? 1 : -1);
+    const aMod = ((a % p) + p) % p;
+    // rebuild arrows & labels anchored to ringP (-2.2) and ringQ (+2.2)
     this.arrows.clear();
-    const addRingArrows = (grp, m, color) => {
-      for (let k = 1; k < m; k++) {
+    this.labels.clear();
+    const mkLbl = (txt, pos, col, sc = 0.7) => {
+      const cv = document.createElement('canvas'); cv.width = 160; cv.height = 64;
+      const c2 = cv.getContext('2d');
+      c2.fillStyle = col; c2.font = 'bold 30px sans-serif'; c2.textAlign = 'center'; c2.textBaseline = 'middle';
+      c2.fillText(txt, 80, 32);
+      const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(cv), transparent: true }));
+      sp.position.copy(pos); sp.scale.set(sc, sc * 0.4, 1);
+      this.labels.add(sp);
+    };
+    mkLbl('p = ' + p, new THREE.Vector3(-2.2, 0.65, 0), '#7fd1ff', 1.1);
+    mkLbl('q = ' + q, new THREE.Vector3(2.2, 0.65, 0), '#ffb36b', 1.1);
+
+    const addRingArrows = (xOff, m, color, highlightMod) => {
+      for (let k = 0; k < m; k++) {
         const ang = (k / m) * Math.PI * 2;
-        const res = leg(k, m) === 1;
+        const isSel = (highlightMod !== null && k === highlightMod);
+        const isRoot = (highlightMod !== null && ap === 1 && (k * k) % m === highlightMod);
+        const legVal = leg(k, m);
+        const res = legVal === 1;
         const dir = new THREE.Vector3(Math.cos(ang), 0, Math.sin(ang));
-        const origin = new THREE.Vector3(Math.cos(ang) * 1.25, 0, Math.sin(ang) * 1.25);
-        const len = res ? 0.55 : 0.28;
-        const mesh = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, len, 8),
-          new THREE.MeshStandardMaterial({ color: res ? color : 0x555566, emissive: res ? color : 0x000000, emissiveIntensity: res ? 0.5 : 0 }));
-        mesh.position.copy(origin).addScaledVector(dir, len / 2);
-        mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
-        grp.add(mesh);
+        const origin = new THREE.Vector3(xOff + Math.cos(ang) * 1.25, 0, Math.sin(ang) * 1.25);
+        if (k > 0) {
+          const len = isSel ? 0.85 : (res ? 0.58 : 0.26);
+          const col = isSel ? (legVal === 1 ? 0x55ff99 : 0xff5577) : (res ? color : 0x555566);
+          const mesh = new THREE.Mesh(new THREE.CylinderGeometry(isSel ? 0.06 : 0.035, isSel ? 0.06 : 0.035, len, 10),
+            new THREE.MeshStandardMaterial({ color: col, emissive: (res || isSel) ? col : 0x000000, emissiveIntensity: isSel ? 0.9 : (res ? 0.45 : 0) }));
+          mesh.position.copy(origin).addScaledVector(dir, len / 2);
+          mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
+          this.arrows.add(mesh);
+        }
+        if (isSel || isRoot) {
+          const orb = new THREE.Mesh(new THREE.SphereGeometry(isSel ? 0.13 : 0.09, 12, 12),
+            new THREE.MeshStandardMaterial({ color: isSel ? 0xffffff : 0x55ff99, emissive: isSel ? 0x55ff99 : 0x22aa55, emissiveIntensity: 0.7 }));
+          orb.position.set(xOff + Math.cos(ang) * 1.25, isSel ? 0.22 : -0.18, Math.sin(ang) * 1.25);
+          this.arrows.add(orb);
+        }
+        mkLbl(String(k), new THREE.Vector3(xOff + Math.cos(ang) * 2.05, 0.12, Math.sin(ang) * 2.05), isSel ? '#ffffff' : (res ? '#cfe8ff' : '#6c7a89'), 0.55);
       }
     };
-    addRingArrows(this.arrows, p, 0x7fd1ff);
-    addRingArrows(this.arrows, q, 0xffb36b);
+    addRingArrows(-2.2, p, 0x7fd1ff, aMod);
+    addRingArrows(2.2, q, 0xffb36b, p % q);
     // symmetry plane color reflects sign
-    this.plane.material.color.set(sgn === 1 ? 0x7fffa0 : 0xff6b8a);
+    this.plane.material.color.set(sgn === 1 ? 0x7fffa0 : (sgn === -1 ? 0xff6b8a : 0x888899));
     this.plane.material.opacity = 0.22;
     // HUD
+    const roots = [];
+    for (let x = 0; x < p; x++) if ((x * x) % p === aMod) roots.push(x);
     setHud('Quadratic reciprocity',
       '\\left(\\frac{p}{q}\\right)\\left(\\frac{q}{p}\\right)=(-1)^{\\frac{p-1}{2}\\frac{q-1}{2}}',
-      [{ k: '(p/q)', v: String(pq) }, { k: '(q/p)', v: String(qp) }, { k: 'sign', v: String(sgn) }, { k: '(a/p)', v: String(ap) }]);
+      [
+        { k: '(p/q)', v: String(pq) },
+        { k: '(q/p)', v: String(qp) },
+        { k: 'sign', v: p === q ? '0 (p=q)' : (sgn > 0 ? '+1' : '-1') },
+        { k: 'a mod p', v: `${aMod} (${ap === 1 ? 'QR, x=' + roots.join(',') : ap === -1 ? 'NR' : '0'})` }
+      ]);
     // chart: reciprocity matrix
     const ctx = chartEl.getContext('2d'), W = chartEl.width, H = chartEl.height;
     ctx.clearRect(0, 0, W, H);
