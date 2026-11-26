@@ -788,6 +788,113 @@ modules.push({
     }
   ]
 });
+modules.push({
+  id: 'sec4_quadratic_reciprocity',
+  title: '4. Section IV: Quadratic Reciprocity (Arts. 94-152)',
+  controls: [
+    { type: 'select', id: 'p', label: 'prime p', options: [3,5,7,11,13], value: 5 },
+    { type: 'select', id: 'q', label: 'prime q', options: [3,5,7,11,13], value: 7 },
+    { type: 'range', id: 'a', label: 'residue a', min: 1, max: 12, step: 1, value: 3 }
+  ],
+  build() {
+    const st = this.state;
+    Object.assign(st, { p: 5, q: 7, a: 3 });
+    this.g = new THREE.Group(); content.add(this.g);
+    this.ringP = new THREE.Group(); this.ringQ = new THREE.Group();
+    this.g.add(this.ringP, this.ringQ);
+    this.ringP.position.set(-2.2, 0, 0);
+    this.ringQ.position.set(2.2, 0, 0);
+    const mkRing = (g, color) => {
+      const tor = new THREE.Mesh(new THREE.TorusGeometry(1.25, 0.055, 12, 64),
+        new THREE.MeshStandardMaterial({ color, metalness: 0.5, roughness: 0.35 }));
+      tor.rotation.x = Math.PI / 2; g.add(tor);
+      const hub = new THREE.Mesh(new THREE.SphereGeometry(0.16, 16, 12),
+        new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: color, emissiveIntensity: 0.6 }));
+      g.add(hub);
+      return g;
+    };
+    mkRing(this.ringP, 0x7fd1ff); mkRing(this.ringQ, 0xffb36b);
+    this.plane = new THREE.Mesh(new THREE.PlaneGeometry(6.2, 3.2),
+      new THREE.MeshStandardMaterial({ color: 0x9b8cff, transparent: true, opacity: 0.16, side: THREE.DoubleSide }));
+    this.plane.rotation.y = Math.PI / 2; this.g.add(this.plane);
+    this.arrows = new THREE.Group(); this.g.add(this.arrows);
+    this.labels = new THREE.Group(); this.g.add(this.labels);
+    this.light = new THREE.PointLight(0xffffff, 1.2, 20); this.light.position.set(0, 4, 4); this.g.add(this.light);
+    this.g.add(new THREE.AmbientLight(0xffffff, 0.45));
+  },
+  update() {
+    const st = this.state, p = +st.p, q = +st.q, a = +st.a;
+    const mp = (b, e, m) => { let r = 1; b %= m; while (e > 0) { if (e & 1) r = (r * b) % m; b = (b * b) % m; e >>= 1; } return r; };
+    const leg = (x, m) => { x = ((x % m) + m) % m; if (x === 0) return 0; const v = mp(x, (m - 1) / 2, m); return v === 1 ? 1 : -1; };
+    const pq = leg(p, q), qp = leg(q, p), ap = leg(a, p);
+    const sgn = ((p - 1) / 2 * ((q - 1) / 2)) % 2 === 0 ? 1 : -1;
+    // rebuild arrows
+    this.arrows.clear();
+    const addRingArrows = (grp, m, color) => {
+      for (let k = 1; k < m; k++) {
+        const ang = (k / m) * Math.PI * 2;
+        const res = leg(k, m) === 1;
+        const dir = new THREE.Vector3(Math.cos(ang), 0, Math.sin(ang));
+        const origin = new THREE.Vector3(Math.cos(ang) * 1.25, 0, Math.sin(ang) * 1.25);
+        const len = res ? 0.55 : 0.28;
+        const mesh = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, len, 8),
+          new THREE.MeshStandardMaterial({ color: res ? color : 0x555566, emissive: res ? color : 0x000000, emissiveIntensity: res ? 0.5 : 0 }));
+        mesh.position.copy(origin).addScaledVector(dir, len / 2);
+        mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
+        grp.add(mesh);
+      }
+    };
+    addRingArrows(this.arrows, p, 0x7fd1ff);
+    addRingArrows(this.arrows, q, 0xffb36b);
+    // symmetry plane color reflects sign
+    this.plane.material.color.set(sgn === 1 ? 0x7fffa0 : 0xff6b8a);
+    this.plane.material.opacity = 0.22;
+    // HUD
+    setHud('Quadratic reciprocity',
+      '\\left(\\frac{p}{q}\\right)\\left(\\frac{q}{p}\\right)=(-1)^{\\frac{p-1}{2}\\frac{q-1}{2}}',
+      [{ k: '(p/q)', v: String(pq) }, { k: '(q/p)', v: String(qp) }, { k: 'sign', v: String(sgn) }, { k: '(a/p)', v: String(ap) }]);
+    // chart: reciprocity matrix
+    const ctx = chartEl.getContext('2d'), W = chartEl.width, H = chartEl.height;
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = '#0b1020'; ctx.fillRect(0, 0, W, H);
+    const primes = [3, 5, 7, 11, 13], n = primes.length;
+    const cell = Math.min(W, H) / (n + 1.6), ox = (W - cell * n) / 2, oy = (H - cell * n) / 2 + 10;
+    ctx.font = '12px monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    for (let i = 0; i < n; i++) {
+      ctx.fillStyle = '#9fb3d9'; ctx.fillText(String(primes[i]), ox + cell * (i + 0.5), oy - 14);
+      ctx.fillText(String(primes[i]), ox - 16, oy + cell * (i + 0.5));
+    }
+    for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) {
+      const v = leg(primes[i], primes[j]);
+      const x = ox + cell * j, y = oy + cell * i;
+      ctx.fillStyle = v === 1 ? '#2f8f5b' : v === -1 ? '#8f2f4a' : '#333a4a';
+      ctx.fillRect(x + 1, y + 1, cell - 2, cell - 2);
+      ctx.fillStyle = '#ffffff'; ctx.fillText(v === 1 ? '+' : v === -1 ? '-' : '0', x + cell / 2, y + cell / 2);
+    }
+    ctx.fillStyle = '#cfe3ff'; ctx.font = '13px monospace';
+    ctx.fillText('(p/q) reciprocity matrix', W / 2, H - 12);
+  },
+  tick(dt) {
+    this.ringP.rotation.y += dt * 0.35;
+    this.ringQ.rotation.y -= dt * 0.35;
+    this.plane.rotation.z = Math.sin(performance.now() * 0.0006) * 0.08;
+  },
+  lesson: String.raw`<b>Euler's criterion.</b> For an odd prime $p$ and $a\not\equiv 0\pmod p$, the Legendre symbol is
+$$\left(\frac{a}{p}\right)\equiv a^{\frac{p-1}{2}}\pmod p,\qquad \left(\frac{a}{p}\right)\in\{+1,-1\}.$$
+It is $+1$ exactly when $a$ is a quadratic residue mod $p$, and $-1$ when $a$ is a non-residue.
+
+<b>The Theorema Aureum (Quadratic Reciprocity).</b> For distinct odd primes $p,q$,
+$$\left(\frac{p}{q}\right)\left(\frac{q}{p}\right)=(-1)^{\frac{p-1}{2}\frac{q-1}{2}}.$$
+The exponent is odd only when both $p\equiv q\equiv 3\pmod 4$; otherwise the two symbols agree. Equivalently,
+$$\left(\frac{p}{q}\right)=\left(\frac{q}{p}\right)\quad\text{if }p\equiv 1\text{ or }q\equiv 1\pmod 4,$$
+and $\left(\frac{p}{q}\right)=-\left(\frac{q}{p}\right)$ when both are $3\pmod 4$.
+
+In the 3D lab the two prime rings show residue arrows (bright = residue, dim = non-residue); the central symmetry plane is green when the reciprocity sign is $+1$ and red when it is $-1$. The chart displays the full matrix of $\left(\frac{p}{q}\right)$ values for the five primes.`,
+  quiz: [
+    { q: 'Euler\'s criterion states that (a/p) is congruent mod p to:', options: ['a^{(p-1)/2}', 'a^{p-1}', 'a^{(p+1)/2}', 'a^{2}'], answer: 0 },
+    { q: 'The reciprocity sign (-1)^{((p-1)/2)((q-1)/2)} equals -1 exactly when:', options: ['both p and q are 1 mod 4', 'both p and q are 3 mod 4', 'one prime is 2', 'p = q'], answer: 1 }
+  ]
+});
 /* === UI CONTROLLER === */
 
 let active = null;
