@@ -32,11 +32,10 @@
   #helpPanel .hsec { margin-bottom:8px; }
   #helpPanel .hsec b { color:#ffd166; }
   #helpPanel .all-item { border-top:1px solid #1e2a3d; padding-top:8px; margin-top:8px; }
-  #moduleList { list-style:none; padding:0; margin:0 0 12px; }
-  #moduleList li { padding:8px 10px; border-radius:8px; cursor:pointer; font-size:13px;
-                   border:1px solid transparent; margin-bottom:4px; }
-  #moduleList li:hover { background:#16233a; }
-  #moduleList li.active { background:#1b2c47; border-color:var(--accent); }
+  #moduleSelect { width:100%; background:#16233a; color:var(--ink); border:1px solid var(--accent);
+                  border-radius:8px; padding:8px 10px; font-size:13px; font-weight:600;
+                  margin-bottom:12px; cursor:pointer; outline:none; }
+  #moduleSelect:hover { background:#1b2c47; }
   #controls { display:flex; flex-direction:column; gap:8px; margin-bottom:12px; }
   .ctrl { display:flex; flex-direction:column; gap:4px; font-size:12px; }
   .ctrl label { color:var(--muted); }
@@ -73,7 +72,7 @@
       <button id="helpAllBtn" class="help-btn" type="button" style="display:none;">Show All 8 Sections</button>
     </div>
     <div id="helpPanel"></div>
-    <ul id="moduleList"></ul>
+    <select id="moduleSelect" aria-label="Select Disquisitiones Arithmeticae section"></select>
     <div id="controls"></div>
     <div id="hud">
       <div id="hudTitle"></div>
@@ -1527,7 +1526,7 @@ has degree $\varphi(n)$ and integer coefficients; moreover $x^{n}-1=\prod_{d\mid
 /* === UI CONTROLLER === */
 
 let active = null;
-const listEl = document.getElementById('moduleList');
+const selectEl = document.getElementById('moduleSelect');
 const controlsEl = document.getElementById('controls');
 const lessonEl = document.getElementById('lesson');
 const quizEl = document.getElementById('quiz');
@@ -1715,16 +1714,19 @@ function loadModule(mod) {
   renderTex(lessonEl, KATEX_OPTS);
   buildControls(mod);
   buildQuiz(mod);
-  listEl.querySelectorAll('li').forEach(li => li.classList.toggle('active', li.dataset.id === mod.id));
+  if (selectEl) selectEl.value = mod.id;
 }
 
 for (const mod of modules) {
-  const li = document.createElement('li');
-  li.textContent = mod.title;
-  li.dataset.id = mod.id;
-  li.addEventListener('click', () => loadModule(mod));
-  listEl.appendChild(li);
+  const opt = document.createElement('option');
+  opt.value = mod.id;
+  opt.textContent = mod.title;
+  selectEl.appendChild(opt);
 }
+selectEl.addEventListener('change', () => {
+  const mod = modules.find(m => m.id === selectEl.value);
+  if (mod) loadModule(mod);
+});
 if (modules.length) loadModule(modules[0]);
 
 function resize() {
