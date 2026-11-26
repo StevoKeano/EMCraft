@@ -39,7 +39,12 @@
   #controls { display:flex; flex-direction:column; gap:8px; margin-bottom:12px; }
   .ctrl { display:flex; flex-direction:column; gap:4px; font-size:12px; }
   .ctrl label { color:var(--muted); }
-  .ctrl input[type=range] { width:100%; accent-color:var(--accent); }
+  .ctrl input[type=range] { width:100%; accent-color:var(--accent); cursor:pointer; }
+  #sliderTip { position:fixed; pointer-events:none; display:none; z-index:9999;
+               background:#0b1322; color:var(--accent); border:1px solid var(--accent);
+               border-radius:6px; padding:2px 7px; font-size:12px; font-weight:700;
+               font-family:monospace; box-shadow:0 4px 12px rgba(0,0,0,0.45);
+               transform:translate(-50%, -135%); white-space:nowrap; }
   .ctrl select, .ctrl input[type=text] { background:#0e1726; color:var(--ink);
         border:1px solid #24344d; border-radius:6px; padding:4px 6px; }
   #hud { background:#0e1726; border:1px solid #24344d; border-radius:8px; padding:10px; margin-bottom:12px; }
@@ -1844,6 +1849,37 @@ function resize() {
   camera.aspect = w / h;
   camera.updateProjectionMatrix();
 }
+const sliderTip = document.getElementById('sliderTip');
+const controlsContainer = document.getElementById('controls');
+function showSliderTip(inp, clientX) {
+  if (!sliderTip || !inp || inp.type !== 'range') return;
+  const r = inp.getBoundingClientRect();
+  const min = parseFloat(inp.min || '0');
+  const max = parseFloat(inp.max || '100');
+  const val = parseFloat(inp.value);
+  const ratio = max > min ? (val - min) / (max - min) : 0;
+  const thumbX = r.left + 8 + ratio * Math.max(0, r.width - 16);
+  const x = Number.isFinite(clientX) ? Math.max(r.left, Math.min(r.right, clientX)) : thumbX;
+  sliderTip.textContent = inp.value;
+  sliderTip.style.left = `${x}px`;
+  sliderTip.style.top = `${r.top}px`;
+  sliderTip.style.display = 'block';
+}
+if (controlsContainer) {
+  controlsContainer.addEventListener('pointermove', (e) => {
+    const inp = e.target.closest('input[type=range]');
+    if (inp) showSliderTip(inp, e.clientX);
+  });
+  controlsContainer.addEventListener('input', (e) => {
+    const inp = e.target.closest('input[type=range]');
+    if (inp) showSliderTip(inp);
+  });
+  controlsContainer.addEventListener('pointerout', (e) => {
+    const inp = e.target.closest('input[type=range]');
+    if (inp && sliderTip) sliderTip.style.display = 'none';
+  });
+}
+
 window.addEventListener('resize', resize);
 
 let last = performance.now();
@@ -1859,5 +1895,6 @@ function animate(now) {
 }
 requestAnimationFrame(animate);
 </script>
+<div id="sliderTip"></div>
 </body>
 </html>
