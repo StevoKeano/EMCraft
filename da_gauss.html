@@ -1693,49 +1693,57 @@ const TEEN_GUIDES = {
     title: "1. Clock Math (Remainders & Wrapping Around)",
     idea: "Think of a 12-hour clock: if it's 10:00 and you wait 5 hours, it's 3:00—not 15:00. Numbers are 'congruent' when they land on the exact same spot after wrapping around a circle of size m.",
     view3d: "A spinning clock with m tick marks. Blue (a) and orange (b) cones point to where each number lands, and the red arc shows the shortcut distance between them.",
-    tryIt: "Set m = 12, a = 17, and b = 5. Both pointers stack on 5 o'clock because 17 and 5 leave the exact same remainder (5) when divided by 12!"
+    tryIt: "Set m = 12, a = 17, and b = 5. Both pointers stack on 5 o'clock because 17 and 5 leave the exact same remainder (5) when divided by 12!",
+    qa: "<b>Wait—why do negative numbers turn positive?</b> When 'least positive' is selected, -1 on a 12-hour clock wraps backward 1 step from 12 to land on 11. Switch to 'absolutely least' to let numbers sit on the negative half (-5 to +6) instead."
   },
   sec2_linear_crt: {
     title: "2. Cracking Secret Lockers (Chinese Remainder Theorem)",
-    idea: "Suppose you don't know a secret number x, only that dividing it by 5 leaves 1 and dividing it by 7 leaves 2. Because 5 and 7 don't share factors, only ONE number under 35 fits both clues (x = 16)!",
-    view3d: "Two interlocking rings—one clock of size m1 and one of size m2. Red dots mark the target remainders on each ring, and the floating red sphere shows where both clues lock together.",
-    tryIt: "Set m1 = 5, m2 = 7, a = 1, b = 2 to crack the code (CRT x = 16). Now keep a = 1, b = 2 and set m1 = 6 and m2 = 8—because 1 is odd and 2 is even, the clues clash and no solution exists!"
+    idea: "This screen actually solves TWO puzzles at once using the same sliders:<br>• <b>Top puzzle (Linear Congruence):</b> Solve a·x ≡ b (mod m), where <b>a multiplies x</b>.<br>• <b>Bottom puzzle (CRT):</b> Reconstruct a mystery number x from two remainders, where <b>a and b act as the target remainders</b>: x ≡ a (mod m1) and x ≡ b (mod m2).",
+    view3d: "Two interlocking rings—horizontal clock m1 and vertical clock m2. Red dots mark the target remainders (a mod m1 and b mod m2), and the floating red beacon shows where both clues lock together in 3D.",
+    tryIt: "Set <b>m1 = 5, m2 = 7, a = 1, b = 2</b>. Here a and b mean 'remainder 1 when divided by 5' and 'remainder 2 when divided by 7':<br>• Clue 1 (÷5 leaves 1): 1, 6, 11, <b>16</b>, 21, 26, 31<br>• Clue 2 (÷7 leaves 2): 2, 9, <b>16</b>, 23, 30<br>The ONLY number under 5×7 = 35 on both lists is <b>16</b> (16 = 3×5 + 1 and 16 = 2×7 + 2), so the HUD reports <b>CRT x: 16 (mod 35)</b>!",
+    qa: "<b>Why did m1 = 6, m2 = 8 say 'none'?</b> Keep a = 1, b = 2 and set m1 = 6, m2 = 8: Clue 1 demands an odd number (1 mod 6), while Clue 2 demands an even number (2 mod 8). Because 6 and 8 share a factor of 2, those clues clash!"
   },
   sec3_power_residues: {
     title: "3. Power Jumps & Super-Generators (Primitive Roots)",
-    idea: "Instead of stepping +1 around a clock, you multiply by g each turn (g¹, g², g³... mod p). A 'primitive root' is a super-generator whose powers hit EVERY single number around the circle before looping back to 1.",
+    idea: "Instead of stepping +1 around a clock, you multiply by g each turn (g¹, g², g³... mod p). A 'primitive root' is a super-generator whose powers hit EVERY single number 1 to p-1 before looping back to 1.",
     view3d: "Numbers 1 to p-1 arranged in a circle. The orange laser path traces every jump as you keep multiplying by g.",
-    tryIt: "Keep p = 11 and test g = 2 (the orange web visits all 10 spots!) vs. g = 10 (it just bounces back and forth between 1 and 10 forever)."
+    tryIt: "Keep p = 11 and test <b>g = 2</b> (the orange web visits all 10 spots—primitive!) vs. <b>g = 10</b> (it just bounces back and forth between 1 and 10 forever).",
+    qa: "<b>Why is 0 missing from the circle?</b> Multiplying by 0 traps you at 0 forever, and for any prime p, multiplying non-zero numbers mod p never hits 0. Also notice '(p-1)! mod p' is always p-1 (which equals -1 mod p)—that's Wilson's Theorem!"
   },
   sec4_quadratic_reciprocity: {
     title: "4. Mirror-Image Squares (Quadratic Reciprocity)",
-    idea: "In clock math, can a number have a square root? Gauss found a crazy mirror rule between any two odd primes p and q: 'Is p a square mod q?' has the EXACT same yes/no answer as 'Is q a square mod p?'—except when both primes are 3 mod 4 (like 3 and 7), where the answers flip!",
-    view3d: "Two prime rings side by side with tall glowing spikes on numbers that have modular square roots. The glass wall in the middle glows green when both rings agree and red when they flip.",
-    tryIt: "Try p = 5, q = 13 (green wall—they match!) vs. p = 3, q = 7 (red wall—they flip!). Slide 'residue a' on ring p to watch green root orbs pop up underneath."
+    idea: "In clock math, can a number have a square root? Gauss found a mirror rule between any two odd primes p and q: 'Is p a square mod q?' has the EXACT same yes/no answer as 'Is q a square mod p?'—except when BOTH primes leave remainder 3 when divided by 4 (like 3 and 7), in which case the answers flip!",
+    view3d: "Ring p (left) and ring q (right) have tall glowing spikes on numbers that are squares mod that prime. The middle wall glows green when (p/q) and (q/p) match, and red when they flip.",
+    tryIt: "Compare <b>p = 5, q = 13</b> (green wall—both are 1 mod 4, so they agree!) vs. <b>p = 3, q = 7</b> (red wall—both are 3 mod 4, so they flip!). Slide 'residue a' on ring p to see green root orbs pop up underneath.",
+    qa: "<b>How can 4 have TWO square roots (x = 2, 3) mod 5?</b> Because 2² = 4 and 3² = 9 ≡ 4 (mod 5)! Just like +2 and -2 both square to 4 in normal math, 3 is the same as -2 on a 5-hour clock."
   },
   sec5a_binary_forms: {
     title: "5A. Stretching Grids & Loops (Quadratic Forms)",
-    idea: "Formulas like ax² + 2bxy + cy² act like stretchy rubber grids. Two messy formulas can actually hit the exact same whole numbers just viewed from a tilted angle—Gauss reduction squishes any formula down to its cleanest twin.",
-    view3d: "An ellipse (closed loop) or hyperbola (two open curves) drawn over a 3D grid, with gold dots marking exact whole-number hits.",
-    tryIt: "Drag a, b, and c around and notice how the HUD's 'reduced' triple stays locked on the simplest version, or switch 'form type' to indefinite to snap the loop open into a hyperbola."
+    idea: "Formulas like f(x,y) = ax² + 2bxy + cy² act like stretchy rubber grids. Two messy formulas can actually produce the exact same whole numbers just viewed from a tilted angle—Gauss reduction squishes any formula down to its cleanest twin.",
+    view3d: "An ellipse (closed loop) or hyperbola (two open curves) drawn over a 3D grid, with gold dots marking exact whole-number hits where f(x,y) = 1.",
+    tryIt: "Drag a, b, and c around and notice how the HUD's 'reduced' triple stays locked on the simplest version, or switch 'form type' to indefinite to snap the loop open into a hyperbola.",
+    qa: "<b>Why does the HUD say D = b² - ac instead of b² - 4ac?</b> Gauss wrote the middle term with a '2' in front (2bxy) so the discriminant divides cleanly by 4 into D = b² - ac without fractions."
   },
   sec5b_composition_genera: {
     title: "5B. Multiplying Shapes Like Numbers (Form Composition)",
-    idea: "Gauss figured out how to 'multiply' two quadratic formulas together to make a third—turning shapes into a mini number system (a group) long before mathematicians even had a word for groups!",
-    view3d: "Each glowing orb is a whole family of equivalent formulas arranged in a ring, with arrows showing how combining them steps around the circle.",
-    tryIt: "Slide Discriminant D to -23 (3 orbs in a triangle) vs. -3 (1 single orb, because every formula collapses into x² + xy + y²)."
+    idea: "Gauss figured out how to 'multiply' two quadratic formulas together to make a third—turning families of formulas into a mini number system (a finite group) decades before mathematicians even had a word for groups!",
+    view3d: "Each glowing orb is one equivalence class of quadratic formulas arranged in a ring, with arrows showing how composing them steps around the circle.",
+    tryIt: "Slide Discriminant D to <b>-23</b> (3 orbs in a triangle) vs. <b>-3</b> (1 single orb, because every formula collapses into x² + xy + y²).",
+    qa: "<b>Why did D skip -22 or -21 when I dragged the slider?</b> Valid discriminants for ax² + bxy + cy² must leave remainder 0 or 1 when divided by 4 (since b² is always 0 or 1 mod 4), so the lab automatically snaps to the nearest valid D."
   },
   sec6_factoring_sieve: {
     title: "6. Gauss's Factor-Hunting Machine (Sieve Exclusions)",
-    idea: "Factoring huge numbers by testing every divisor is super slow. Instead, rewrite N = x² - y² and use prime clocks (3, 5, 7, 11...) as filters to instantly eliminate ~50% of bad guesses per prime—like a mechanical coin sorter!",
-    view3d: "A 10×10 board of 100 candidate numbers. As you crank up 'sieve depth', eliminated tiles drop down into the dark while a true factor match shoots up in bright green.",
-    tryIt: "Try N = 899 (30² - 899 = 1² → 29 × 31) or default N = 1001 (green hits at x = 45, 51, 75) and raise sieve depth from 1 to 6 to watch bad guesses drop away."
+    idea: "Factoring huge numbers by testing every divisor is super slow. Instead, rewrite N = x² - y² and use prime clocks (3, 5, 7, 11, 13, 17) as filters to instantly eliminate ~50% of bad x guesses per prime—like a mechanical coin sorter!",
+    view3d: "A 10×10 board of the first 100 candidate numbers x ≥ √N. Increasing 'sieve depth' drops eliminated tiles down into the dark while a true factor match shoots up in bright green.",
+    tryIt: "Try <b>N = 899</b> (30² - 899 = 1² → 29 × 31) or default <b>N = 1001</b> (green hits at x = 45, 51, 75 giving 13×77, 11×91, 7×143) and raise sieve depth from 1 to 6.",
+    qa: "<b>What if N is prime, like N = 1009?</b> No green tile will pop up because no x² - N is a perfect square—and the sieve proves it by eliminating almost every tile on the board without doing a single long division!"
   },
   sec7_cyclotomic_17gon: {
     title: "7. Drawing a 17-Sided Star with Just a Ruler & Compass",
-    idea: "For 2,000 years, nobody knew how to draw a perfect 17-sided polygon using only a compass and unmarked straightedge. At age 18, Gauss solved it by bundling the 16 symmetry points of a circle into pairs of pairs (16 → 8 → 4 → 2 → 1) that only need regular square roots!",
-    view3d: "17 points around a circle connected by glowing colored webs (Gaussian periods) lifted into 3D layers, with diamond markers at each group's center.",
-    tryIt: "Keep n = 17 and step 'Gaussian period size' down from 8 → 4 → 2 → 1 to watch Gauss split the 16 points in half over and over until every corner is unlocked."
+    idea: "For 2,000 years, nobody knew how to draw a perfect 17-sided polygon using only a compass and unmarked straightedge. At age 18, Gauss solved it by bundling the 16 non-trivial symmetry points of a circle into pairs of pairs (16 → 8 → 4 → 2 → 1) that only need regular square roots!",
+    view3d: "17 points around a circle connected by glowing colored webs (Gaussian periods) lifted into 3D layers, with diamond markers at each group's center of mass.",
+    tryIt: "Keep n = 17 and step the period size down from <b>8 → 4 → 2 → 1</b> to watch Gauss split the 16 points in half over and over until every single corner is unlocked.",
+    qa: "<b>Why isn't the top point (1) connected to the colored webs?</b> Point 1 is the trivial root (x = 1). Gauss's symmetry trick groups the remaining n - 1 = 16 roots using powers of a primitive root (g = 3 mod 17)."
   }
 };
 
@@ -1770,7 +1778,8 @@ function renderHelp() {
       <h3 style="color:${titleCol};">${g.title}</h3>
       <div class="hsec"><b>The Big Idea:</b> ${g.idea}</div>
       <div class="hsec"><b>What You See in 3D:</b> ${g.view3d}</div>
-      <div class="hsec" style="margin-bottom:0;"><b>Try This:</b> ${g.tryIt}</div>
+      <div class="hsec" style="${g.qa ? '' : 'margin-bottom:0;'}"><b>Try This:</b> ${g.tryIt}</div>
+      ${g.qa ? `<div class="hsec" style="margin-bottom:0; color:#b9d4f2;">${g.qa}</div>` : ''}
     </div>`;
 
   if (helpShowAll) {
