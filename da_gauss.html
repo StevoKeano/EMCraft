@@ -250,18 +250,57 @@ modules.push({
   },
   rebuildTicks() {
     const st = this.state;
-    while (this.ticks.children.length) this.ticks.remove(this.ticks.children[0]);
+    while (this.ticks.children.length) {
+      const c = this.ticks.children.pop();
+      c.geometry?.dispose?.();
+      if (c.material?.map) c.material.map.dispose();
+      c.material?.dispose?.();
+    }
     const m = st.m;
+    const conv = st.conv;
     for (let i = 0; i < m; i++) {
       const ang = (i / m) * Math.PI * 2;
-      const r = 3.0;
-      const tick = new THREE.Mesh(
-        new THREE.BoxGeometry(0.05, 0.05, 0.28),
-        new THREE.MeshStandardMaterial({ color: i === 0 ? 0xffe08a : 0x8fb8d8 })
+      const isZero = i === 0;
+
+      // Full radial pie spoke from hub (r=0.22) to outer ring (r=3.05)
+      const spokeLen = 2.83;
+      const spokeMid = 0.22 + spokeLen / 2;
+      const spoke = new THREE.Mesh(
+        new THREE.BoxGeometry(spokeLen, isZero ? 0.045 : 0.025, isZero ? 0.055 : 0.03),
+        new THREE.MeshStandardMaterial({
+          color: isZero ? 0xffe08a : 0x3b6288,
+          emissive: isZero ? 0x4a3800 : 0x0d1b2a
+        })
       );
-      tick.position.set(Math.cos(ang) * r, 0, Math.sin(ang) * r);
+      spoke.position.set(Math.cos(ang) * spokeMid, 0, Math.sin(ang) * spokeMid);
+      spoke.rotation.y = -ang;
+      this.ticks.add(spoke);
+
+      // Outer rim notch
+      const tick = new THREE.Mesh(
+        new THREE.BoxGeometry(0.28, 0.07, 0.06),
+        new THREE.MeshStandardMaterial({ color: isZero ? 0xffe08a : 0x8fb8d8 })
+      );
+      tick.position.set(Math.cos(ang) * 3.0, 0, Math.sin(ang) * 3.0);
       tick.rotation.y = -ang;
       this.ticks.add(tick);
+
+      // Residue number sprite around the outside of each division
+      const labelVal = (conv === 'absolutely least' && i > m / 2) ? (i - m) : i;
+      const cv = document.createElement('canvas');
+      cv.width = 64; cv.height = 64;
+      const c2 = cv.getContext('2d');
+      c2.fillStyle = isZero ? '#ffe08a' : '#a8c7e6';
+      c2.font = 'bold 28px monospace';
+      c2.textAlign = 'center';
+      c2.textBaseline = 'middle';
+      c2.fillText(String(labelVal), 32, 32);
+      const sp = new THREE.Sprite(
+        new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(cv), transparent: true })
+      );
+      sp.position.set(Math.cos(ang) * 3.45, 0.12, Math.sin(ang) * 3.45);
+      sp.scale.set(0.45, 0.45, 1);
+      this.ticks.add(sp);
     }
   },
   residue(x, m, conv) {
