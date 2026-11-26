@@ -1643,7 +1643,7 @@ const PLAIN_GUIDES = {
     title: "2. Linear Congruences & Chinese Remainder Theorem",
     idea: "Solving ax ≡ b (mod m) is modular division. The Chinese Remainder Theorem (CRT) reconstructs one hidden number x from its remainders on two different clocks (m1 and m2).",
     view3d: "Two perpendicular clocks—horizontal mod m1 and vertical mod m2—with red dots marking target remainders and a floating red beacon showing their combined 3D intersection.",
-    tryIt: "Set m1 = 5, m2 = 7, a = 1, b = 2 to see CRT x = 16 (mod 35). Then set m1 = 6, m2 = 8 (not coprime) to see when two clocks cannot agree."
+    tryIt: "Set m1 = 5, m2 = 7, a = 1, b = 2 to see CRT x = 16 (mod 35). Then keep a = 1, b = 2 and set m1 = 6, m2 = 8 (not coprime, and 1 ≢ 2 mod 2) to see when two clocks cannot agree."
   },
   sec3_power_residues: {
     title: "3. Power Residues & Primitive Roots",
@@ -1673,7 +1673,7 @@ const PLAIN_GUIDES = {
     title: "6. Mechanical Factoring & Exclusions",
     idea: "To factor N without slow trial division, write N as a difference of squares: x² - N = y². You rapidly eliminate impossible x candidates by checking if x² - N is a legal square mod 3, 5, 7, 11, 13, 17—cutting ~50% of candidates per prime.",
     view3d: "A 10×10 grid of the first 100 candidates x ≥ √N. Increasing sieve depth drops excluded tiles down; any tile where x² - N is a true square rises in bright green and reveals the factors.",
-    tryIt: "Set N = 899 (where 30² - 899 = 1² → 29 × 31) or N = 1001 and step sieve depth from 1 to 6 to watch impossible candidates drop away."
+    tryIt: "Keep N = 1001 (green factor hits at x = 45, 51, 75 giving 13×77, 11×91, 7×143) or set N = 899 (30² - 899 = 1² → 29 × 31) and step sieve depth from 1 to 6."
   },
   sec7_cyclotomic_17gon: {
     title: "7. Cyclotomic Equations & the Regular 17-Gon",
@@ -1694,7 +1694,7 @@ const TEEN_GUIDES = {
     title: "2. Cracking Secret Lockers (Chinese Remainder Theorem)",
     idea: "Suppose you don't know a secret number x, only that dividing it by 5 leaves 1 and dividing it by 7 leaves 2. Because 5 and 7 don't share factors, only ONE number under 35 fits both clues (x = 16)!",
     view3d: "Two interlocking rings—one clock of size m1 and one of size m2. Red dots mark the target remainders on each ring, and the floating red sphere shows where both clues lock together.",
-    tryIt: "Set m1 = 5, m2 = 7, a = 1, b = 2 to crack the code (CRT x = 16). Now set m1 = 6 and m2 = 8—the clues clash and no solution exists!"
+    tryIt: "Set m1 = 5, m2 = 7, a = 1, b = 2 to crack the code (CRT x = 16). Now keep a = 1, b = 2 and set m1 = 6 and m2 = 8—because 1 is odd and 2 is even, the clues clash and no solution exists!"
   },
   sec3_power_residues: {
     title: "3. Power Jumps & Super-Generators (Primitive Roots)",
@@ -1724,7 +1724,7 @@ const TEEN_GUIDES = {
     title: "6. Gauss's Factor-Hunting Machine (Sieve Exclusions)",
     idea: "Factoring huge numbers by testing every divisor is super slow. Instead, rewrite N = x² - y² and use prime clocks (3, 5, 7, 11...) as filters to instantly eliminate ~50% of bad guesses per prime—like a mechanical coin sorter!",
     view3d: "A 10×10 board of 100 candidate numbers. As you crank up 'sieve depth', eliminated tiles drop down into the dark while a true factor match shoots up in bright green.",
-    tryIt: "Set N = 899 (which is 29 × 31 = 30² - 1²) and raise sieve depth from 1 to 6 to watch bad guesses drop away and the green winning tile pop up."
+    tryIt: "Try N = 899 (30² - 899 = 1² → 29 × 31) or default N = 1001 (green hits at x = 45, 51, 75) and raise sieve depth from 1 to 6 to watch bad guesses drop away."
   },
   sec7_cyclotomic_17gon: {
     title: "7. Drawing a 17-Sided Star with Just a Ruler & Compass",
