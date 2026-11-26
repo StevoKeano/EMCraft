@@ -175,6 +175,7 @@ function setHud(titleStr, latexEqStr, rows) {
   }
 }
 
+function gcd(a, b) { a = Math.abs(Math.trunc(a)); b = Math.abs(Math.trunc(b)); while (b) { const t = b; b = a % b; a = t; } return a; }
 const modules = [];
 
 modules.push({
