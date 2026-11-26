@@ -1151,6 +1151,99 @@ modules.push({
     { q: 'The principal genus consists of:', options: ['the squares of the class group', 'all classes', 'only the identity', 'the non-squares'], answer: 0 }
   ]
 });
+modules.push({
+  id: 'sec6_factoring_sieve',
+  title: '6. Section VI: Mechanical Factoring & Exclusions (Arts. 308-334)',
+  controls: [
+    { type: 'range', id: 'N', label: 'N', min: 100, max: 10000, step: 1, value: 1001 },
+    { type: 'select', id: 'p', label: 'prime p', options: [3, 7, 11, 13, 17], value: 7 },
+    { type: 'range', id: 'depth', label: 'sieve depth', min: 1, max: 6, step: 1, value: 3 }
+  ],
+  build() {
+    Object.assign(this.state, { N: 1001, p: 7, depth: 3 });
+    this.grid = new THREE.Group();
+    this.ring = new THREE.Group();
+    content.add(this.grid, this.ring);
+    this.cells = [];
+    const cols = 10, rows = 10, s = 0.42;
+    for (let i = 0; i < cols * rows; i++) {
+      const m = new THREE.Mesh(
+        new THREE.BoxGeometry(s * 0.9, 0.12, s * 0.9),
+        new THREE.MeshStandardMaterial({ color: 0x2f6f8f, roughness: 0.6, metalness: 0.2 })
+      );
+      m.position.set((i % cols - 4.5) * s, 0, (Math.floor(i / cols) - 4.5) * s);
+      this.grid.add(m);
+      this.cells.push(m);
+    }
+    const ringGeo = new THREE.TorusGeometry(2.2, 0.07, 12, 96);
+    this.ringMesh = new THREE.Mesh(ringGeo, new THREE.MeshStandardMaterial({ color: 0xffb347, emissive: 0x442200 }));
+    this.ringMesh.rotation.x = Math.PI / 2;
+    this.ring.add(this.ringMesh);
+    for (let i = 0; i < 12; i++) {
+      const a = i / 12 * Math.PI * 2;
+      const dot = new THREE.Mesh(new THREE.SphereGeometry(0.09, 8, 8), new THREE.MeshStandardMaterial({ color: 0x7fd1ff }));
+      dot.position.set(Math.cos(a) * 2.2, 0.12, Math.sin(a) * 2.2);
+      this.ring.add(dot);
+    }
+    this.ring.position.set(0, 1.6, 0);
+    this.grid.position.set(0, -0.4, 0);
+    addArrowField([{ origin: new THREE.Vector3(-5, 0.2, -5), dir: new THREE.Vector3(1, 0, 0), len: 10 }], 0x335566);
+  },
+  update() {
+    const st = this.state;
+    const N = Math.round(st.N), p = Number(st.p), depth = Math.round(st.depth);
+    const period = (() => { let k = 1, r = 10 % p; while (r !== 1 && k < p) { r = (r * 10) % p; k++; } return k; })();
+    const residues = new Set();
+    for (let x = 0; x < p; x++) if ((x * x) % p === N % p) residues.add(x);
+    const primes = [3, 5, 7, 11, 13, 17];
+    let survivors = [];
+    for (let d = 2; d <= Math.floor(Math.sqrt(N)); d++) survivors.push(d);
+    const counts = [];
+    for (let k = 0; k < depth; k++) {
+      const q = primes[k];
+      survivors = survivors.filter(d => residues.has(d % q) || (N % q === 0));
+      counts.push(survivors.length);
+    }
+    const fac = survivors.length ? survivors.slice(0, 4).join(', ') : 'none';
+    this.cells.forEach((m, i) => {
+      const alive = i < survivors.length;
+      m.material.color.setHex(alive ? 0x2f6f8f : 0x1a1a1a);
+      m.material.emissive.setHex(alive ? 0x0a2230 : 0x000000);
+      m.position.y = alive ? 0 : -0.25;
+    });
+    this.ringMesh.rotation.z = period / p * Math.PI * 2;
+    setHud('Factoring sieve', '\\text{ord}_p(10) \\mid p-1,\\quad N \\equiv r \\pmod{p}', [
+      { k: 'p', v: String(p) }, { k: 'period', v: String(period) },
+      { k: 'survivors', v: String(survivors.length) }, { k: 'factors', v: fac }
+    ]);
+    const ctx = chartEl.getContext('2d');
+    const W = chartEl.width, H = chartEl.height;
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = '#0b1018'; ctx.fillRect(0, 0, W, H);
+    ctx.strokeStyle = '#2a3b4d'; ctx.beginPath(); ctx.moveTo(40, H - 40); ctx.lineTo(W - 20, H - 40); ctx.moveTo(40, H - 40); ctx.lineTo(40, 20); ctx.stroke();
+    ctx.fillStyle = '#7fd1ff'; ctx.font = '12px monospace';
+    ctx.fillText('survivors vs sieve depth', 50, 30);
+    const maxC = Math.max(1, counts[0] || 1);
+    counts.forEach((c, i) => {
+      const x = 60 + i * (W - 100) / Math.max(1, counts.length - 1);
+      const y = H - 50 - (c / maxC) * (H - 100);
+      ctx.fillStyle = '#7fd1ff'; ctx.beginPath(); ctx.arc(x, y, 4, 0, Math.PI * 2); ctx.fill();
+      if (i) { ctx.strokeStyle = '#7fd1ff'; ctx.beginPath(); ctx.moveTo(prevX, prevY); ctx.lineTo(x, y); ctx.stroke(); }
+      ctx.fillStyle = '#9fb3c8'; ctx.fillText(String(c), x - 6, y - 8);
+      var prevX = x, prevY = y;
+    });
+    ctx.fillStyle = '#ffb347'; ctx.fillText('period of 1/' + p + ' = ' + period, W - 190, 30);
+  },
+  tick(dt) {
+    this.ring.rotation.y += dt * 0.25;
+    this.grid.rotation.y = Math.sin(performance.now() * 0.0002) * 0.05;
+  },
+  lesson: String.raw`Section VI treats factoring as mechanical exclusion. For a prime $p$ not dividing $10$, the decimal expansion of $1/p$ is purely periodic and its period is $\text{ord}_p(10)$, which divides $p-1$ by Fermat's little theorem. A quadratic exclusion table for modulus $p$ lists residues $r$ with $r^2 \equiv N \pmod{p}$; any candidate divisor $d$ of $N$ must satisfy $d \equiv r \pmod{p}$ for some surviving $r$. Gauss's sieve intersects these residue sets over several small primes, discarding rows of the candidate grid. The surviving candidates are the only divisors worth testing.`,
+  quiz: [
+    { q: 'For prime p = 7, the period of 1/7 is:', options: ['3', '6', '7', '2'], answer: 1 },
+    { q: 'In the exclusion sieve, a candidate divisor d survives modulus p when:', options: ['d is prime', 'd^2 ≡ N mod p', 'd divides p-1', 'd ≡ 0 mod p'], answer: 1 }
+  ]
+});
 /* === UI CONTROLLER === */
 
 let active = null;
