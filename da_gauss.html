@@ -265,13 +265,15 @@ modules.push({
     this.pointerB.position.set(Math.cos(angB) * 2.2, 0.55, Math.sin(angB) * 2.2);
     this.pointerB.rotation.set(Math.PI / 2, 0, -angB + Math.PI / 2);
 
-    // wrap arc between residues (short way)
-    let d = Math.abs(ra - rb);
-    if (d > m / 2) d = m - d;
+    // wrap arc between residues along true shortest modular path in XZ plane
+    const diff = (((rb - ra) % m) + m) % m;
+    const shortSteps = diff <= m / 2 ? diff : m - diff;
+    const startAng = diff <= m / 2 ? angA : angB;
     this.arc.geometry.dispose();
-    this.arc.geometry = new THREE.TorusGeometry(2.55, 0.035, 6, 48, Math.max(0.05, (d / m) * Math.PI * 2));
-    this.arc.rotation.set(Math.PI / 2, 0, Math.min(angA, angB));
-    this.arc.visible = d > 0;
+    this.arc.geometry = new THREE.TorusGeometry(2.55, 0.04, 6, 48, Math.max(0.05, (shortSteps / m) * Math.PI * 2));
+    this.arc.rotation.order = 'YXZ';
+    this.arc.rotation.set(Math.PI / 2, -startAng, 0);
+    this.arc.visible = shortSteps > 0;
 
     setHud('Congruence', 'a \\equiv b \\pmod{m} \\iff m \\mid (a-b)', [
       { k: 'm', v: String(m) },
@@ -451,46 +453,53 @@ modules.push({
     let phi = 0;
     for (let k = 1; k <= m; k++) if (gcd(k, m) === 1) phi++;
 
-    // CRT solution: brute force mod M
+    const r1 = ((a % m1) + m1) % m1;
+    const r2 = ((b % m2) + m2) % m2;
+    const g12 = gcd(m1, m2);
+    const crtSolvable = (r1 - r2) % g12 === 0;
+    const lcmM = (m1 * m2) / g12;
     let crt = -1;
-    if (coprime) {
-      for (let x = 0; x < M; x++) {
-        if (x % m1 === 1 && x % m2 === 2) { crt = x; break; }
+    if (crtSolvable) {
+      for (let x = 0; x < lcmM; x++) {
+        if (x % m1 === r1 && x % m2 === r2) { crt = x; break; }
       }
     }
 
-    // Ring 1 dots
+    // Ring 1 dots (mod m1 in XZ)
     for (let i = 0; i < 12; i++) {
       const d = this.ring1Dots[i];
       if (i < m1) {
         const ang = (i / m1) * Math.PI * 2;
         d.position.set(2.2 * Math.cos(ang), 0, 2.2 * Math.sin(ang));
         d.visible = true;
-        d.material.color.setHex(i === 1 % m1 ? 0xff5d5d : 0x7fd1ff);
+        d.material.color.setHex(i === r1 ? 0xff5d5d : 0x7fd1ff);
+        d.scale.setScalar(i === r1 ? 1.5 : 1.0);
       } else d.visible = false;
     }
-    // Ring 2 dots
+    // Ring 2 dots (mod m2 in XY)
     for (let i = 0; i < 12; i++) {
       const d = this.ring2Dots[i];
       if (i < m2) {
         const ang = (i / m2) * Math.PI * 2;
         d.position.set(2.2 * Math.cos(ang), 2.2 * Math.sin(ang), 0);
         d.visible = true;
-        d.material.color.setHex(i === 2 % m2 ? 0xff5d5d : 0xffb86b);
+        d.material.color.setHex(i === r2 ? 0xff5d5d : 0xffb86b);
+        d.scale.setScalar(i === r2 ? 1.5 : 1.0);
       } else d.visible = false;
     }
 
-    // Marker at CRT intersection (projected)
-    if (coprime && crt >= 0) {
-      const t = crt / M;
-      this.marker.position.set(2.2 * Math.cos(t * Math.PI * 2), 2.2 * Math.sin(t * Math.PI * 2), 0);
+    // Marker at coupled 3D torus coordinates (ang1 on XZ, ang2 on XY)
+    if (crtSolvable && crt >= 0) {
+      const a1 = (r1 / m1) * Math.PI * 2;
+      const a2 = (r2 / m2) * Math.PI * 2;
+      this.marker.position.set(2.2 * Math.cos(a1), 2.2 * Math.sin(a2), 2.2 * Math.sin(a1));
       this.marker.visible = true;
     } else this.marker.visible = false;
 
-    // Lattice grid: CRT solutions mod M (only one if coprime)
+    // Lattice grid: all CRT solutions mod M = m1*m2
     let li = 0;
     for (let x = 0; x < M && li < 144; x++) {
-      if (x % m1 === 1 && x % m2 === 2) {
+      if (x % m1 === r1 && x % m2 === r2) {
         const d = this.latticeDots[li++];
         const row = Math.floor(x / 12), col = x % 12;
         d.position.set(-3 + col * 0.5, -3.5 + row * 0.5, -1.5);
@@ -543,9 +552,9 @@ modules.push({
     ctx.strokeStyle = '#2a3a55';
     ctx.beginPath(); ctx.moveTo(W / 2 + 10, H - 40); ctx.lineTo(W - 20, H - 40); ctx.stroke();
     ctx.beginPath(); ctx.moveTo(W / 2 + 10, H - 40); ctx.lineTo(W / 2 + 10, 40); ctx.stroke();
-    if (coprime) {
+    if (crtSolvable) {
       for (let x = 0; x < M; x++) {
-        if (x % m1 === 1 && x % m2 === 2) {
+        if (x % m1 === r1 && x % m2 === r2) {
           const px = W / 2 + 10 + (x / Math.max(M - 1, 1)) * (W / 2 - 40);
           const py = H - 40 - 0.5 * (H - 80);
           ctx.fillStyle = '#8fe388';
@@ -554,15 +563,15 @@ modules.push({
       }
     } else {
       ctx.fillStyle = '#ff5d5d'; ctx.font = '12px monospace';
-      ctx.fillText('moduli not coprime', W / 2 + 20, H / 2);
+      ctx.fillText('no CRT sol (gcd=' + g12 + ')', W / 2 + 20, H / 2);
     }
 
     setHud('Linear congruences & CRT',
-      'a x \\equiv b \\pmod{m},\\quad x \\equiv r_1 \\pmod{m_1},\\; x \\equiv r_2 \\pmod{m_2}',
+      'a x \\equiv b \\pmod{m},\\quad x \\equiv ' + r1 + ' \\pmod{' + m1 + '},\\; x \\equiv ' + r2 + ' \\pmod{' + m2 + '}',
       [
-        { k: 'gcd(a,m)', v: String(g) },
-        { k: 'solutions', v: solvable ? String(g) : '0' },
-        { k: 'M', v: String(M) },
+        { k: 'lin sols', v: solvable ? String(g) + ' (gcd=' + g + ')' : '0 (gcd=' + g + ')' },
+        { k: 'CRT x', v: crtSolvable ? `${crt} (mod ${lcmM})` : 'none' },
+        { k: 'M = m1·m2', v: String(M) },
         { k: 'phi(m)', v: String(phi) }
       ]);
   },
@@ -591,6 +600,9 @@ modules.push({
     Object.assign(st, { p: 11, a: 3, g: 2, idx: 0, ord: 0, prod: 0, step: 0 });
 
     const grp = new THREE.Group();
+    this.grp = grp;
+    this.lblGrp = new THREE.Group();
+    grp.add(this.lblGrp);
     content.add(grp);
 
     // ring of p-1 residue nodes on unit circle
@@ -755,14 +767,33 @@ modules.push({
     ctx.fillText('index table k = ind_g(r)', pad, pad - 12);
     ctx.fillText('orbit g^k mod p', W - pad - 150, pad - 12);
 
+    // 3D residue labels around ring
+    this.lblGrp.clear();
+    for (let i = 0; i < n; i++) {
+      const ang = (i / n) * Math.PI * 2 - Math.PI / 2;
+      const cv = document.createElement('canvas'); cv.width = 64; cv.height = 64;
+      const c2 = cv.getContext('2d');
+      c2.fillStyle = (i + 1 === a) ? '#ffb347' : '#9fc7e8';
+      c2.font = 'bold 30px sans-serif'; c2.textAlign = 'center'; c2.textBaseline = 'middle';
+      c2.fillText(String(i + 1), 32, 32);
+      const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(cv), transparent: true }));
+      sp.position.set(Math.cos(ang) * 1.24, Math.sin(ang) * 1.24, 0.02);
+      sp.scale.set(0.28, 0.28, 1);
+      this.lblGrp.add(sp);
+    }
+
+    let ordG = 1, gx = g % p;
+    while (gx !== 1 && ordG < n) { gx = (gx * g) % p; ordG++; }
+    const isPrim = ordG === n;
+
     setHud(
       'Power residues',
       'a^{p-1} \\equiv 1 \\pmod{p},\\quad g^{k} \\equiv a \\pmod{p},\\quad (p-1)! \\equiv -1 \\pmod{p}',
       [
-        { k: 'p', v: String(p) },
-        { k: 'order', v: String(st.ord) },
-        { k: 'index', v: st.idx >= 0 ? String(st.idx) : 'n/a' },
-        { k: 'product', v: String(st.prod) }
+        { k: 'ord_p(a)', v: String(st.ord) },
+        { k: 'ord_p(g)', v: `${ordG} (${isPrim ? 'prim' : 'non-prim'})` },
+        { k: 'ind_g(a)', v: st.idx >= 0 ? String(st.idx) : 'n/a' },
+        { k: '(p-1)! mod p', v: `${st.prod} (≡ -1)` }
       ]
     );
   },
@@ -770,8 +801,7 @@ modules.push({
   tick(dt) {
     const st = this.state;
     st.step += dt;
-    const grp = content.children[content.children.length - 1];
-    if (grp) grp.rotation.y = Math.sin(st.step * 0.4) * 0.15;
+    if (this.grp) this.grp.rotation.y = Math.sin(st.step * 0.4) * 0.15;
   },
 
   lesson: String.raw`Fermat's little theorem states that for a prime $p$ and any integer $a$ not divisible by $p$, $a^{p-1} \equiv 1 \pmod{p}$. The nonzero residues modulo $p$ form a multiplicative group of order $p-1$. This group is cyclic: there exists a primitive root $g$ such that every residue is a power $g^k$. The exponent $k$ is the index (discrete logarithm) of the residue, $k = \mathrm{ind}_g(a)$, satisfying $g^k \equiv a \pmod{p}$. The order of $a$ is the smallest positive $k$ with $a^k \equiv 1$. Wilson's theorem gives $(p-1)! \equiv -1 \pmod{p}$, a companion congruence to Fermat's theorem. The 3D ring shows the $p-1$ residues as vertices of a regular polygon; the generator steps around the ring, and the chart displays the index table and the orbit of powers.`,
@@ -954,7 +984,14 @@ modules.push({
   },
   update() {
     const st = this.state;
-    const a = st.a, b = st.b, c = st.c, D = b * b - a * c;
+    const a = Number(st.a), c = Number(st.c);
+    let b = Number(st.b);
+    if (st.type === 'indefinite' && b * b - a * c <= 0) {
+      b = Math.ceil(Math.sqrt(a * c + 1));
+    } else if (st.type === 'positive definite' && b * b - a * c >= 0) {
+      b = Math.max(-Math.floor(Math.sqrt(Math.max(0, a * c - 1))), Math.min(Math.floor(Math.sqrt(Math.max(0, a * c - 1))), b));
+    }
+    const D = b * b - a * c;
     const posdef = (a > 0 && D < 0);
     const N = 240, verts = [];
     // level curve f(x,y)=1: a x^2 + 2bxy + c y^2 = 1
@@ -1010,9 +1047,15 @@ modules.push({
         } else break;
       }
     }
+    const red = this.reduced[this.reduced.length - 1] || [a, b, c];
     setHud('Binary quadratic forms',
       'f(x,y)=a x^{2}+2 b x y+c y^{2},\\quad D=b^{2}-a c',
-      [{ k: 'a', v: a }, { k: 'b', v: b }, { k: 'c', v: c }, { k: 'D', v: D }]);
+      [
+        { k: 'form', v: `(${a}, ${b}, ${c})` },
+        { k: 'reduced', v: `(${red[0]}, ${red[1]}, ${red[2]})` },
+        { k: 'D = b²-ac', v: String(D) },
+        { k: 'class', v: posdef ? 'pos. definite' : (D === 0 ? 'degenerate' : 'indefinite') }
+      ]);
     this.drawChart(a, b, c, D, posdef);
   },
   drawChart(a, b, c, D, posdef) {
@@ -1095,9 +1138,22 @@ modules.push({
   update() {
     const st = this.state;
     this.group.clear(); this.nodes = []; this.edges = []; this.genusPlanes = [];
-    const D = st.D;
-    // toy class-group model: h(D) from simple discriminant heuristic
-    const h = Math.max(1, Math.min(8, Math.abs(D) % 7 + 1));
+    // Snap D to a valid negative discriminant (D < 0 and D ≡ 0 or 1 mod 4)
+    let D = Math.min(-3, Math.round(Number(st.D)));
+    while (((D % 4) + 4) % 4 !== 0 && ((D % 4) + 4) % 4 !== 1) D--;
+    // Exact count of primitive reduced binary quadratic forms ax^2 + bxy + cy^2 of discriminant D
+    const forms = [];
+    const maxA = Math.floor(Math.sqrt(Math.abs(D) / 3));
+    for (let a = 1; a <= maxA; a++) {
+      for (let b = -a; b <= a; b++) {
+        if ((b * b - D) % (4 * a) !== 0) continue;
+        const c = (b * b - D) / (4 * a);
+        if (c < a) continue;
+        if ((Math.abs(b) === a || a === c) && b < 0) continue;
+        if (gcd(gcd(a, Math.abs(b)), c) === 1) forms.push(`(${a},${b},${c})`);
+      }
+    }
+    const h = Math.max(1, forms.length);
     const n = h;
     const R = 1.6;
     const pts = [];
@@ -1173,7 +1229,10 @@ modules.push({
     ctx.fillStyle = '#ff9ad7';
     ctx.fillText('Genus: even/odd character', 10, H - 10);
     setHud('Form composition & genera', 'f_1 \\circ f_2 = f_3,\\quad h(D)=\\#\\text{classes}', [
-      { k: 'D', v: String(D) }, { k: 'h(D)', v: String(h) }, { k: 'genera', v: String(genusCount) }, { k: 'order', v: String(n) }
+      { k: 'valid D', v: String(D) },
+      { k: 'h(D)', v: String(h) },
+      { k: 'genera', v: String(genusCount) },
+      { k: 'forms', v: forms.slice(0, 3).join(' ') || '(1,0,1)' }
     ]);
   },
   tick(dt) {
@@ -1228,28 +1287,50 @@ modules.push({
     const st = this.state;
     const N = Math.round(st.N), p = Number(st.p), depth = Math.round(st.depth);
     const period = (() => { let k = 1, r = 10 % p; while (r !== 1 && k < p) { r = (r * 10) % p; k++; } return k; })();
-    const residues = new Set();
-    for (let x = 0; x < p; x++) if ((x * x) % p === N % p) residues.add(x);
-    const primes = [3, 5, 7, 11, 13, 17];
-    let survivors = [];
-    for (let d = 2; d <= Math.floor(Math.sqrt(N)); d++) survivors.push(d);
+    // Gauss quadratic-residue exclusion sieve for x^2 - N = y^2 over x = ceil(sqrt(N)) + i (i = 0..99)
+    const xStart = Math.ceil(Math.sqrt(N));
+    const sievePrimes = [3, 5, 7, 11, 13, 17];
+    const qrByPrime = new Map();
+    for (const q of sievePrimes) {
+      const s = new Set();
+      for (let r = 0; r < q; r++) s.add((r * r) % q);
+      qrByPrime.set(q, s);
+    }
+    const aliveMask = new Array(100).fill(true);
     const counts = [];
     for (let k = 0; k < depth; k++) {
-      const q = primes[k];
-      survivors = survivors.filter(d => residues.has(d % q) || (N % q === 0));
-      counts.push(survivors.length);
+      const q = sievePrimes[k];
+      const qr = qrByPrime.get(q);
+      let c = 0;
+      for (let i = 0; i < 100; i++) {
+        if (!aliveMask[i]) continue;
+        const x = xStart + i;
+        const rem = (((x * x - N) % q) + q) % q;
+        if (!qr.has(rem)) aliveMask[i] = false;
+        else c++;
+      }
+      counts.push(c);
     }
-    const fac = survivors.length ? survivors.slice(0, 4).join(', ') : 'none';
-    this.cells.forEach((m, i) => {
-      const alive = i < survivors.length;
-      m.material.color.setHex(alive ? 0x2f6f8f : 0x1a1a1a);
-      m.material.emissive.setHex(alive ? 0x0a2230 : 0x000000);
-      m.position.y = alive ? 0 : -0.25;
-    });
+    let foundFactor = 'none';
+    const survivors = [];
+    for (let i = 0; i < 100; i++) {
+      const x = xStart + i;
+      const diff = x * x - N;
+      const y = Math.round(Math.sqrt(Math.max(0, diff)));
+      const isSquare = diff >= 0 && y * y === diff && (x - y) > 1;
+      if (isSquare && foundFactor === 'none') foundFactor = `${x - y} × ${x + y}`;
+      if (aliveMask[i]) survivors.push(x);
+      const m = this.cells[i];
+      m.material.color.setHex(isSquare ? 0x55ff99 : (aliveMask[i] ? 0x2f6f8f : 0x1a1a1a));
+      m.material.emissive.setHex(isSquare ? 0x228844 : (aliveMask[i] ? 0x0a2230 : 0x000000));
+      m.position.y = isSquare ? 0.25 : (aliveMask[i] ? 0 : -0.25);
+    }
     this.ringMesh.rotation.z = period / p * Math.PI * 2;
-    setHud('Factoring sieve', '\\text{ord}_p(10) \\mid p-1,\\quad N \\equiv r \\pmod{p}', [
-      { k: 'p', v: String(p) }, { k: 'period', v: String(period) },
-      { k: 'survivors', v: String(survivors.length) }, { k: 'factors', v: fac }
+    setHud('Factoring sieve', 'x^{2}-N = y^{2} \\implies x^{2}-N \\in \\mathrm{QR}(q),\\quad \\text{ord}_p(10) \\mid p-1', [
+      { k: 'period 1/p', v: String(period) },
+      { k: 'survivors', v: `${survivors.length} / 100` },
+      { k: 'x range', v: `${xStart}..${xStart + 99}` },
+      { k: 'factor hit', v: foundFactor }
     ]);
     const ctx = chartEl.getContext('2d');
     const W = chartEl.width, H = chartEl.height;
