@@ -68,7 +68,7 @@
     <div id="quiz"></div>
   </aside>
   <main id="stage">
-    <canvas id="chart"></canvas>
+    <canvas id="chart" width="640" height="400"></canvas>
     <div id="chartLabel">2D analytical plot</div>
   </main>
 </div>
@@ -1464,6 +1464,14 @@ if (modules.length) loadModule(modules[0]);
 function resize() {
   const w = stage.clientWidth, h = stage.clientHeight;
   renderer.setSize(w, h);
+  if (chartEl) {
+    const cw = Math.round((chartEl.clientWidth || 320) * Math.min(window.devicePixelRatio || 1, 2));
+    const ch = Math.round((chartEl.clientHeight || 200) * Math.min(window.devicePixelRatio || 1, 2));
+    if (cw > 0 && ch > 0 && (chartEl.width !== cw || chartEl.height !== ch)) {
+      chartEl.width = cw;
+      chartEl.height = ch;
+    }
+  }
   camera.aspect = w / h;
   camera.updateProjectionMatrix();
 }
