@@ -1260,7 +1260,7 @@ modules.push({
       new THREE.TorusGeometry(3, 0.035, 12, 128),
       new THREE.MeshStandardMaterial({ color: 0x2a4a6a, metalness: 0.4, roughness: 0.5 })
     );
-    st.ring.rotation.x = Math.PI / 2; st.grp.add(st.ring);
+    st.grp.add(st.ring);
     st.verts = new THREE.Group(); st.grp.add(st.verts);
     st.arcGroup = new THREE.Group(); st.grp.add(st.arcGroup);
     st.spokes = new THREE.Group(); st.grp.add(st.spokes);
@@ -1274,7 +1274,7 @@ modules.push({
     st.grp.position.y = -0.2;
   },
   update() {
-    const st = this.state, n = st.n, per = Math.min(st.per, n - 1);
+    const st = this.state, n = Number(st.n), per = Math.min(Number(st.per), n - 1);
     const phi = (k) => { let c = 0; for (let i = 1; i <= k; i++) if (k % i === 0) c++; return c; };
     const phiN = phi(n);
     const R = 3;
@@ -1298,28 +1298,62 @@ modules.push({
       const g = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 0, 0), m.position.clone()]);
       st.spokes.add(new THREE.Line(g, new THREE.LineBasicMaterial({ color: 0x335577, transparent: true, opacity: 0.5 })));
     }
-    // Gaussian periods: group primitive roots by k mod per (periods of size per)
+    // Find primitive root g mod n so Gaussian periods follow true Galois subgroups
+    let gRoot = 2;
+    for (let cand = 2; cand < n; cand++) {
+      if (gcd(cand, n) !== 1) continue;
+      let cur = 1, ord = 0;
+      do { cur = (cur * cand) % n; ord++; } while (cur !== 1 && ord <= n);
+      if (ord === phiN) { gRoot = cand; break; }
+    }
+    const powOrder = [];
+    for (let t = 0, cur = 1; t < phiN; t++, cur = (cur * gRoot) % n) powOrder.push(cur);
+
+    // Partition primitive residues into e = ceil(phiN / per) Gaussian periods of size ~per
+    const eCount = Math.max(1, Math.ceil(phiN / per));
     const periods = [];
-    for (let j = 0; j < per; j++) {
-      const ks = prim.filter(k => k % per === j);
-      if (ks.length) periods.push({ j, ks, sum: ks.reduce((s, k) => s + Math.cos(2 * Math.PI * k / n), 0) });
+    for (let j = 0; j < eCount; j++) {
+      const ks = [];
+      for (let m = 0; j + m * eCount < phiN; m++) ks.push(powOrder[j + m * eCount]);
+      if (ks.length) {
+        const cx = ks.reduce((s, k) => s + Math.cos(2 * Math.PI * k / n), 0);
+        const cy = ks.reduce((s, k) => s + Math.sin(2 * Math.PI * k / n), 0);
+        periods.push({ j, ks, sum: cx, cx, cy });
+      }
     }
-    // arcs for periods
-    if (st.arcs) {
-      periods.forEach((p, idx) => {
-        const col = new THREE.Color().setHSL(idx / Math.max(periods.length, 1), 0.75, 0.55);
-        p.ks.forEach(k => {
-          const a0 = 2 * Math.PI * k / n, a1 = 2 * Math.PI * (k + 1) / n;
-          const pts = [];
-          for (let t = 0; t <= 12; t++) {
-            const a = a0 + (a1 - a0) * t / 12;
-            pts.push(new THREE.Vector3(R * 1.06 * Math.cos(a), R * 1.06 * Math.sin(a), 0));
-          }
-          const g = new THREE.BufferGeometry().setFromPoints(pts);
-          st.arcGroup.add(new THREE.Line(g, new THREE.LineBasicMaterial({ color: col, linewidth: 2 })));
+
+    // 3D Gaussian period chords + elevated period centroid nodes
+    periods.forEach((p, idx) => {
+      const col = new THREE.Color().setHSL(idx / Math.max(periods.length, 1), 0.85, 0.6);
+      const zLift = (idx - (periods.length - 1) / 2) * 0.45;
+      if (st.arcs && p.ks.length > 0) {
+        const chordPts = p.ks.map(k => {
+          const a = 2 * Math.PI * k / n;
+          return new THREE.Vector3(R * Math.cos(a), R * Math.sin(a), zLift);
         });
-      });
-    }
+        if (chordPts.length > 2) chordPts.push(chordPts[0].clone());
+        st.arcGroup.add(new THREE.Line(
+          new THREE.BufferGeometry().setFromPoints(chordPts),
+          new THREE.LineBasicMaterial({ color: col })
+        ));
+        // Drop risers from each root on z=0 up to its period layer zLift
+        p.ks.forEach(k => {
+          const a = 2 * Math.PI * k / n;
+          const x = R * Math.cos(a), y = R * Math.sin(a);
+          st.arcGroup.add(new THREE.Line(
+            new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(x, y, 0), new THREE.Vector3(x, y, zLift)]),
+            new THREE.LineBasicMaterial({ color: col, transparent: true, opacity: 0.45 })
+          ));
+        });
+      }
+      // Period centroid marker in 3D
+      const cMesh = new THREE.Mesh(
+        new THREE.OctahedronGeometry(0.16, 0),
+        new THREE.MeshStandardMaterial({ color: col, emissive: col, emissiveIntensity: 0.35 })
+      );
+      cMesh.position.set((p.cx / p.ks.length) * R, (p.cy / p.ks.length) * R, zLift);
+      st.arcGroup.add(cMesh);
+    });
     // labels
     const mkLabel = (txt, x, y, col) => {
       const cv = document.createElement('canvas'); cv.width = 128; cv.height = 64;
