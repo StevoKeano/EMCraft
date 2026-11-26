@@ -577,6 +577,217 @@ modules.push({
     { q: 'For coprime m1 and m2, the CRT solution is unique modulo:', options: ['m1 + m2', 'm1 - m2', 'm1 * m2', 'gcd(m1,m2)'], answer: 2 }
   ]
 });
+modules.push({
+  id: 'sec3_power_residues',
+  title: '3. Section III: Power Residues & Primitive Roots (Arts. 45-93)',
+  controls: [
+    { type: 'select', id: 'p', label: 'prime p', options: [5, 7, 11, 13, 17], value: 11 },
+    { type: 'range', id: 'a', label: 'base a', min: 1, max: 16, step: 1, value: 3 },
+    { type: 'range', id: 'g', label: 'generator g', min: 2, max: 16, step: 1, value: 2 }
+  ],
+  build() {
+    const st = this.state;
+    Object.assign(st, { p: 11, a: 3, g: 2, idx: 0, ord: 0, prod: 0, step: 0 });
+
+    const grp = new THREE.Group();
+    content.add(grp);
+
+    // ring of p-1 residue nodes on unit circle
+    const ring = new THREE.Group();
+    grp.add(ring);
+    const nodeGeo = new THREE.SphereGeometry(0.055, 12, 12);
+    const nodeMat = new THREE.MeshStandardMaterial({ color: 0x7fd1ff, emissive: 0x1a4a6a });
+    const nodes = [];
+    for (let i = 0; i < 16; i++) {
+      const m = new THREE.Mesh(nodeGeo, nodeMat.clone());
+      m.visible = false;
+      ring.add(m);
+      nodes.push(m);
+    }
+    st.nodes = nodes;
+
+    // polygon outline
+    const lineGeo = new THREE.BufferGeometry();
+    const lineMat = new THREE.LineBasicMaterial({ color: 0x4a8fb8 });
+    const line = new THREE.Line(lineGeo, lineMat);
+    grp.add(line);
+    st.line = line;
+
+    // generator arrow / stepping marker
+    const marker = new THREE.Mesh(
+      new THREE.ConeGeometry(0.09, 0.22, 16),
+      new THREE.MeshStandardMaterial({ color: 0xffb347, emissive: 0x6a3a00 })
+    );
+    grp.add(marker);
+    st.marker = marker;
+
+    // center hub
+    const hub = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.06, 0.06, 0.05, 16),
+      new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0x333333 })
+    );
+    hub.rotation.x = Math.PI / 2;
+    grp.add(hub);
+
+    // orbit trail
+    const trailGeo = new THREE.BufferGeometry();
+    const trailMat = new THREE.LineBasicMaterial({ color: 0xffb347 });
+    const trail = new THREE.Line(trailGeo, trailMat);
+    grp.add(trail);
+    st.trail = trail;
+
+    // camera framing
+    camera.position.set(0, 1.6, 3.2);
+    camera.lookAt(0, 0, 0);
+  },
+
+  update() {
+    const st = this.state;
+    const p = Number(st.p);
+    const a = Math.min(Number(st.a), p - 1);
+    const g = Math.min(Number(st.g), p - 1);
+    const n = p - 1;
+
+    // order of a mod p
+    let ord = 1, x = a % p;
+    while (x !== 1 && ord < n) { x = (x * a) % p; ord++; }
+    st.ord = ord;
+
+    // discrete log index of a base g (if g primitive)
+    let idx = -1, y = 1;
+    for (let k = 0; k < n; k++) {
+      if (y === a % p) { idx = k; break; }
+      y = (y * g) % p;
+    }
+    st.idx = idx;
+
+    // Wilson product
+    let prod = 1;
+    for (let i = 2; i <= p - 1; i++) prod = (prod * i) % p;
+    st.prod = prod;
+
+    // place nodes
+    const nodes = st.nodes;
+    for (let i = 0; i < nodes.length; i++) {
+      const m = nodes[i];
+      if (i < n) {
+        const ang = (i / n) * Math.PI * 2 - Math.PI / 2;
+        m.position.set(Math.cos(ang), Math.sin(ang), 0);
+        m.visible = true;
+        m.scale.setScalar(i === (a % p) - 1 ? 1.6 : 1);
+        m.material.color.setHex(i === (a % p) - 1 ? 0xffb347 : 0x7fd1ff);
+      } else m.visible = false;
+    }
+
+    // polygon outline
+    const pts = [];
+    for (let i = 0; i < n; i++) {
+      const ang = (i / n) * Math.PI * 2 - Math.PI / 2;
+      pts.push(new THREE.Vector3(Math.cos(ang), Math.sin(ang), 0));
+    }
+    pts.push(pts[0]);
+    st.line.geometry.setFromPoints(pts);
+
+    // marker at generator position
+    const gAng = ((g % p) - 1) / n * Math.PI * 2 - Math.PI / 2;
+    st.marker.position.set(Math.cos(gAng), Math.sin(gAng), 0.12);
+    st.marker.rotation.z = -gAng - Math.PI / 2;
+
+    // orbit trail of powers g^k
+    const orbit = [];
+    let v = 1;
+    for (let k = 0; k <= n; k++) {
+      const ang = (v - 1) / n * Math.PI * 2 - Math.PI / 2;
+      orbit.push(new THREE.Vector3(Math.cos(ang), Math.sin(ang), 0.05));
+      v = (v * g) % p;
+    }
+    st.trail.geometry.setFromPoints(orbit);
+
+    // chart
+    const ctx = chartEl.getContext('2d');
+    const W = chartEl.width, H = chartEl.height;
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = '#0b1220';
+    ctx.fillRect(0, 0, W, H);
+
+    const pad = 40;
+    const plotW = W - 2 * pad, plotH = H - 2 * pad;
+
+    // axes
+    ctx.strokeStyle = '#2a4a66';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(pad, pad);
+    ctx.lineTo(pad, H - pad);
+    ctx.lineTo(W - pad, H - pad);
+    ctx.stroke();
+
+    // index table bars: k = ind_g(a) for each residue
+    const barW = plotW / n;
+    for (let r = 1; r < p; r++) {
+      let k = -1, yv = 1;
+      for (let j = 0; j < n; j++) {
+        if (yv === r) { k = j; break; }
+        yv = (yv * g) % p;
+      }
+      const h = k >= 0 ? (k / n) * plotH : 0;
+      ctx.fillStyle = r === a % p ? '#ffb347' : '#3a7ca5';
+      ctx.fillRect(pad + (r - 1) * barW + 2, H - pad - h, barW - 4, h);
+    }
+
+    // orbit line
+    ctx.strokeStyle = '#7fd1ff';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    let ov = 1;
+    for (let k = 0; k <= n; k++) {
+      const px = pad + (k / n) * plotW;
+      const py = H - pad - ((ov - 1) / n) * plotH;
+      if (k === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+      ov = (ov * g) % p;
+    }
+    ctx.stroke();
+
+    // labels
+    ctx.fillStyle = '#9fc7e8';
+    ctx.font = '12px monospace';
+    ctx.fillText('index table k = ind_g(r)', pad, pad - 12);
+    ctx.fillText('orbit g^k mod p', W - pad - 150, pad - 12);
+
+    setHud(
+      'Power residues',
+      'a^{p-1} \\equiv 1 \\pmod{p},\\quad g^{k} \\equiv a \\pmod{p},\\quad (p-1)! \\equiv -1 \\pmod{p}',
+      [
+        { k: 'p', v: String(p) },
+        { k: 'order', v: String(st.ord) },
+        { k: 'index', v: st.idx >= 0 ? String(st.idx) : 'n/a' },
+        { k: 'product', v: String(st.prod) }
+      ]
+    );
+  },
+
+  tick(dt) {
+    const st = this.state;
+    st.step += dt;
+    const grp = content.children[content.children.length - 1];
+    if (grp) grp.rotation.y = Math.sin(st.step * 0.4) * 0.15;
+  },
+
+  lesson: String.raw`Fermat's little theorem states that for a prime $p$ and any integer $a$ not divisible by $p$, $a^{p-1} \equiv 1 \pmod{p}$. The nonzero residues modulo $p$ form a multiplicative group of order $p-1$. This group is cyclic: there exists a primitive root $g$ such that every residue is a power $g^k$. The exponent $k$ is the index (discrete logarithm) of the residue, $k = \mathrm{ind}_g(a)$, satisfying $g^k \equiv a \pmod{p}$. The order of $a$ is the smallest positive $k$ with $a^k \equiv 1$. Wilson's theorem gives $(p-1)! \equiv -1 \pmod{p}$, a companion congruence to Fermat's theorem. The 3D ring shows the $p-1$ residues as vertices of a regular polygon; the generator steps around the ring, and the chart displays the index table and the orbit of powers.`,
+
+  quiz: [
+    {
+      q: 'Fermat\'s little theorem says that for prime p and a not divisible by p:',
+      options: ['a^{p-1} \\equiv 1 \\pmod{p}', 'a^{p} \\equiv 1 \\pmod{p}', 'a^{p-1} \\equiv -1 \\pmod{p}', 'a^{p+1} \\equiv 1 \\pmod{p}'],
+      answer: 0
+    },
+    {
+      q: 'A primitive root g modulo p has the property that:',
+      options: ['g^{p-1} \\equiv 1 and its powers generate all nonzero residues', 'g^2 \\equiv 1 \\pmod{p}', 'g^{p} \\equiv -1 \\pmod{p}', 'g divides p-1'],
+      answer: 0
+    }
+  ]
+});
 /* === UI CONTROLLER === */
 
 let active = null;
