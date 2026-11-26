@@ -1037,6 +1037,120 @@ modules.push({
     { q: 'Gauss reduction of a positive definite form requires:', options: ['|b| <= a <= c', 'a <= b <= c', 'D > 0', 'b = 0 always'], answer: 0 }
   ]
 });
+modules.push({
+  id: 'sec5b_composition_genera',
+  title: '5B. Section V (Part B): Form Composition & Genera (Arts. 223-307)',
+  controls: [
+    { id: 'D', type: 'range', label: 'Discriminant D', min: -40, max: 20, step: 1, value: -23 },
+    { id: 'steps', type: 'range', label: 'Composition steps', min: 1, max: 8, step: 1, value: 4 },
+    { id: 'genus', type: 'check', label: 'Show genus characters', value: true }
+  ],
+  build() {
+    Object.assign(this.state, { D: -23, steps: 4, genus: true });
+    this.group = new THREE.Group(); content.add(this.group);
+    this.nodes = []; this.edges = [];
+    this.planeMat = new THREE.MeshBasicMaterial({ color: 0x1b3a5c, transparent: true, opacity: 0.35, side: THREE.DoubleSide });
+    this.nodeGeo = new THREE.SphereGeometry(0.16, 16, 12);
+    this.nodeMat = new THREE.MeshStandardMaterial({ color: 0x7fd1ff, emissive: 0x1a4a6a });
+    this.edgeMat = new THREE.LineBasicMaterial({ color: 0x9ad7ff, transparent: true, opacity: 0.7 });
+    this.genusPlanes = [];
+    this.light = new THREE.DirectionalLight(0xffffff, 1.2); this.light.position.set(3, 5, 4); content.add(this.light);
+    content.add(new THREE.AmbientLight(0x88aacc, 0.6));
+  },
+  update() {
+    const st = this.state;
+    this.group.clear(); this.nodes = []; this.edges = []; this.genusPlanes = [];
+    const D = st.D;
+    // toy class-group model: h(D) from simple discriminant heuristic
+    const h = Math.max(1, Math.min(8, Math.abs(D) % 7 + 1));
+    const n = h;
+    const R = 1.6;
+    const pts = [];
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * Math.PI * 2;
+      pts.push(new THREE.Vector3(Math.cos(a) * R, Math.sin(a) * R * 0.55, 0));
+    }
+    // genus planes: split into 2 genera by parity of index
+    const genusCount = n > 1 ? 2 : 1;
+    for (let g = 0; g < genusCount; g++) {
+      const pl = new THREE.Mesh(new THREE.PlaneGeometry(3.2, 1.6), this.planeMat.clone());
+      pl.material.color.setHex(g === 0 ? 0x2a6f9e : 0x8a4f9e);
+      pl.position.set(0, g === 0 ? -0.9 : 0.9, -0.4);
+      pl.rotation.x = -Math.PI / 2;
+      pl.visible = st.genus;
+      this.group.add(pl); this.genusPlanes.push(pl);
+    }
+    // nodes
+    for (let i = 0; i < n; i++) {
+      const m = new THREE.Mesh(this.nodeGeo, this.nodeMat.clone());
+      m.position.copy(pts[i]);
+      m.userData.idx = i;
+      this.group.add(m); this.nodes.push(m);
+    }
+    // composition arrows: i + j -> (i+j) mod n
+    const steps = st.steps;
+    for (let s = 0; s < steps; s++) {
+      for (let i = 0; i < n; i++) {
+        const j = (i + 1) % n;
+        const a = pts[i], b = pts[j];
+        const mid = a.clone().add(b).multiplyScalar(0.5);
+        const dir = b.clone().sub(a).normalize();
+        const len = a.distanceTo(b) * 0.85;
+        const geo = new THREE.BufferGeometry().setFromPoints([a, b]);
+        const line = new THREE.Line(geo, this.edgeMat.clone());
+        line.material.opacity = 0.25 + 0.1 * s;
+        this.group.add(line); this.edges.push(line);
+        // arrow head
+        const head = new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.18, 8), this.nodeMat.clone());
+        head.position.copy(mid);
+        head.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
+        this.group.add(head);
+      }
+    }
+    // genus character labels via small colored rings
+    if (st.genus) {
+      for (let i = 0; i < n; i++) {
+        const ring = new THREE.Mesh(new THREE.TorusGeometry(0.22, 0.025, 8, 24), new THREE.MeshBasicMaterial({ color: i % 2 === 0 ? 0x7fd1ff : 0xff9ad7 }));
+        ring.position.copy(pts[i]); ring.position.z = 0.05;
+        this.group.add(ring);
+      }
+    }
+    // chart: multiplication table + genus distribution
+    const ctx = chartEl.getContext('2d');
+    const W = chartEl.width, H = chartEl.height;
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = '#0b1220'; ctx.fillRect(0, 0, W, H);
+    ctx.strokeStyle = '#2a4a6a'; ctx.lineWidth = 1;
+    const cell = Math.min(W / (n + 1), H / (n + 1)) * 0.8;
+    const ox = (W - cell * n) / 2, oy = (H - cell * n) / 2;
+    ctx.font = '12px monospace'; ctx.fillStyle = '#9ad7ff';
+    for (let i = 0; i < n; i++) {
+      for (let j = 0; j < n; j++) {
+        const k = (i + j) % n;
+        ctx.fillStyle = (i + j) % 2 === 0 ? '#1b3a5c' : '#3a2a5c';
+        ctx.fillRect(ox + j * cell, oy + i * cell, cell - 2, cell - 2);
+        ctx.fillStyle = '#cfe8ff';
+        ctx.fillText(String(k), ox + j * cell + cell / 2 - 4, oy + i * cell + cell / 2 + 4);
+      }
+    }
+    ctx.fillStyle = '#7fd1ff'; ctx.font = '13px monospace';
+    ctx.fillText('Class-group multiplication (i+j mod h)', 10, 20);
+    ctx.fillStyle = '#ff9ad7';
+    ctx.fillText('Genus: even/odd character', 10, H - 10);
+    setHud('Form composition & genera', 'f_1 \\circ f_2 = f_3,\\quad h(D)=\\#\\text{classes}', [
+      { k: 'D', v: String(D) }, { k: 'h(D)', v: String(h) }, { k: 'genera', v: String(genusCount) }, { k: 'order', v: String(n) }
+    ]);
+  },
+  tick(dt) {
+    this.group.rotation.y += dt * 0.15;
+    this.group.rotation.x = Math.sin(performance.now() * 0.0003) * 0.1;
+  },
+  lesson: String.raw`Gauss composition: two primitive forms of the same discriminant $D$ compose into a third form of discriminant $D$, giving the class group of order $h(D)$. The principal genus contains the squares of the class group. Genus characters split the class group into genera, and ternary forms plus the three-triangular-number theorem close Section V.`,
+  quiz: [
+    { q: 'Composition of two primitive forms of discriminant D yields a form of discriminant:', options: ['D', '2D', 'D^2', 'D/2'], answer: 0 },
+    { q: 'The principal genus consists of:', options: ['the squares of the class group', 'all classes', 'only the identity', 'the non-squares'], answer: 0 }
+  ]
+});
 /* === UI CONTROLLER === */
 
 let active = null;
