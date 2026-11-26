@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<link rel="icon" href="data:," />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Disquisitiones Arithmeticae (1801) — Kraus &amp; Fleisch, Electromagnetics and Applications</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" />
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+<script type="importmap">
+{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+               "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/" } }
+</script>
+<style>
+  :root { --bg:#0b1220; --panel:#111a2b; --ink:#e6edf7; --muted:#8fa3bf; --accent:#7fd1ff; }
+  * { box-sizing: border-box; }
+  html, body { margin:0; height:100%; background:var(--bg); color:var(--ink);
+               font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  #app { display:grid; grid-template-columns: 340px 1fr; height:100%; }
+  #sidebar { background:var(--panel); border-right:1px solid #1e2a3d; padding:14px; overflow:auto; }
+  #sidebar h1 { font-size:16px; margin:0 0 4px; }
+  #sidebar .sub { color:var(--muted); font-size:12px; margin-bottom:12px; }
+  #moduleList { list-style:none; padding:0; margin:0 0 12px; }
+  #moduleList li { padding:8px 10px; border-radius:8px; cursor:pointer; font-size:13px;
+                   border:1px solid transparent; margin-bottom:4px; }
+  #moduleList li:hover { background:#16233a; }
+  #moduleList li.active { background:#1b2c47; border-color:var(--accent); }
+  #controls { display:flex; flex-direction:column; gap:8px; margin-bottom:12px; }
+  .ctrl { display:flex; flex-direction:column; gap:4px; font-size:12px; }
+  .ctrl label { color:var(--muted); }
+  .ctrl input[type=range] { width:100%; accent-color:var(--accent); }
+  .ctrl select, .ctrl input[type=text] { background:#0e1726; color:var(--ink);
+        border:1px solid #24344d; border-radius:6px; padding:4px 6px; }
+  #hud { background:#0e1726; border:1px solid #24344d; border-radius:8px; padding:10px; margin-bottom:12px; }
+  #hudTitle { font-weight:600; font-size:13px; margin-bottom:6px; }
+  #hudEq { font-size:13px; margin-bottom:8px; }
+  #hudRows { display:grid; grid-template-columns:1fr 1fr; gap:4px 10px; font-size:12px; }
+  #hudRows .k { color:var(--muted); }
+  #lesson { font-size:12px; line-height:1.5; color:#c9d6e8; margin-bottom:12px; }
+  #quiz { font-size:12px; }
+  #quiz .q { margin-bottom:8px; }
+  #quiz .opts { display:flex; flex-direction:column; gap:4px; }
+  #quiz button { background:#16233a; color:var(--ink); border:1px solid #24344d;
+                 border-radius:6px; padding:6px 8px; text-align:left; cursor:pointer; }
+  #quiz button.correct { border-color:#3ddc84; }
+  #quiz button.wrong { border-color:#ff6b6b; }
+  #stage { position:relative; }
+  #stage > canvas:not(#chart) { width:100%; height:100%; display:block; touch-action:none; outline:none; }
+  #chart { position:absolute; right:12px; bottom:12px; width:320px; height:200px;
+           background:#0e1726; border:1px solid #24344d; border-radius:8px; }
+  #chartLabel { position:absolute; right:12px; bottom:216px; font-size:11px; color:var(--muted); }
+</style>
+</head>
+<body>
+<div id="app">
+  <aside id="sidebar">
+    <h1>Disquisitiones Arithmeticae (1801)</h1>
+    <div class="sub">Kraus &amp; Fleisch — Electromagnetics and Applications</div>
+    <ul id="moduleList"></ul>
+    <div id="controls"></div>
+    <div id="hud">
+      <div id="hudTitle"></div>
+      <div id="hudEq"></div>
+      <div id="hudRows"></div>
+    </div>
+    <div id="lesson"></div>
+    <div id="quiz"></div>
+  </aside>
+  <main id="stage">
+    <canvas id="chart"></canvas>
+    <div id="chartLabel">2D analytical plot</div>
+  </main>
+</div>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+const stage = document.getElementById('stage');
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setSize(stage.clientWidth, stage.clientHeight);
+stage.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0b1220);
+
+const camera = new THREE.PerspectiveCamera(45, stage.clientWidth / stage.clientHeight, 0.1, 200);
+camera.position.set(6, 5, 8);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.06;
+controls.minDistance = 0.8;
+controls.maxDistance = 80;
+controls.enableZoom = false;
+
+renderer.domElement.addEventListener('wheel', (e) => {
+  e.preventDefault();
+  const dir = Math.sign(e.deltaY);
+  if (!dir) return;
+  const offset = camera.position.clone().sub(controls.target);
+  const dist = Math.max(controls.minDistance, Math.min(controls.maxDistance, offset.length() * (dir > 0 ? 1.12 : 0.89)));
+  offset.setLength(dist);
+  camera.position.copy(controls.target).add(offset);
+}, { passive: false });
+
+scene.add(new THREE.AmbientLight(0xffffff, 0.55));
+const key = new THREE.DirectionalLight(0xffffff, 0.9);
+key.position.set(6, 10, 6);
+scene.add(key);
+
+const content = new THREE.Group();
+scene.add(content);
+
+const chartEl = document.getElementById('chart');
+const chartCtx = chartEl.getContext('2d');
+
+function addArrowField(vectors, color = 0x7fd1ff) {
+  const group = new THREE.Group();
+  const mat = new THREE.MeshBasicMaterial({ color });
+  const nextVecs = [];
+  function rebuild(vecs) {
+    while (group.children.length) {
+      const c = group.children.pop();
+      c.geometry?.dispose?.();
+      group.remove(c);
+    }
+    for (const v of vecs) {
+      const len = v.len ?? v.dir.length();
+      const dir = v.dir.clone().normalize();
+      const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, len, 6), mat);
+      shaft.position.copy(v.origin).addScaledVector(dir, len / 2);
+      shaft.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
+      const head = new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.16, 8), mat);
+      head.position.copy(v.origin).addScaledVector(dir, len);
+      head.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
+      group.add(shaft, head);
+    }
+  }
+  rebuild(vectors);
+  group.setVectors = (vecs) => { nextVecs.length = 0; nextVecs.push(...vecs); rebuild(vecs); };
+  return group;
+}
+
+function renderTex(el, opts) {
+  if (window.renderMathInElement) window.renderMathInElement(el, opts);
+}
+const KATEX_OPTS = {
+  delimiters: [
+    { left: '$$', right: '$$', display: true },
+    { left: '$', right: '$', display: false },
+    { left: '\\(', right: '\\)', display: false },
+    { left: '\\[', right: '\\]', display: true }
+  ],
+  throwOnError: false,
+  strict: false
+};
+
+function setHud(titleStr, latexEqStr, rows) {
+  document.getElementById('hudTitle').textContent = titleStr;
+  const eq = document.getElementById('hudEq');
+  const trimmedEq = (latexEqStr || '').trim();
+  eq.innerHTML = (trimmedEq && !trimmedEq.startsWith('$') && !trimmedEq.startsWith('\\(') && !trimmedEq.startsWith('\\['))
+    ? `$${trimmedEq}$`
+    : trimmedEq;
+  renderTex(eq, KATEX_OPTS);
+  const rowsEl = document.getElementById('hudRows');
+  rowsEl.innerHTML = '';
+  for (const r of rows) {
+    const k = document.createElement('div'); k.className = 'k'; k.textContent = r.k;
+    const v = document.createElement('div'); v.textContent = r.v;
+    rowsEl.appendChild(k); rowsEl.appendChild(v);
+  }
+}
+
+const modules = [];
+
+modules.push({
+  id: 'sec1_congruences',
+  title: '1. Section I: Congruent Numbers in General (Arts. 1-12)',
+  controls: [
+    { type: 'range', id: 'm', label: 'modulus m', min: 3, max: 24, step: 1, value: 12 },
+    { type: 'range', id: 'a', label: 'integer a', min: -30, max: 30, step: 1, value: 17 },
+    { type: 'range', id: 'b', label: 'integer b', min: -30, max: 30, step: 1, value: 5 },
+    { type: 'select', id: 'conv', label: 'residue convention', options: ['least positive', 'absolutely least'], value: 'least positive' }
+  ],
+  build() {
+    Object.assign(this.state, { m: 12, a: 17, b: 5, conv: 'least positive' });
+    this.group = new THREE.Group();
+    content.add(this.group);
+
+    // ring
+    const ringGeo = new THREE.TorusGeometry(3, 0.06, 8, 96);
+    const ring = new THREE.Mesh(ringGeo, new THREE.MeshStandardMaterial({ color: 0x2a4a6a, metalness: 0.4, roughness: 0.5 }));
+    ring.rotation.x = Math.PI / 2;
+    this.group.add(ring);
+
+    // tick marks
+    this.ticks = new THREE.Group();
+    this.group.add(this.ticks);
+
+    // pointers
+    const pMatA = new THREE.MeshStandardMaterial({ color: 0x7fd1ff, emissive: 0x1a4a6a });
+    const pMatB = new THREE.MeshStandardMaterial({ color: 0xffb86b, emissive: 0x6a3a1a });
+    this.pointerA = new THREE.Mesh(new THREE.ConeGeometry(0.18, 1.1, 12), pMatA);
+    this.pointerB = new THREE.Mesh(new THREE.ConeGeometry(0.18, 1.1, 12), pMatB);
+    this.group.add(this.pointerA, this.pointerB);
+
+    // wrap arc
+    this.arc = new THREE.Mesh(
+      new THREE.TorusGeometry(2.55, 0.035, 6, 48, Math.PI),
+      new THREE.MeshStandardMaterial({ color: 0xff6b6b, emissive: 0x5a1a1a })
+    );
+    this.arc.rotation.x = Math.PI / 2;
+    this.group.add(this.arc);
+
+    // center hub
+    const hub = new THREE.Mesh(new THREE.SphereGeometry(0.22, 16, 16), new THREE.MeshStandardMaterial({ color: 0x9fb8d0 }));
+    this.group.add(hub);
+
+    // lights
+    const l1 = new THREE.DirectionalLight(0xffffff, 1.2); l1.position.set(5, 8, 5); content.add(l1);
+    const l2 = new THREE.PointLight(0x7fd1ff, 0.8, 20); l2.position.set(-4, 3, -4); content.add(l2);
+
+    this.rebuildTicks();
+  },
+  rebuildTicks() {
+    const st = this.state;
+    while (this.ticks.children.length) this.ticks.remove(this.ticks.children[0]);
+    const m = st.m;
+    for (let i = 0; i < m; i++) {
+      const ang = (i / m) * Math.PI * 2;
+      const r = 3.0;
+      const tick = new THREE.Mesh(
+        new THREE.BoxGeometry(0.05, 0.05, 0.28),
+        new THREE.MeshStandardMaterial({ color: i === 0 ? 0xffe08a : 0x8fb8d8 })
+      );
+      tick.position.set(Math.cos(ang) * r, 0, Math.sin(ang) * r);
+      tick.rotation.y = -ang;
+      this.ticks.add(tick);
+    }
+  },
+  residue(x, m, conv) {
+    let r = ((x % m) + m) % m;
+    if (conv === 'absolutely least' && r > m / 2) r -= m;
+    return r;
+  },
+  update() {
+    const st = this.state;
+    const m = st.m;
+    this.rebuildTicks();
+
+    const ra = this.residue(st.a, m, st.conv);
+    const rb = this.residue(st.b, m, st.conv);
+    const congruent = ((st.a - st.b) % m + m) % m === 0;
+
+    const angA = (ra / m) * Math.PI * 2;
+    const angB = (rb / m) * Math.PI * 2;
+
+    this.pointerA.position.set(Math.cos(angA) * 2.2, 0.55, Math.sin(angA) * 2.2);
+    this.pointerA.rotation.set(Math.PI / 2, 0, -angA + Math.PI / 2);
+    this.pointerB.position.set(Math.cos(angB) * 2.2, 0.55, Math.sin(angB) * 2.2);
+    this.pointerB.rotation.set(Math.PI / 2, 0, -angB + Math.PI / 2);
+
+    // wrap arc between residues (short way)
+    let d = Math.abs(ra - rb);
+    if (d > m / 2) d = m - d;
+    this.arc.geometry.dispose();
+    this.arc.geometry = new THREE.TorusGeometry(2.55, 0.035, 6, 48, Math.max(0.05, (d / m) * Math.PI * 2));
+    this.arc.rotation.set(Math.PI / 2, 0, Math.min(angA, angB));
+    this.arc.visible = d > 0;
+
+    setHud('Congruence', 'a \\equiv b \\pmod{m} \\iff m \\mid (a-b)', [
+      { k: 'm', v: String(m) },
+      { k: 'a mod m', v: String(ra) },
+      { k: 'b mod m', v: String(rb) },
+      { k: 'congruent', v: congruent ? 'yes' : 'no' }
+    ]);
+
+    this.drawChart(ra, rb, congruent);
+  },
+  drawChart(ra, rb, congruent) {
+    const st = this.state;
+    const ctx = chartEl.getContext('2d');
+    const W = chartEl.width, H = chartEl.height;
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = '#0b1220'; ctx.fillRect(0, 0, W, H);
+
+    const m = st.m;
+    const pad = 40;
+    const x0 = pad, x1 = W - pad, y0 = H - pad, y1 = pad;
+    const N = 12;
+    const vals = [];
+    for (let k = 0; k <= N; k++) vals.push(st.a + k * m);
+    const minV = Math.min(...vals), maxV = Math.max(...vals);
+    const sx = (k) => x0 + (k / N) * (x1 - x0);
+    const sy = (v) => y0 - ((v - minV) / (maxV - minV || 1)) * (y0 - y1);
+
+    // axes
+    ctx.strokeStyle = '#2a4a6a'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y0); ctx.moveTo(x0, y0); ctx.lineTo(x0, y1); ctx.stroke();
+
+    // staircase
+    ctx.strokeStyle = '#7fd1ff'; ctx.lineWidth = 2;
+    ctx.beginPath();
+    for (let k = 0; k <= N; k++) {
+      const x = sx(k), y = sy(vals[k]);
+      if (k === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // points
+    for (let k = 0; k <= N; k++) {
+      const x = sx(k), y = sy(vals[k]);
+      const isWrap = k > 0 && vals[k] % m === vals[0] % m;
+      ctx.fillStyle = isWrap ? '#ff6b6b' : '#ffb86b';
+      ctx.beginPath(); ctx.arc(x, y, isWrap ? 5 : 3.5, 0, Math.PI * 2); ctx.fill();
+    }
+
+    // labels
+    ctx.fillStyle = '#9fb8d0'; ctx.font = '12px monospace';
+    ctx.fillText('a + k m, k = 0..12', x0 + 6, y1 + 14);
+    ctx.fillStyle = congruent ? '#7fffa0' : '#ff8a8a';
+    ctx.fillText(congruent ? 'congruent: wrap hits a' : 'not congruent', x1 - 150, y1 + 14);
+  },
+  tick(dt) {
+    this.group.rotation.y += dt * 0.15;
+  },
+  lesson: String.raw`<b>Congruence.</b> For integers $a,b$ and modulus $m>0$, we say $a \equiv b \pmod{m}$ iff $m \mid (a-b)$. Equivalently, $a$ and $b$ leave the same remainder upon division by $m$.
+
+<b>Residue classes.</b> Every integer has a unique least positive residue $r$ with $0 \le r < m$, and a unique absolutely least residue in $(-m/2, m/2]$. The set of all integers congruent to $r$ is the residue class $r + m\mathbb{Z}$.
+
+<b>Arithmetic compatibility.</b> If $a \equiv b \pmod{m}$ and $c \equiv d \pmod{m}$, then
+$a+c \equiv b+d$, $a-c \equiv b-d$, and $ac \equiv bd \pmod{m}$.
+Thus congruences may be added, subtracted, and multiplied just like equations.
+
+<b>Clock picture.</b> The modular clock has $m$ tick marks. A pointer at residue $a$ and another at residue $b$ coincide exactly when $a \equiv b \pmod{m}$. The staircase $a + km$ wraps around the clock at each multiple of $m$.`,
+  quiz: [
+    { q: 'Which condition is equivalent to $a \\equiv b \\pmod{m}$?', options: ['$m \\mid (a-b)$', '$a+b$ is divisible by $m$', '$a$ and $b$ are both prime', '$m \\mid ab$'], answer: 0 },
+    { q: 'If $a \\equiv b \\pmod{m}$ and $c \\equiv d \\pmod{m}$, which is always true?', options: ['$ac \\equiv bd \\pmod{m}$', '$a/c \\equiv b/d \\pmod{m}$', '$a^b \\equiv c^d \\pmod{m}$', '$a-b = m$'], answer: 0 }
+  ]
+});
+/* === UI CONTROLLER === */
+
+let active = null;
+const listEl = document.getElementById('moduleList');
+const controlsEl = document.getElementById('controls');
+const lessonEl = document.getElementById('lesson');
+const quizEl = document.getElementById('quiz');
+
+function buildControls(mod) {
+  controlsEl.innerHTML = '';
+  for (const c of mod.controls) {
+    const wrap = document.createElement('div');
+    wrap.className = 'ctrl';
+    const label = document.createElement('label');
+    label.textContent = c.label;
+    wrap.appendChild(label);
+    let input;
+    if (c.type === 'range') {
+      input = document.createElement('input');
+      input.type = 'range';
+      input.min = c.min; input.max = c.max; input.step = c.step; input.value = c.value;
+      input.addEventListener('input', () => {
+        mod.state[c.id] = parseFloat(input.value);
+        mod.update();
+      });
+    } else if (c.type === 'select') {
+      input = document.createElement('select');
+      for (const o of c.options) {
+        const opt = document.createElement('option');
+        opt.value = (typeof o === 'object' && o !== null) ? o.value : o;
+        opt.textContent = (typeof o === 'object' && o !== null) ? (o.label ?? o.value) : o;
+        input.appendChild(opt);
+      }
+      input.value = c.value;
+      input.addEventListener('change', () => {
+        mod.state[c.id] = input.value;
+        mod.update();
+      });
+    } else if (c.type === 'check') {
+      input = document.createElement('input');
+      input.type = 'checkbox';
+      input.checked = !!c.value;
+      input.addEventListener('change', () => {
+        mod.state[c.id] = input.checked;
+        mod.update();
+      });
+    }
+    wrap.appendChild(input);
+    controlsEl.appendChild(wrap);
+  }
+}
+
+function buildQuiz(mod) {
+  quizEl.innerHTML = '';
+  for (const item of mod.quiz) {
+    const q = document.createElement('div');
+    q.className = 'q';
+    q.textContent = item.q;
+    const opts = document.createElement('div');
+    opts.className = 'opts';
+    item.options.forEach((opt, i) => {
+      const b = document.createElement('button');
+      b.textContent = opt;
+      b.addEventListener('click', () => {
+        if (i === item.answer) b.classList.add('correct');
+        else b.classList.add('wrong');
+      });
+      opts.appendChild(b);
+    });
+    q.appendChild(opts);
+    quizEl.appendChild(q);
+  }
+}
+
+function loadModule(mod) {
+  active = mod;
+  controls.target.set(0, 0, 0);
+  if (Number.isNaN(camera.position.x)) camera.position.set(6, 5, 8);
+  content.clear();
+  mod.state = mod.state || {};
+  for (const c of mod.controls) {
+    if (!(c.id in mod.state)) {
+      mod.state[c.id] = c.type === 'range' ? parseFloat(c.value) : (c.type === 'check' ? !!c.value : c.value);
+    }
+  }
+  mod.build();
+  mod.update();
+  lessonEl.innerHTML = mod.lesson;
+  renderTex(lessonEl, KATEX_OPTS);
+  buildControls(mod);
+  buildQuiz(mod);
+  listEl.querySelectorAll('li').forEach(li => li.classList.toggle('active', li.dataset.id === mod.id));
+}
+
+for (const mod of modules) {
+  const li = document.createElement('li');
+  li.textContent = mod.title;
+  li.dataset.id = mod.id;
+  li.addEventListener('click', () => loadModule(mod));
+  listEl.appendChild(li);
+}
+if (modules.length) loadModule(modules[0]);
+
+function resize() {
+  const w = stage.clientWidth, h = stage.clientHeight;
+  renderer.setSize(w, h);
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+}
+window.addEventListener('resize', resize);
+
+let last = performance.now();
+function animate(now) {
+  requestAnimationFrame(animate);
+  const dt = Math.min((now - last) / 1000, 0.05);
+  last = now;
+  if (active && typeof active.tick === 'function') {
+    try { active.tick(dt); } catch (e) { console.error('tick error:', e); active.tick = null; }
+  }
+  controls.update();
+  renderer.render(scene, camera);
+}
+requestAnimationFrame(animate);
+</script>
+</body>
+</html>
