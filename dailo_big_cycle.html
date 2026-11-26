@@ -1,0 +1,1066 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<link rel="icon" href="data:," />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>How Countries Go Broke: The Big Debt Cycle</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" />
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+<script type="importmap">
+{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+               "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/" } }
+</script>
+<style>
+  :root { --bg:#0b1220; --panel:#111a2b; --ink:#e6edf7; --muted:#8fa3bf; --accent:#7fd1ff; }
+  * { box-sizing: border-box; }
+  html, body { margin:0; height:100%; background:var(--bg); color:var(--ink);
+               font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  #app { display:grid; grid-template-columns: 340px 1fr; height:100%; }
+  #sidebar { background:var(--panel); border-right:1px solid #1e2a3d; padding:14px; overflow:auto; }
+  #sidebar h1 { font-size:16px; margin:0 0 4px; }
+  #sidebar .sub { color:var(--muted); font-size:12px; margin-bottom:8px; }
+  .help-bar { display:flex; gap:6px; margin-bottom:12px; }
+  .help-btn { background:#16233a; color:var(--accent); border:1px solid #2b4466; border-radius:6px;
+              padding:5px 10px; font-size:12px; cursor:pointer; font-weight:600; }
+  .help-btn:hover { background:#1e3150; border-color:var(--accent); }
+  #helpPanel { display:none; background:#0b1322; border:1px solid var(--accent); border-radius:8px;
+               padding:10px 12px; margin-bottom:12px; font-size:12px; line-height:1.5; color:#d7e3f4; }
+  #helpPanel.open { display:block; }
+  #helpPanel h3 { margin:0 0 6px; font-size:13px; color:var(--accent); }
+  #helpPanel .hsec { margin-bottom:8px; }
+  #helpPanel .hsec b { color:#ffd166; }
+  #helpPanel .all-item { border-top:1px solid #1e2a3d; padding-top:8px; margin-top:8px; }
+  #moduleSelect { width:100%; background:#16233a; color:var(--ink); border:1px solid var(--accent);
+                  border-radius:8px; padding:8px 10px; font-size:13px; font-weight:600;
+                  margin-bottom:12px; cursor:pointer; outline:none; }
+  #moduleSelect:hover { background:#1b2c47; }
+  #controls { display:flex; flex-direction:column; gap:8px; margin-bottom:12px; }
+  .ctrl { display:flex; flex-direction:column; gap:4px; font-size:12px; }
+  .ctrl label { color:var(--muted); }
+  .ctrl input[type=range] { width:100%; accent-color:var(--accent); cursor:pointer; }
+  #sliderTip { position:fixed; pointer-events:none; display:none; z-index:9999;
+               background:#0b1322; color:var(--accent); border:1px solid var(--accent);
+               border-radius:6px; padding:2px 7px; font-size:12px; font-weight:700;
+               font-family:monospace; box-shadow:0 4px 12px rgba(0,0,0,0.45);
+               transform:translate(-50%, -135%); white-space:nowrap; }
+  .ctrl select, .ctrl input[type=text] { background:#0e1726; color:var(--ink);
+        border:1px solid #24344d; border-radius:6px; padding:4px 6px; }
+  #hud { background:#0e1726; border:1px solid #24344d; border-radius:8px; padding:10px; margin-bottom:12px; }
+  #hudTitle { font-weight:600; font-size:13px; margin-bottom:6px; }
+  #hudEq { font-size:13px; margin-bottom:8px; }
+  #hudRows { display:grid; grid-template-columns:1fr 1fr; gap:4px 10px; font-size:12px; }
+  #hudRows .k { color:var(--muted); }
+  #lesson { font-size:12px; line-height:1.5; color:#c9d6e8; margin-bottom:12px; }
+  #quiz { font-size:12px; }
+  #quiz .q { margin-bottom:8px; }
+  #quiz .opts { display:flex; flex-direction:column; gap:4px; }
+  #quiz button { background:#16233a; color:var(--ink); border:1px solid #24344d;
+                 border-radius:6px; padding:6px 8px; text-align:left; cursor:pointer;
+                 font-family:inherit; font-size:12px; line-height:1.4; }
+  #quiz button.correct { border-color:#3ddc84; }
+  #quiz button.wrong { border-color:#ff6b6b; }
+  #stage { position:relative; }
+  #stage > canvas:not(#chart) { width:100%; height:100%; display:block; touch-action:none; outline:none; }
+  #chart { position:absolute; right:12px; bottom:12px; width:340px; height:215px;
+           background:#0e1726; border:1px solid #24344d; border-radius:8px; }
+  #chartLabel { position:absolute; right:12px; bottom:231px; font-size:11px; color:var(--muted); }
+</style>
+</head>
+<body>
+<div id="app">
+  <aside id="sidebar">
+    <h1>How Countries Go Broke: The Big Debt Cycle</h1>
+    <div class="sub">Ray Dalio — U.S. Debt Dynamics &amp; The 3% Rule</div>
+    <div class="help-bar" style="flex-wrap:wrap;">
+      <button id="helpToggleBtn" class="help-btn" type="button">? Plain-English Guide</button>
+      <button id="teenToggleBtn" class="help-btn" type="button" style="color:#ffd166; border-color:#5c4b1e;">🎓 Teen / Student Guide</button>
+      <button id="helpAllBtn" class="help-btn" type="button" style="display:none;">Show All Sections</button>
+    </div>
+    <div id="helpPanel"></div>
+    <select id="moduleSelect" aria-label="Select interactive module"></select>
+    <div id="controls"></div>
+    <div id="hud">
+      <div id="hudTitle"></div>
+      <div id="hudEq"></div>
+      <div id="hudRows"></div>
+    </div>
+    <div id="lesson"></div>
+    <div id="quiz"></div>
+  </aside>
+  <main id="stage">
+    <canvas id="chart" width="680" height="430"></canvas>
+    <div id="chartLabel">2D analytical plot</div>
+  </main>
+</div>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+const stage = document.getElementById('stage');
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setSize(stage.clientWidth, stage.clientHeight);
+stage.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0b1220);
+
+const camera = new THREE.PerspectiveCamera(45, stage.clientWidth / stage.clientHeight, 0.1, 200);
+camera.position.set(6, 5, 8);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.06;
+controls.minDistance = 0.8;
+controls.maxDistance = 80;
+controls.enableZoom = false;
+
+renderer.domElement.addEventListener('wheel', (e) => {
+  e.preventDefault();
+  const dir = Math.sign(e.deltaY);
+  if (!dir) return;
+  const offset = camera.position.clone().sub(controls.target);
+  const dist = Math.max(controls.minDistance, Math.min(controls.maxDistance, offset.length() * (dir > 0 ? 1.12 : 0.89)));
+  offset.setLength(dist);
+  camera.position.copy(controls.target).add(offset);
+}, { passive: false });
+
+scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+const key = new THREE.DirectionalLight(0xffffff, 0.95);
+key.position.set(6, 10, 6);
+scene.add(key);
+
+const content = new THREE.Group();
+scene.add(content);
+
+const chartEl = document.getElementById('chart');
+const chartCtx = chartEl.getContext('2d');
+const chartLabelEl = document.getElementById('chartLabel');
+
+function renderTex(el, opts) {
+  if (window.renderMathInElement) window.renderMathInElement(el, opts);
+}
+const KATEX_OPTS = {
+  delimiters: [
+    { left: '$$', right: '$$', display: true },
+    { left: '$', right: '$', display: false },
+    { left: '\\(', right: '\\)', display: false },
+    { left: '\\[', right: '\\]', display: true }
+  ],
+  throwOnError: false,
+  strict: false
+};
+
+function setHud(titleStr, latexEqStr, rows) {
+  document.getElementById('hudTitle').textContent = titleStr;
+  const eq = document.getElementById('hudEq');
+  const trimmedEq = (latexEqStr || '').trim();
+  eq.innerHTML = (trimmedEq && !trimmedEq.startsWith('$') && !trimmedEq.startsWith('\\(') && !trimmedEq.startsWith('\\['))
+    ? `$${trimmedEq}$`
+    : trimmedEq;
+  renderTex(eq, KATEX_OPTS);
+  const rowsEl = document.getElementById('hudRows');
+  rowsEl.innerHTML = '';
+  for (const r of rows) {
+    const k = document.createElement('div'); k.className = 'k'; k.textContent = r.k;
+    const v = document.createElement('div'); v.textContent = r.v;
+    if (r.color) v.style.color = r.color;
+    rowsEl.appendChild(k); rowsEl.appendChild(v);
+  }
+}
+
+function makeSpriteLabel(text, color = '#e6edf7', bg = 'rgba(11,19,34,0.75)') {
+  const cv = document.createElement('canvas');
+  cv.width = 256; cv.height = 64;
+  const c = cv.getContext('2d');
+  c.fillStyle = bg;
+  c.fillRect(8, 8, 240, 48);
+  c.strokeStyle = color;
+  c.lineWidth = 2;
+  c.strokeRect(8, 8, 240, 48);
+  c.fillStyle = color;
+  c.font = 'bold 20px sans-serif';
+  c.textAlign = 'center';
+  c.textBaseline = 'middle';
+  c.fillText(text, 128, 33);
+  const tex = new THREE.CanvasTexture(cv);
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true }));
+  sp.scale.set(2.4, 0.6, 1);
+  return sp;
+}
+
+const selectEl = document.getElementById('moduleSelect');
+const lessonEl = document.getElementById('lesson');
+const quizEl = document.getElementById('quiz');
+let active = null;
+
+function buildControls(mod) {
+  const host = document.getElementById('controls');
+  host.innerHTML = '';
+  mod._inputs = {};
+  for (const c of mod.controls) {
+    const wrap = document.createElement('div');
+    wrap.className = 'ctrl';
+    const lbl = document.createElement('label');
+    lbl.textContent = c.label;
+    wrap.appendChild(lbl);
+
+    if (c.type === 'range') {
+      const inp = document.createElement('input');
+      inp.type = 'range';
+      inp.min = c.min; inp.max = c.max; inp.step = c.step;
+      inp.value = mod.state[c.id];
+      inp.addEventListener('input', () => {
+        mod.state[c.id] = parseFloat(inp.value);
+        if (typeof mod.onControl === 'function') mod.onControl(c.id, mod.state[c.id]);
+        mod.update();
+      });
+      mod._inputs[c.id] = inp;
+      wrap.appendChild(inp);
+    } else if (c.type === 'select') {
+      const sel = document.createElement('select');
+      for (const optVal of c.options) {
+        const o = document.createElement('option');
+        o.value = optVal; o.textContent = optVal;
+        sel.appendChild(o);
+      }
+      sel.value = mod.state[c.id];
+      sel.addEventListener('change', () => {
+        mod.state[c.id] = sel.value;
+        if (typeof mod.onControl === 'function') mod.onControl(c.id, mod.state[c.id]);
+        mod.update();
+      });
+      mod._inputs[c.id] = sel;
+      wrap.appendChild(sel);
+    }
+    host.appendChild(wrap);
+  }
+}
+
+function buildQuiz(mod) {
+  quizEl.innerHTML = '';
+  if (!mod.quiz) return;
+  const qDiv = document.createElement('div');
+  qDiv.className = 'q';
+  qDiv.innerHTML = `<b>Quick Check:</b> ${mod.quiz.q}`;
+  quizEl.appendChild(qDiv);
+  const optsDiv = document.createElement('div');
+  optsDiv.className = 'opts';
+  mod.quiz.opts.forEach((optText, idx) => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.innerHTML = optText;
+    btn.addEventListener('click', () => {
+      [...optsDiv.children].forEach((b, i) => {
+        b.classList.remove('correct', 'wrong');
+        if (i === mod.quiz.ans) b.classList.add('correct');
+        else if (i === idx) b.classList.add('wrong');
+      });
+    });
+    optsDiv.appendChild(btn);
+  });
+  quizEl.appendChild(optsDiv);
+  renderTex(quizEl, KATEX_OPTS);
+}
+
+const modules = [];
+
+// ============================================================================
+// MODULE 1: Dalio's 3% Rule & U.S. Deficit Breakdown
+// ============================================================================
+modules.push({
+  id: 'mod1_three_percent_rule',
+  title: "1. Dalio's 3% Rule & U.S. Deficit Breakdown",
+  controls: [
+    { type: 'select', id: 'preset', label: 'Fiscal Scenario Preset', options: ['U.S. Status Quo (~8.0% Deficit)', 'Dalio 3% Bipartisan Fix', '1990s Surplus Discipline', 'Austerity Shock'], value: 'U.S. Status Quo (~8.0% Deficit)' },
+    { type: 'range', id: 'debt0', label: 'Debt / GDP Ratio d (%)', min: 60, max: 160, step: 1, value: 123 },
+    { type: 'range', id: 'tax', label: 'Tax Revenue (% GDP)', min: 14.0, max: 24.0, step: 0.2, value: 17.2 },
+    { type: 'range', id: 'spend', label: 'Primary Spending ex-Interest (% GDP)', min: 16.0, max: 28.0, step: 0.2, value: 20.8 },
+    { type: 'range', id: 'rate', label: 'Effective Interest Rate r (%)', min: 1.0, max: 9.0, step: 0.1, value: 3.6 }
+  ],
+  onControl(id, val) {
+    if (id !== 'preset') return;
+    const presets = {
+      'U.S. Status Quo (~8.0% Deficit)': { debt0: 123, tax: 17.2, spend: 20.8, rate: 3.6 },
+      'Dalio 3% Bipartisan Fix': { debt0: 123, tax: 19.6, spend: 18.4, rate: 3.4 },
+      '1990s Surplus Discipline': { debt0: 64, tax: 19.8, spend: 16.4, rate: 4.5 },
+      'Austerity Shock': { debt0: 123, tax: 21.5, spend: 17.0, rate: 5.5 }
+    };
+    const p = presets[val];
+    if (!p) return;
+    Object.assign(this.state, p);
+    for (const k of Object.keys(p)) {
+      if (this._inputs && this._inputs[k]) this._inputs[k].value = p[k];
+    }
+  },
+  build() {
+    camera.position.set(0, 4.8, 10.5);
+    const grid = new THREE.GridHelper(12, 12, 0x24344d, 0x162236);
+    content.add(grid);
+
+    const mkBar = (color) => new THREE.Mesh(
+      new THREE.BoxGeometry(1.4, 1, 1.4),
+      new THREE.MeshStandardMaterial({ color, roughness: 0.35, metalness: 0.15 })
+    );
+    this.barTax = mkBar(0x3ddc84);
+    this.barPrim = mkBar(0x5aa9e6);
+    this.barInt = mkBar(0xff6b6b);
+    this.barDef = mkBar(0xffb703);
+
+    this.barTax.position.x = -3.0;
+    this.barPrim.position.x = -0.8;
+    this.barInt.position.x = -0.8;
+    this.barDef.position.x = 2.2;
+
+    content.add(this.barTax, this.barPrim, this.barInt, this.barDef);
+
+    // 3.0% Deficit Ceiling Plane
+    this.limitPlane = new THREE.Mesh(
+      new THREE.BoxGeometry(3.2, 0.05, 2.6),
+      new THREE.MeshStandardMaterial({ color: 0x3ddc84, transparent: true, opacity: 0.45, emissive: 0x165b33 })
+    );
+    this.limitPlane.position.set(2.2, 0.6, 0);
+    content.add(this.limitPlane);
+
+    const lTax = makeSpriteLabel('Tax Revenue', '#3ddc84');
+    lTax.position.set(-3.0, 5.5, 0);
+    const lSpend = makeSpriteLabel('Primary + Interest', '#7fd1ff');
+    lSpend.position.set(-0.8, 5.5, 0);
+    const lDef = makeSpriteLabel('Total Deficit vs 3%', '#ffd166');
+    lDef.position.set(2.2, 5.5, 0);
+    content.add(lTax, lSpend, lDef);
+  },
+  update() {
+    const st = this.state;
+    const d = st.debt0 / 100;
+    const primDef = st.spend - st.tax;
+    const netInt = (st.rate / 100) * d * 100;
+    const totDef = primDef + netInt;
+    const gap3 = totDef - 3.0;
+    const intToTax = (netInt / st.tax) * 100;
+
+    const scale = 0.2;
+    const hTax = Math.max(0.1, st.tax * scale);
+    const hPrim = Math.max(0.1, st.spend * scale);
+    const hInt = Math.max(0.05, netInt * scale);
+    const hDef = Math.max(0.1, Math.abs(totDef) * scale);
+
+    this.barTax.scale.y = hTax; this.barTax.position.y = hTax / 2;
+    this.barPrim.scale.y = hPrim; this.barPrim.position.y = hPrim / 2;
+    this.barInt.scale.y = hInt; this.barInt.position.y = hPrim + hInt / 2;
+
+    this.barDef.scale.y = hDef;
+    this.barDef.position.y = totDef >= 0 ? hDef / 2 : -hDef / 2;
+    this.barDef.material.color.setHex(totDef <= 3.0 ? 0x3ddc84 : (totDef <= 5.0 ? 0xffb703 : 0xff595e));
+
+    this.limitPlane.position.y = 3.0 * scale;
+
+    const status = totDef <= 3.0 ? '≤3% Sustainable' : (totDef <= 5.0 ? '3–5% Fiscal Strain' : '>5% Late-Cycle Danger');
+    const stColor = totDef <= 3.0 ? '#3ddc84' : (totDef <= 5.0 ? '#ffd166' : '#ff6b6b');
+
+    setHud("Dalio's 3% Rule & Deficit", `\\text{Deficit} = (${st.spend.toFixed(1)} - ${st.tax.toFixed(1)}) + ${netInt.toFixed(1)} = ${totDef.toFixed(1)}\\%`, [
+      { k: 'Total Deficit (% GDP)', v: `${totDef.toFixed(2)}%`, color: stColor },
+      { k: 'Gap to 3% Rule (Δ)', v: `${gap3 >= 0 ? '+' : ''}${gap3.toFixed(2)}% GDP`, color: gap3 <= 0 ? '#3ddc84' : '#ff6b6b' },
+      { k: 'Interest / Tax Ratio', v: `${intToTax.toFixed(1)}%`, color: intToTax > 20 ? '#ff6b6b' : '#e6edf7' },
+      { k: 'Cycle Status', v: status, color: stColor }
+    ]);
+
+    this.drawChart(st.tax, st.spend, netInt, totDef, gap3);
+  },
+  drawChart(tax, spend, netInt, totDef, gap3) {
+    chartLabelEl.textContent = 'U.S. Fiscal Waterfall (% of GDP) vs. Dalio 3% Limit';
+    const ctx = chartCtx;
+    const W = chartEl.width, H = chartEl.height;
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = '#0b1220'; ctx.fillRect(0, 0, W, H);
+
+    const padL = 62, padR = 24, padT = 28, padB = 46;
+    const maxY = Math.max(30, spend + netInt + 3);
+    const sy = (v) => (H - padB) - (v / maxY) * (H - padT - padB);
+
+    // Gridlines
+    ctx.strokeStyle = '#1d2c44'; ctx.lineWidth = 1;
+    ctx.font = '18px monospace'; ctx.fillStyle = '#8fa3bf'; ctx.textAlign = 'right';
+    for (let v = 0; v <= maxY; v += 5) {
+      const y = sy(v);
+      ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(W - padR, y); ctx.stroke();
+      ctx.fillText(`${v}%`, padL - 8, y + 6);
+    }
+
+    const cols = [
+      { label: 'Taxes', x: padL + 55, w: 85 },
+      { label: 'Total Spend', x: padL + 225, w: 85 },
+      { label: 'Total Deficit', x: padL + 395, w: 85 }
+    ];
+
+    // Bar 1: Tax
+    ctx.fillStyle = '#3ddc84';
+    ctx.fillRect(cols[0].x, sy(tax), cols[0].w, sy(0) - sy(tax));
+
+    // Bar 2: Stacked Primary + Interest
+    ctx.fillStyle = '#5aa9e6';
+    ctx.fillRect(cols[1].x, sy(spend), cols[1].w, sy(0) - sy(spend));
+    ctx.fillStyle = '#ff6b6b';
+    ctx.fillRect(cols[1].x, sy(spend + netInt), cols[1].w, sy(spend) - sy(spend + netInt));
+
+    // Bar 3: Total Deficit
+    const defVal = Math.max(0, totDef);
+    ctx.fillStyle = totDef <= 3.0 ? '#3ddc84' : '#ffb703';
+    ctx.fillRect(cols[2].x, sy(defVal), cols[2].w, sy(0) - sy(defVal));
+
+    // 3% Rule dashed threshold line
+    const y3 = sy(3.0);
+    ctx.save();
+    ctx.setLineDash([8, 6]);
+    ctx.strokeStyle = '#3ddc84';
+    ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(padL, y3); ctx.lineTo(W - padR, y3); ctx.stroke();
+    ctx.restore();
+
+    ctx.fillStyle = '#3ddc84'; ctx.textAlign = 'left'; ctx.font = 'bold 17px sans-serif';
+    ctx.fillText("Dalio's 3.0% Rule Ceiling", padL + 10, y3 - 8);
+
+    // X-axis labels & values
+    ctx.textAlign = 'center'; ctx.fillStyle = '#e6edf7'; ctx.font = '18px sans-serif';
+    cols.forEach((c) => ctx.fillText(c.label, c.x + c.w / 2, H - 14));
+    ctx.font = 'bold 17px monospace';
+    ctx.fillText(`${tax.toFixed(1)}%`, cols[0].x + 42, sy(tax) - 8);
+    ctx.fillText(`${(spend + netInt).toFixed(1)}%`, cols[1].x + 42, sy(spend + netInt) - 8);
+    ctx.fillStyle = totDef <= 3.0 ? '#3ddc84' : '#ffd166';
+    ctx.fillText(`${totDef.toFixed(1)}%`, cols[2].x + 42, sy(defVal) - 8);
+  },
+  lesson: "Ray Dalio's <b>3% Rule</b> states that to stabilize a high Debt-to-GDP ratio without triggering a late-stage debt crisis, a nation must bring its total fiscal deficit down to roughly <b>3% of GDP</b> through a bipartisan balance of moderate tax increases, spending restraint, and supportive monetary policy—before compounding net interest ($r \\cdot d$) crowds out productive spending.",
+  quiz: {
+    q: "If Debt/GDP is $d = 120\\%$ and the effective interest rate is $r = 4\\%$, what is net interest as a share of GDP?",
+    opts: ["$3.0\\%$ of GDP", "$4.8\\%$ of GDP", "$6.0\\%$ of GDP"],
+    ans: 1
+  }
+});
+
+// ============================================================================
+// MODULE 2: The r vs. g Debt Snowball (20-Year Trajectory)
+// ============================================================================
+modules.push({
+  id: 'mod2_debt_snowball',
+  title: '2. The r vs. g Debt Snowball (20-Year Trajectory)',
+  controls: [
+    { type: 'range', id: 'debt0', label: 'Initial Debt / GDP (%)', min: 60, max: 160, step: 1, value: 123 },
+    { type: 'range', id: 'pb', label: 'Primary Deficit (% GDP)', min: -2.0, max: 8.0, step: 0.2, value: 3.6 },
+    { type: 'range', id: 'rBase', label: 'Base Interest Rate r (%)', min: 1.0, max: 8.0, step: 0.1, value: 3.6 },
+    { type: 'range', id: 'gNom', label: 'Nominal GDP Growth g (%)', min: 1.0, max: 8.0, step: 0.1, value: 4.5 },
+    { type: 'range', id: 'vigilante', label: 'Bond Vigilante Sensitivity φ', min: 0.0, max: 2.0, step: 0.1, value: 1.0 }
+  ],
+  simulate() {
+    const st = this.state;
+    const years = [];
+    let d = st.debt0 / 100;
+    const pb = st.pb / 100;
+    const r0 = st.rBase / 100;
+    const g = st.gNom / 100;
+    const phi = st.vigilante;
+
+    for (let t = 0; t <= 20; t++) {
+      const approxDef = pb + r0 * d;
+      const rEff = r0 + phi * Math.max(0, d - 1.10) + 0.5 * Math.max(0, approxDef - 0.03);
+      const netInt = rEff * d;
+      const totDef = pb + netInt;
+      const intToTax = (netInt / 0.175) * 100;
+      years.push({ t, dPct: d * 100, rPct: rEff * 100, defPct: totDef * 100, intToTax });
+      d = d * ((1 + rEff) / (1 + g)) + pb;
+    }
+    return years;
+  },
+  build() {
+    camera.position.set(8.5, 6.5, 11.5);
+    const grid = new THREE.GridHelper(14, 14, 0x24344d, 0x162236);
+    content.add(grid);
+
+    this.bars = [];
+    for (let t = 0; t <= 20; t++) {
+      const m = new THREE.Mesh(
+        new THREE.BoxGeometry(0.45, 1, 0.9),
+        new THREE.MeshStandardMaterial({ color: 0x3ddc84, roughness: 0.35 })
+      );
+      m.position.x = (t - 10) * 0.58;
+      content.add(m);
+      this.bars.push(m);
+    }
+    const lStart = makeSpriteLabel('Year 0', '#7fd1ff');
+    lStart.position.set(-5.8, 0.6, 1.4);
+    const lEnd = makeSpriteLabel('Year 20', '#ffd166');
+    lEnd.position.set(5.8, 0.6, 1.4);
+    content.add(lStart, lEnd);
+  },
+  update() {
+    const series = this.simulate();
+    const y0 = series[0], y10 = series[10], y20 = series[20];
+    const spread = y0.rPct - this.state.gNom;
+
+    series.forEach((pt, idx) => {
+      const mesh = this.bars[idx];
+      const h = Math.max(0.15, Math.min(9.0, pt.dPct * 0.03));
+      mesh.scale.y = h;
+      mesh.position.y = h / 2;
+      const col = pt.dPct < 115 ? 0x3ddc84 : (pt.dPct < 150 ? 0xffb703 : 0xff595e);
+      mesh.material.color.setHex(col);
+    });
+
+    const d20Color = y20.dPct > 150 ? '#ff6b6b' : (y20.dPct > 125 ? '#ffd166' : '#3ddc84');
+    setHud('Debt Snowball Trajectory', 'd_{t+1} = d_t \\frac{1+r_t}{1+g_t} + \\text{pb}_t', [
+      { k: 'Initial r - g Spread', v: `${spread >= 0 ? '+' : ''}${spread.toFixed(2)}%`, color: spread > 0 ? '#ff6b6b' : '#3ddc84' },
+      { k: 'Year-10 Debt / GDP', v: `${y10.dPct.toFixed(1)}%` },
+      { k: 'Year-20 Debt / GDP', v: `${y20.dPct.toFixed(1)}%`, color: d20Color },
+      { k: 'Yr-20 Interest / Tax', v: `${y20.intToTax.toFixed(1)}%`, color: y20.intToTax > 25 ? '#ff6b6b' : '#e6edf7' }
+    ]);
+
+    this.drawChart(series);
+  },
+  drawChart(series) {
+    chartLabelEl.textContent = '20-Year Debt/GDP (%) & Interest/Tax Crowd-Out (%)';
+    const ctx = chartCtx;
+    const W = chartEl.width, H = chartEl.height;
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = '#0b1220'; ctx.fillRect(0, 0, W, H);
+
+    const padL = 62, padR = 26, padT = 28, padB = 42;
+    const maxD = Math.max(180, ...series.map(s => s.dPct));
+    const sx = (t) => padL + (t / 20) * (W - padL - padR);
+    const sy = (v) => (H - padB) - (v / maxD) * (H - padT - padB);
+
+    ctx.strokeStyle = '#1d2c44'; ctx.lineWidth = 1;
+    ctx.font = '16px monospace'; ctx.fillStyle = '#8fa3bf'; ctx.textAlign = 'right';
+    for (let v = 0; v <= maxD; v += 50) {
+      const y = sy(v);
+      ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(W - padR, y); ctx.stroke();
+      ctx.fillText(`${Math.round(v)}%`, padL - 8, y + 5);
+    }
+
+    // Debt/GDP curve
+    ctx.strokeStyle = '#7fd1ff'; ctx.lineWidth = 3.5;
+    ctx.beginPath();
+    series.forEach((s, i) => {
+      const x = sx(s.t), y = sy(s.dPct);
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    });
+    ctx.stroke();
+
+    // Interest / Tax curve
+    ctx.strokeStyle = '#ff6b6b'; ctx.lineWidth = 3;
+    ctx.beginPath();
+    series.forEach((s, i) => {
+      const x = sx(s.t), y = sy(s.intToTax);
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    });
+    ctx.stroke();
+
+    // Legend
+    ctx.font = 'bold 16px sans-serif'; ctx.textAlign = 'left';
+    ctx.fillStyle = '#7fd1ff'; ctx.fillText('— Debt / GDP (%)', padL + 10, padT + 6);
+    ctx.fillStyle = '#ff6b6b'; ctx.fillText('— Interest / Tax (%)', padL + 200, padT + 6);
+
+    ctx.fillStyle = '#8fa3bf'; ctx.textAlign = 'center'; ctx.font = '16px monospace';
+    [0, 5, 10, 15, 20].forEach(t => ctx.fillText(`Yr ${t}`, sx(t), H - 14));
+  },
+  lesson: "When the effective interest rate $r_t$ rises above nominal GDP growth $g_t$, existing debt compounds faster than the economy grows ($\\frac{1+r_t}{1+g_t} > 1$). Even a modest primary deficit triggers an exponential debt snowball once bond buyers demand a risk premium ($\\phi$).",
+  quiz: {
+    q: "In $d_{t+1} = d_t \\frac{1+r}{1+g} + \\text{pb}$, if $\\text{pb} = 0$, when does Debt-to-GDP $d_t$ automatically shrink?",
+    opts: ["Whenever $r > g$", "Whenever $g > r$", "Only when $r = 0$"],
+    ans: 1
+  }
+});
+
+// ============================================================================
+// MODULE 3: Print & Monetize: The Central Bank Dilemma
+// ============================================================================
+modules.push({
+  id: 'mod3_print_monetize',
+  title: '3. Print & Monetize: The Central Bank Dilemma',
+  controls: [
+    { type: 'range', id: 'deficit', label: 'Total Fiscal Deficit (% GDP)', min: 1.0, max: 12.0, step: 0.2, value: 6.6 },
+    { type: 'range', id: 'privDemand', label: 'Private/Foreign Buyer Cap (% GDP)', min: 1.0, max: 8.0, step: 0.2, value: 3.5 },
+    { type: 'range', id: 'monetize', label: 'Fed Monetization / QE (%)', min: 0, max: 100, step: 5, value: 25 },
+    { type: 'range', id: 'piBase', label: 'Base Inflation π (%)', min: 1.0, max: 6.0, step: 0.2, value: 2.5 }
+  ],
+  calcPoint(muPct) {
+    const st = this.state;
+    const def = st.deficit / 100;
+    const cap = st.privDemand / 100;
+    const mu = muPct / 100;
+    const unabsorbed = Math.max(0, def - cap);
+    const rMarket = 0.035 + 1.4 * unabsorbed;
+    const rEff = rMarket * (1 - 0.65 * mu);
+    const pi = (st.piBase / 100) + 1.8 * mu * Math.max(0, def - 0.02);
+    const w10 = 100 * Math.pow((1 + rEff) / (1 + pi), 10);
+    return { rPct: rEff * 100, piPct: pi * 100, w10, unabsorbedPct: unabsorbed * 100 };
+  },
+  build() {
+    camera.position.set(0, 4.5, 9.5);
+    const grid = new THREE.GridHelper(12, 12, 0x24344d, 0x162236);
+    content.add(grid);
+
+    this.yieldTower = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.85, 0.85, 1, 24),
+      new THREE.MeshStandardMaterial({ color: 0xff595e, roughness: 0.3 })
+    );
+    this.yieldTower.position.x = -2.4;
+
+    this.inflTower = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.85, 0.85, 1, 24),
+      new THREE.MeshStandardMaterial({ color: 0xffb703, roughness: 0.3 })
+    );
+    this.inflTower.position.x = 0.0;
+
+    this.bondOrb = new THREE.Mesh(
+      new THREE.SphereGeometry(1.15, 28, 28),
+      new THREE.MeshStandardMaterial({ color: 0x3ddc84, roughness: 0.25, metalness: 0.2 })
+    );
+    this.bondOrb.position.set(2.6, 2.2, 0);
+
+    content.add(this.yieldTower, this.inflTower, this.bondOrb);
+
+    const l1 = makeSpriteLabel('Bond Yield r', '#ff6b6b'); l1.position.set(-2.4, 5.2, 0);
+    const l2 = makeSpriteLabel('Inflation π', '#ffd166'); l2.position.set(0.0, 5.2, 0);
+    const l3 = makeSpriteLabel('Real $100 Bond', '#3ddc84'); l3.position.set(2.6, 5.2, 0);
+    content.add(l1, l2, l3);
+  },
+  update() {
+    const cur = this.calcPoint(this.state.monetize);
+    const hY = Math.max(0.2, cur.rPct * 0.45);
+    const hI = Math.max(0.2, cur.piPct * 0.45);
+    this.yieldTower.scale.y = hY; this.yieldTower.position.y = hY / 2;
+    this.inflTower.scale.y = hI; this.inflTower.position.y = hI / 2;
+
+    const orbScale = Math.max(0.35, Math.min(1.4, cur.w10 / 100));
+    this.bondOrb.scale.setScalar(orbScale);
+    this.bondOrb.material.color.setHex(cur.w10 >= 95 ? 0x3ddc84 : (cur.w10 >= 75 ? 0xffb703 : 0xff595e));
+
+    const mu = this.state.monetize;
+    const regime = mu < 20 ? 'Hard Money / Yield Spike' : (mu <= 55 ? 'Balanced / Beautiful Mix' : 'Print & Devalue Currency');
+
+    setHud('Central Bank Monetization', 'W_{10} = 100 \\left(\\frac{1 + r_{\\text{eff}}}{1 + \\pi}\\right)^{10}', [
+      { k: 'Effective Yield r', v: `${cur.rPct.toFixed(2)}%`, color: cur.rPct > 6 ? '#ff6b6b' : '#e6edf7' },
+      { k: 'Inflation Rate π', v: `${cur.piPct.toFixed(2)}%`, color: cur.piPct > 5 ? '#ffd166' : '#e6edf7' },
+      { k: '10-Yr Real $100 Bond', v: `$${cur.w10.toFixed(1)}`, color: cur.w10 < 80 ? '#ff6b6b' : '#3ddc84' },
+      { k: 'Policy Regime', v: regime }
+    ]);
+
+    this.drawChart(mu);
+  },
+  drawChart(activeMu) {
+    chartLabelEl.textContent = 'Central Bank Trilemma Across Fed Monetization μ (0% → 100%)';
+    const ctx = chartCtx;
+    const W = chartEl.width, H = chartEl.height;
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = '#0b1220'; ctx.fillRect(0, 0, W, H);
+
+    const padL = 56, padR = 24, padT = 30, padB = 42;
+    const pts = [];
+    for (let m = 0; m <= 100; m += 5) pts.push({ m, ...this.calcPoint(m) });
+
+    const sx = (m) => padL + (m / 100) * (W - padL - padR);
+    const syRate = (v) => (H - padB) - (Math.min(14, v) / 14) * (H - padT - padB);
+    const syBond = (w) => (H - padB) - (Math.min(120, w) / 120) * (H - padT - padB);
+
+    // Yield curve
+    ctx.strokeStyle = '#ff6b6b'; ctx.lineWidth = 3;
+    ctx.beginPath();
+    pts.forEach((p, i) => { const x = sx(p.m), y = syRate(p.rPct); if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y); });
+    ctx.stroke();
+
+    // Inflation curve
+    ctx.strokeStyle = '#ffd166'; ctx.lineWidth = 3;
+    ctx.beginPath();
+    pts.forEach((p, i) => { const x = sx(p.m), y = syRate(p.piPct); if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y); });
+    ctx.stroke();
+
+    // Real Bond Purchasing Power curve
+    ctx.strokeStyle = '#3ddc84'; ctx.lineWidth = 3;
+    ctx.beginPath();
+    pts.forEach((p, i) => { const x = sx(p.m), y = syBond(p.w10); if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y); });
+    ctx.stroke();
+
+    // Active vertical marker
+    const ax = sx(activeMu);
+    ctx.save(); ctx.setLineDash([6, 5]); ctx.strokeStyle = '#7fd1ff'; ctx.lineWidth = 2.5;
+    ctx.beginPath(); ctx.moveTo(ax, padT); ctx.lineTo(ax, H - padB); ctx.stroke();
+    ctx.restore();
+
+    ctx.font = 'bold 15px sans-serif'; ctx.textAlign = 'left';
+    ctx.fillStyle = '#ff6b6b'; ctx.fillText('Yield r', padL + 6, padT - 8);
+    ctx.fillStyle = '#ffd166'; ctx.fillText('Inflation π', padL + 85, padT - 8);
+    ctx.fillStyle = '#3ddc84'; ctx.fillText('Real $100 Bond', padL + 195, padT - 8);
+
+    ctx.fillStyle = '#8fa3bf'; ctx.textAlign = 'center'; ctx.font = '15px monospace';
+    [0, 25, 50, 75, 100].forEach(m => ctx.fillText(`μ=${m}%`, sx(m), H - 14));
+  },
+  lesson: "When government bond supply exceeds private and foreign buyer demand, Dalio shows the central bank faces a binary trap: refuse to print ($\\mu \\to 0$) and let real interest rates spike, or print money to buy the debt ($\\mu \\to 100$), suppressing yields while devaluing the currency via inflation ($\\pi > r_{\\text{eff}}$).",
+  quiz: {
+    q: "If the central bank monetizes deficits so that $\\pi = 6\\%$ while nominal bond yields are capped at $r_{\\text{eff}} = 3\\%$, what happens to bondholders?",
+    opts: ["They gain $3\\%$ real purchasing power per year", "They lose roughly $3\\%$ real purchasing power per year", "Debt-to-GDP immediately drops to zero"],
+    ans: 1
+  }
+});
+
+// ============================================================================
+// MODULE 4: The 6-Stage Big Debt Cycle Phase Space
+// ============================================================================
+modules.push({
+  id: 'mod4_big_cycle_arch',
+  title: '4. The 6-Stage Big Debt Cycle Phase Space',
+  controls: [
+    { type: 'range', id: 'stagePos', label: 'Cycle Progression (%)', min: 0, max: 100, step: 1, value: 72 },
+    { type: 'select', id: 'policyMix', label: 'Policy Response', options: ['Status Quo Drift', 'Dalio 3% Beautiful Deleveraging', 'Unchecked Money Printing', 'Hard Austerity'], value: 'Status Quo Drift' },
+    { type: 'range', id: 'reserveStatus', label: 'Reserve Currency Privilege', min: 0.0, max: 1.0, step: 0.1, value: 0.8 }
+  ],
+  build() {
+    camera.position.set(0, 5.5, 11.5);
+    const grid = new THREE.GridHelper(14, 14, 0x24344d, 0x162236);
+    content.add(grid);
+
+    const stageColors = [0x3ddc84, 0x5aa9e6, 0xffd166, 0xf77f00, 0xff595e, 0x9b5de5];
+    const pts = [];
+    for (let i = 0; i <= 60; i++) {
+      const u = i / 60;
+      const x = (u - 0.5) * 11;
+      const y = 1.2 + Math.sin(u * Math.PI * 1.45) * 2.4 + u * 1.4;
+      const z = Math.cos(u * Math.PI * 2) * 1.8;
+      pts.push(new THREE.Vector3(x, y, z));
+    }
+    for (let s = 0; s < 6; s++) {
+      const subPts = pts.slice(s * 10, s * 10 + 11);
+      const curve = new THREE.CatmullRomCurve3(subPts);
+      const tube = new THREE.Mesh(
+        new THREE.TubeGeometry(curve, 16, 0.14, 10, false),
+        new THREE.MeshStandardMaterial({ color: stageColors[s], emissive: stageColors[s], emissiveIntensity: 0.25 })
+      );
+      content.add(tube);
+    }
+    this.curve = new THREE.CatmullRomCurve3(pts);
+    this.beacon = new THREE.Mesh(
+      new THREE.SphereGeometry(0.36, 24, 24),
+      new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0x7fd1ff, emissiveIntensity: 0.8 })
+    );
+    content.add(this.beacon);
+
+    const l1 = makeSpriteLabel('Stage 1: Sound Money', '#3ddc84'); l1.position.set(-4.5, 0.5, 2.2);
+    const l5 = makeSpriteLabel('Stage 5: Print/Deleverage', '#ff6b6b'); l5.position.set(3.8, 4.8, -1.8);
+    content.add(l1, l5);
+  },
+  update() {
+    const st = this.state;
+    const u = st.stagePos / 100;
+    const pos = this.curve.getPointAt(u);
+    this.beacon.position.copy(pos);
+
+    const stages = [
+      '1. Sound Money & Low Debt',
+      '2. Debt Bubble & Rising Leverage',
+      '3. Top & Market Reversal',
+      '4. Depression / Deleveraging Squeeze',
+      '5. Printing & Monetization Crisis',
+      '6. Currency Reset / New Order'
+    ];
+    const idx = Math.min(5, Math.floor(u * 6));
+    const cushion = st.reserveStatus >= 0.7 ? 'High (USD Reserve Buffer)' : (st.reserveStatus >= 0.35 ? 'Moderate' : 'Low (EM-Style Fragility)');
+    const risk = u > 0.65 && st.policyMix !== 'Dalio 3% Beautiful Deleveraging' ? 'Elevated Late-Cycle' : 'Contained';
+
+    setHud('Big Cycle Archetype', '\\text{Stress} = f\\!\\left(\\frac{\\text{Debt}}{\\text{GDP}},\\, \\text{Deficit},\\, \\mu\\right)', [
+      { k: 'Active Stage', v: stages[idx], color: idx >= 4 ? '#ff6b6b' : '#ffd166' },
+      { k: 'Policy Path', v: st.policyMix },
+      { k: 'Reserve Cushion', v: cushion },
+      { k: 'Currency Risk', v: risk, color: risk === 'Contained' ? '#3ddc84' : '#ff6b6b' }
+    ]);
+
+    this.drawChart(u, st.policyMix, st.reserveStatus);
+  },
+  tick(dt) {
+    if (this.beacon) {
+      const s = 1 + 0.12 * Math.sin(performance.now() * 0.005);
+      this.beacon.scale.setScalar(s);
+    }
+  },
+  drawChart(u, policyMix, res) {
+    chartLabelEl.textContent = 'Big Cycle Phase Space: Debt/GDP vs. Fiscal & Monetary Stress';
+    const ctx = chartCtx;
+    const W = chartEl.width, H = chartEl.height;
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = '#0b1220'; ctx.fillRect(0, 0, W, H);
+
+    const padL = 56, padR = 24, padT = 28, padB = 42;
+    const sx = (x) => padL + x * (W - padL - padR);
+    const sy = (y) => (H - padB) - y * (H - padT - padB);
+
+    // Baseline historical arc
+    ctx.strokeStyle = '#4a658a'; ctx.lineWidth = 3;
+    ctx.beginPath();
+    for (let i = 0; i <= 50; i++) {
+      const t = i / 50;
+      const px = 0.08 + t * 0.84;
+      const py = 0.12 + Math.pow(t, 1.75) * (0.85 - 0.18 * res);
+      if (i === 0) ctx.moveTo(sx(px), sy(py)); else ctx.lineTo(sx(px), sy(py));
+    }
+    ctx.stroke();
+
+    // Policy divergence branch from current u
+    const curX = 0.08 + u * 0.84;
+    const curY = 0.12 + Math.pow(u, 1.75) * (0.85 - 0.18 * res);
+    const branchColor = policyMix === 'Dalio 3% Beautiful Deleveraging' ? '#3ddc84' : (policyMix === 'Unchecked Money Printing' ? '#ff6b6b' : '#ffd166');
+    const endX = Math.min(0.96, curX + 0.16);
+    const endY = policyMix === 'Dalio 3% Beautiful Deleveraging' ? Math.max(0.22, curY - 0.24) : Math.min(0.96, curY + 0.22);
+
+    ctx.strokeStyle = branchColor; ctx.lineWidth = 3.5;
+    ctx.beginPath(); ctx.moveTo(sx(curX), sy(curY)); ctx.lineTo(sx(endX), sy(endY)); ctx.stroke();
+
+    // Current position dot
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath(); ctx.arc(sx(curX), sy(curY), 7, 0, Math.PI * 2); ctx.fill();
+
+    ctx.font = 'bold 15px sans-serif'; ctx.textAlign = 'left';
+    ctx.fillStyle = branchColor; ctx.fillText(`Projected Path: ${policyMix}`, padL + 8, padT - 6);
+    ctx.fillStyle = '#8fa3bf'; ctx.textAlign = 'center'; ctx.font = '15px sans-serif';
+    ctx.fillText('Debt / GDP Burden (Low → Late Cycle)', (padL + W - padR) / 2, H - 12);
+  },
+  lesson: "Across 500 years of reserve-currency empires, Dalio identifies a recurring 6-stage arc. Reserve currency privilege buys extra time in Stage 5, but only a <b>Beautiful Deleveraging</b>—combining Dalio's 3% deficit cap with balanced nominal growth—avoids an inflationary currency reset.",
+  quiz: {
+    q: "What distinguishes a 'Beautiful Deleveraging' from an 'Ugly Inflationary Deleveraging' in Stage 5?",
+    opts: [
+      "Unlimited money printing with 10%+ deficits",
+      "Balancing fiscal restraint (~3% deficit rule) with moderate money growth so nominal growth exceeds nominal interest rates without runaway inflation",
+      "Raising interest rates to 15% while cutting all public spending immediately"
+    ],
+    ans: 1
+  }
+});
+
+// ============================================================================
+// DUAL-LEVEL PEDAGOGICAL GUIDES (PLAIN ENGLISH & TEEN / STUDENT)
+// ============================================================================
+const PLAIN_GUIDES = {
+  mod1_three_percent_rule: {
+    title: "1. Dalio's 3% Rule & U.S. Deficit Breakdown",
+    idea: "Ray Dalio argues that the U.S. cannot sustain 6%–8% annual deficits when Debt/GDP exceeds 120%. His <b>3% Rule</b> calls for reducing the total deficit to ~3% of GDP via a balanced mix of tax revenue adjustments and spending restraint so debt grows slower than the economy.",
+    view3d: "Left green pillar = Tax Revenue; middle stacked pillar = Primary Spending (blue) + Net Interest (red); right pillar = Total Deficit compared against the glowing green 3.0% ceiling plane.",
+    tryIt: "Start on <b>U.S. Status Quo</b> (~8.0% total deficit), then switch the preset to <b>Dalio 3% Bipartisan Fix</b> to see how raising taxes ~2.4% of GDP and trimming primary spending ~2.4% brings the deficit right onto the 3.0% threshold."
+  },
+  mod2_debt_snowball: {
+    title: "2. The r vs. g Debt Snowball",
+    idea: "A country's Debt-to-GDP ratio shrinks naturally if nominal economic growth (g) beats the average interest rate on its debt (r). When r > g and primary deficits persist, interest compounds on itself like a snowball rolling downhill.",
+    view3d: "A 20-year 3D staircase tracking Debt/GDP from Year 0 to Year 20, shifting from green to amber to red as compounding interest overtakes GDP growth.",
+    tryIt: "Raise <b>Effective Interest Rate r</b> above <b>Nominal Growth g</b> (e.g., r = 5.5%, g = 4.0%) and watch Year-20 Debt/GDP and Interest/Tax surge past Dalio's 25% crowd-out danger zone."
+  },
+  mod3_print_monetize: {
+    title: "3. Print & Monetize: The Central Bank Dilemma",
+    idea: "When the government issues more bonds than private and foreign investors want to buy, the central bank faces a dilemma: let yields spike (hurting borrowers and the budget) or print money to buy the bonds (suppressing yields but taxing bondholders through inflation).",
+    view3d: "Red cylinder = Nominal Bond Yield r; gold cylinder = Inflation Rate π; green sphere = Real 10-year purchasing power of a $100 government bond.",
+    tryIt: "Slide <b>Fed Monetization / QE (%)</b> from 0% up to 100% while holding Deficit at 6.6%—watch the red yield tower drop while the gold inflation tower rises and shrinks the green bond sphere."
+  },
+  mod4_big_cycle_arch: {
+    title: "4. The 6-Stage Big Debt Cycle Phase Space",
+    idea: "Every major reserve currency follows a predictable multi-decade credit cycle from sound money and productive debt to late-stage debt saturation, monetization, and either a balanced restructuring or currency devaluation.",
+    view3d: "A 6-segment 3D ribbon representing Stages 1 through 6 of Dalio's Big Debt Cycle, with a pulsing white beacon marking the current U.S. position (~72% through the cycle).",
+    tryIt: "Switch <b>Policy Response</b> between <b>Status Quo Drift</b>, <b>Unchecked Money Printing</b>, and <b>Dalio 3% Beautiful Deleveraging</b> to see how policy bends the 2D phase-space trajectory."
+  }
+};
+
+const TEEN_GUIDES = {
+  mod1_three_percent_rule: {
+    title: "1. The National Credit Card & Dalio's 3% Rule",
+    idea: "Imagine earning $100,000 a year, spending $121,000 on bills, and already owing $123,000 on your credit card. Ray Dalio's <b>3% Rule</b> is like a bipartisan family budget plan: trim spending a little and raise income a little so your yearly shortfall drops to 3% or less before credit card interest eats your whole paycheck.",
+    view3d: "The green tower is tax money coming in, the blue + red tower is government spending plus interest going out, and the right bar shows whether the gap fits under the green 3% safety shelf.",
+    tryIt: "Toggle the top dropdown from <b>U.S. Status Quo</b> to <b>Dalio 3% Bipartisan Fix</b> and watch the orange deficit bar shrink down to touch the green 3.0% ceiling!",
+    qa: "<b>Wait—why is Net Interest separate from Primary Spending?</b> Congress votes every year on programs like defense and healthcare (Primary Spending), but interest on past debt has to be paid automatically—and when interest rates rise, that red slice grows even if Congress passes zero new programs."
+  },
+  mod2_debt_snowball: {
+    title: "2. Outgrowing Your Debt vs. The Interest Snowball",
+    idea: "If your paycheck grows 5% a year (g) while your loan charges 3% interest (r), your debt gets easier to handle over time. But if your interest rate (r) jumps higher than your paycheck growth (g), your debt snowballs even if you stop buying new stuff!",
+    view3d: "Twenty 3D blocks showing the next 20 years of U.S. Debt-to-GDP. Green means manageable, yellow means tight, and red means debt is spiraling faster than the economy.",
+    tryIt: "Slide <b>Primary Deficit</b> down to 0.0% and set <b>Nominal Growth g = 5.0%</b> vs. <b>r = 3.5%</b>—watch the 20-year staircase slope downward instead of exploding!",
+    qa: "<b>What is 'Bond Vigilante Sensitivity φ'?</b> Bond vigilantes are big investors who demand higher interest rates if they think a country is borrowing too recklessly—which makes the snowball grow even faster."
+  },
+  mod3_print_monetize: {
+    title: "3. Why Can't the Fed Just Print Money to Pay Off the Debt?",
+    idea: "The government can never run out of dollars it prints itself—but printing extra dollars to buy government bonds makes every dollar buy less groceries (inflation). You avoid bouncing a check, but savers lose purchasing power!",
+    view3d: "The red tower is the interest rate on bonds, the gold tower is inflation, and the green ball shows how much real stuff a $100 bond can still buy after 10 years.",
+    tryIt: "Drag <b>Fed Monetization / QE (%)</b> all the way to 100%—the red interest tower shrinks, but the gold inflation tower shoots up and crushes the green $100 bond sphere!",
+    qa: "<b>Is printing money a 'stealth tax'?</b> Yes! Dalio calls inflation a hidden tax on people holding cash and bonds, because the government pays them back in dollars worth less than when they lent them."
+  },
+  mod4_big_cycle_arch: {
+    title: "4. Where Is the U.S. on History's 6-Stage Rollercoaster?",
+    idea: "Dalio studied 500 years of empires (Dutch, British, U.S.) and found they all ride the same 6-stage rollercoaster: starting with hard money and low debt, booming on credit, hitting a debt wall, and then choosing between painful austerity, money-printing inflation, or a balanced 3% fix.",
+    view3d: "A glowing 6-stage 3D track from Stage 1 (green) to Stage 6 (purple). The pulsing white orb shows where we are right now.",
+    tryIt: "Slide <b>Reserve Currency Privilege</b> down from 0.8 to 0.2 to see why having the world's reserve currency (the U.S. dollar) gives America extra cushion—and what happens if that trust erodes.",
+    qa: "<b>What is 'Reserve Currency Privilege'?</b> Because global trade and central banks use U.S. dollars, foreigners keep buying U.S. Treasury bonds longer than they would for smaller countries—buying time, though not forever."
+  }
+};
+
+let helpMode = null; // null | 'plain' | 'teen'
+let helpShowAll = false;
+const helpPanelEl = document.getElementById('helpPanel');
+const helpToggleBtn = document.getElementById('helpToggleBtn');
+const teenToggleBtn = document.getElementById('teenToggleBtn');
+const helpAllBtn = document.getElementById('helpAllBtn');
+
+function renderHelp() {
+  if (!helpPanelEl) return;
+  const isOpen = helpMode !== null;
+  helpPanelEl.classList.toggle('open', isOpen);
+  helpPanelEl.style.borderColor = helpMode === 'teen' ? '#ffd166' : 'var(--accent)';
+  if (helpAllBtn) {
+    helpAllBtn.style.display = isOpen ? 'inline-block' : 'none';
+    helpAllBtn.textContent = helpShowAll ? 'Current Section Only' : 'Show All Sections';
+  }
+  if (helpToggleBtn) {
+    helpToggleBtn.textContent = helpMode === 'plain' ? '✕ Close Guide' : '? Plain-English Guide';
+  }
+  if (teenToggleBtn) {
+    teenToggleBtn.textContent = helpMode === 'teen' ? '✕ Close Teen Guide' : '🎓 Teen / Student Guide';
+  }
+  if (!isOpen) return;
+
+  const book = helpMode === 'teen' ? TEEN_GUIDES : PLAIN_GUIDES;
+  const titleCol = helpMode === 'teen' ? '#ffd166' : 'var(--accent)';
+  const renderOne = (g, isExtra = false) => `
+    <div class="${isExtra ? 'all-item' : ''}">
+      <h3 style="color:${titleCol};">${g.title}</h3>
+      <div class="hsec"><b>The Big Idea:</b> ${g.idea}</div>
+      <div class="hsec"><b>What You See in 3D:</b> ${g.view3d}</div>
+      <div class="hsec" style="${g.qa ? '' : 'margin-bottom:0;'}"><b>Try This:</b> ${g.tryIt}</div>
+      ${g.qa ? `<div class="hsec" style="margin-bottom:0; color:#b9d4f2;">${g.qa}</div>` : ''}
+    </div>`;
+
+  if (helpShowAll) {
+    helpPanelEl.innerHTML = Object.values(book).map((g, i) => renderOne(g, i > 0)).join('');
+  } else {
+    const g = (active && book[active.id]) || Object.values(book)[0];
+    helpPanelEl.innerHTML = renderOne(g, false);
+  }
+}
+
+if (helpToggleBtn) {
+  helpToggleBtn.addEventListener('click', () => {
+    helpMode = (helpMode === 'plain') ? null : 'plain';
+    if (!helpMode) helpShowAll = false;
+    renderHelp();
+  });
+}
+if (teenToggleBtn) {
+  teenToggleBtn.addEventListener('click', () => {
+    helpMode = (helpMode === 'teen') ? null : 'teen';
+    if (!helpMode) helpShowAll = false;
+    renderHelp();
+  });
+}
+if (helpAllBtn) {
+  helpAllBtn.addEventListener('click', () => {
+    helpShowAll = !helpShowAll;
+    renderHelp();
+  });
+}
+
+function loadModule(mod) {
+  active = mod;
+  renderHelp();
+  controls.target.set(0, 0, 0);
+  if (Number.isNaN(camera.position.x)) camera.position.set(6, 5, 8);
+  content.clear();
+  mod.state = mod.state || {};
+  for (const c of mod.controls) {
+    if (!(c.id in mod.state)) {
+      mod.state[c.id] = c.type === 'range' ? parseFloat(c.value) : (c.type === 'check' ? !!c.value : c.value);
+    }
+  }
+  mod.build();
+  mod.update();
+  lessonEl.innerHTML = mod.lesson;
+  renderTex(lessonEl, KATEX_OPTS);
+  buildControls(mod);
+  buildQuiz(mod);
+  if (selectEl) selectEl.value = mod.id;
+}
+
+for (const mod of modules) {
+  const opt = document.createElement('option');
+  opt.value = mod.id;
+  opt.textContent = mod.title;
+  selectEl.appendChild(opt);
+}
+selectEl.addEventListener('change', () => {
+  const mod = modules.find(m => m.id === selectEl.value);
+  if (mod) loadModule(mod);
+});
+if (modules.length) loadModule(modules[0]);
+
+function resize() {
+  const w = stage.clientWidth, h = stage.clientHeight;
+  renderer.setSize(w, h);
+  if (chartEl) {
+    const cw = Math.round((chartEl.clientWidth || 340) * Math.min(window.devicePixelRatio || 1, 2));
+    const ch = Math.round((chartEl.clientHeight || 215) * Math.min(window.devicePixelRatio || 1, 2));
+    if (cw > 0 && ch > 0 && (chartEl.width !== cw || chartEl.height !== ch)) {
+      chartEl.width = cw;
+      chartEl.height = ch;
+    }
+  }
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+  if (active) active.update();
+}
+const sliderTip = document.getElementById('sliderTip');
+const controlsContainer = document.getElementById('controls');
+function showSliderTip(inp, clientX) {
+  if (!sliderTip || !inp || inp.type !== 'range') return;
+  const r = inp.getBoundingClientRect();
+  const min = parseFloat(inp.min || '0');
+  const max = parseFloat(inp.max || '100');
+  const val = parseFloat(inp.value);
+  const ratio = max > min ? (val - min) / (max - min) : 0;
+  const thumbX = r.left + 8 + ratio * Math.max(0, r.width - 16);
+  const x = Number.isFinite(clientX) ? Math.max(r.left, Math.min(r.right, clientX)) : thumbX;
+  sliderTip.textContent = inp.value;
+  sliderTip.style.left = `${x}px`;
+  sliderTip.style.top = `${r.top}px`;
+  sliderTip.style.display = 'block';
+}
+if (controlsContainer) {
+  controlsContainer.addEventListener('pointermove', (e) => {
+    const inp = e.target.closest('input[type=range]');
+    if (inp) showSliderTip(inp, e.clientX);
+  });
+  controlsContainer.addEventListener('input', (e) => {
+    const inp = e.target.closest('input[type=range]');
+    if (inp) showSliderTip(inp);
+  });
+  controlsContainer.addEventListener('pointerout', (e) => {
+    const inp = e.target.closest('input[type=range]');
+    if (inp && sliderTip) sliderTip.style.display = 'none';
+  });
+}
+
+window.addEventListener('resize', resize);
+
+let last = performance.now();
+function animate(now) {
+  requestAnimationFrame(animate);
+  const dt = Math.min((now - last) / 1000, 0.05);
+  last = now;
+  if (active && typeof active.tick === 'function') {
+    try { active.tick(dt); } catch (e) { console.error('tick error:', e); active.tick = null; }
+  }
+  controls.update();
+  renderer.render(scene, camera);
+}
+window.addEventListener('load', () => {
+  if (active) {
+    renderTex(document.getElementById('hudEq'), KATEX_OPTS);
+    renderTex(lessonEl, KATEX_OPTS);
+    renderTex(quizEl, KATEX_OPTS);
+  }
+});
+requestAnimationFrame(animate);
+</script>
+<div id="sliderTip"></div>
+</body>
+</html>
