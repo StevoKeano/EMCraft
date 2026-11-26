@@ -895,6 +895,148 @@ In the 3D lab the two prime rings show residue arrows (bright = residue, dim = n
     { q: 'The reciprocity sign (-1)^{((p-1)/2)((q-1)/2)} equals -1 exactly when:', options: ['both p and q are 1 mod 4', 'both p and q are 3 mod 4', 'one prime is 2', 'p = q'], answer: 1 }
   ]
 });
+modules.push({
+  id: 'sec5a_binary_forms',
+  title: '5A. Section V (Part A): Binary Quadratic Forms (Arts. 153-222)',
+  controls: [
+    { type: 'range', id: 'a', label: 'a', min: 1, max: 12, step: 1, value: 3 },
+    { type: 'range', id: 'b', label: 'b', min: -6, max: 6, step: 1, value: 1 },
+    { type: 'range', id: 'c', label: 'c', min: 1, max: 12, step: 1, value: 5 },
+    { type: 'select', id: 'type', label: 'form type', options: ['positive definite', 'indefinite'], value: 'positive definite' }
+  ],
+  build() {
+    Object.assign(this.state, { a: 3, b: 1, c: 5, type: 'positive definite' });
+    this.group = new THREE.Group();
+    this.curve = new THREE.Line(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: 0x7fd1ff }));
+    this.group.add(this.curve);
+    this.pts = new THREE.Group();
+    this.group.add(this.pts);
+    this.grid = new THREE.GridHelper(16, 16, 0x223344, 0x16202c);
+    this.grid.rotation.x = Math.PI / 2;
+    this.group.add(this.grid);
+    content.add(this.group);
+    this.reduced = [];
+  },
+  update() {
+    const st = this.state;
+    const a = st.a, b = st.b, c = st.c, D = b * b - a * c;
+    const posdef = (a > 0 && D < 0);
+    const N = 240, verts = [];
+    // level curve f(x,y)=1: a x^2 + 2bxy + c y^2 = 1
+    for (let i = 0; i <= N; i++) {
+      const t = (i / N) * Math.PI * 2;
+      const x = Math.cos(t), y = Math.sin(t);
+      const q = a * x * x + 2 * b * x * y + c * y * y;
+      if (q <= 1e-9) continue;
+      const s = 1 / Math.sqrt(q);
+      verts.push(new THREE.Vector3(x * s, y * s, 0));
+    }
+    if (verts.length > 2) {
+      const g = new THREE.BufferGeometry().setFromPoints(verts);
+      this.curve.geometry.dispose();
+      this.curve.geometry = g;
+      this.curve.material.color.set(posdef ? 0x7fd1ff : 0xff9f6b);
+    }
+    // lattice points with small f value
+    this.pts.clear();
+    const dotGeo = new THREE.SphereGeometry(0.055, 8, 8);
+    const dotMat = new THREE.MeshBasicMaterial({ color: 0xffe08a });
+    for (let x = -6; x <= 6; x++) for (let y = -6; y <= 6; y++) {
+      const f = a * x * x + 2 * b * x * y + c * y * y;
+      if (f > 0 && f <= 1.05) {
+        const m = new THREE.Mesh(dotGeo, dotMat);
+        m.position.set(x, y, 0.02);
+        this.pts.add(m);
+      }
+    }
+    // Gauss reduction steps (definite: |b|<=a<=c; indefinite: periodic)
+    this.reduced = [];
+    let A = a, B = b, C = c;
+    for (let k = 0; k < 12; k++) {
+      this.reduced.push([A, B, C]);
+      if (posdef) {
+        if (Math.abs(B) > A || A > C) {
+          // reduce: replace (A,B,C) by (C, -B, A) or shift b by multiples of a
+          if (Math.abs(B) > A) {
+            const m = Math.round(B / A);
+            C = C - 2 * m * B + m * m * A;
+            B = B - m * A;
+          } else {
+            const t = A; A = C; C = t; B = -B;
+          }
+        } else break;
+      } else {
+        // indefinite: continued fraction style reduction
+        if (Math.abs(B) > Math.abs(A) || Math.abs(B) > Math.abs(C)) {
+          const m = Math.round(B / A);
+          C = C - 2 * m * B + m * m * A;
+          B = B - m * A;
+          const t = A; A = C; C = t; B = -B;
+        } else break;
+      }
+    }
+    setHud('Binary quadratic forms',
+      'f(x,y)=a x^{2}+2 b x y+c y^{2},\\quad D=b^{2}-a c',
+      [{ k: 'a', v: a }, { k: 'b', v: b }, { k: 'c', v: c }, { k: 'D', v: D }]);
+    this.drawChart(a, b, c, D, posdef);
+  },
+  drawChart(a, b, c, D, posdef) {
+    const ctx = chartEl.getContext('2d');
+    const W = chartEl.width, H = chartEl.height;
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = '#0b1118'; ctx.fillRect(0, 0, W, H);
+    // left: level curve
+    const cx = W * 0.28, cy = H * 0.5, R = Math.min(W, H) * 0.32;
+    ctx.strokeStyle = '#2a3a4a'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(cx - R, cy); ctx.lineTo(cx + R, cy); ctx.moveTo(cx, cy - R); ctx.lineTo(cx, cy + R); ctx.stroke();
+    ctx.strokeStyle = posdef ? '#7fd1ff' : '#ff9f6b'; ctx.lineWidth = 2;
+    ctx.beginPath();
+    let first = true;
+    for (let i = 0; i <= 360; i++) {
+      const t = i * Math.PI / 180;
+      const x = Math.cos(t), y = Math.sin(t);
+      const q = a * x * x + 2 * b * x * y + c * y * y;
+      if (q <= 1e-9) { first = true; continue; }
+      const s = 1 / Math.sqrt(q);
+      const px = cx + x * s * R * 0.5, py = cy - y * s * R * 0.5;
+      if (first) { ctx.moveTo(px, py); first = false; } else ctx.lineTo(px, py);
+    }
+    ctx.stroke();
+    ctx.fillStyle = '#ffe08a';
+    for (let x = -6; x <= 6; x++) for (let y = -6; y <= 6; y++) {
+      const f = a * x * x + 2 * b * x * y + c * y * y;
+      if (f > 0 && f <= 1.05) {
+        ctx.beginPath(); ctx.arc(cx + x * R * 0.5, cy - y * R * 0.5, 2.5, 0, Math.PI * 2); ctx.fill();
+      }
+    }
+    ctx.fillStyle = '#9fb3c8'; ctx.font = '12px monospace';
+    ctx.fillText('f(x,y)=1', cx - 30, cy - R * 0.55);
+    // right: reduced coefficients vs step
+    const ox = W * 0.62, oy = H * 0.5, sx = W * 0.32, sy = H * 0.32;
+    ctx.strokeStyle = '#2a3a4a'; ctx.beginPath(); ctx.moveTo(ox, oy); ctx.lineTo(ox + sx, oy); ctx.moveTo(ox, oy); ctx.lineTo(ox, oy - sy); ctx.stroke();
+    const cols = ['#7fd1ff', '#ff9f6b', '#a0e08a'];
+    const names = ['a', 'b', 'c'];
+    const maxv = Math.max(1, ...this.reduced.flat().map(Math.abs));
+    for (let j = 0; j < 3; j++) {
+      ctx.strokeStyle = cols[j]; ctx.lineWidth = 2; ctx.beginPath();
+      this.reduced.forEach((r, i) => {
+        const px = ox + (i / Math.max(1, this.reduced.length - 1)) * sx;
+        const py = oy - (r[j] / maxv) * sy;
+        if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+      });
+      ctx.stroke();
+      ctx.fillStyle = cols[j]; ctx.fillText(names[j], ox + sx + 6, oy - sy + 14 + j * 16);
+    }
+    ctx.fillStyle = '#9fb3c8'; ctx.fillText('reduction steps', ox + sx * 0.25, oy + 18);
+    ctx.fillStyle = '#9fb3c8'; ctx.fillText('D = ' + D, ox + 8, oy - sy - 8);
+  },
+  tick(dt) { this.group.rotation.z += dt * 0.05; },
+  lesson: String.raw`A binary quadratic form is $f(x,y)=a x^{2}+2 b x y+c y^{2}$ with discriminant $D=b^{2}-a c$. Two forms are equivalent if one is obtained from the other by an $SL_2(\mathbb{Z})$ change of variables, which preserves $D$. For positive definite forms ($a>0$, $D<0$) Gauss reduction requires $|b|\le a\le c$, with $b\ge 0$ when $a=c$; this gives a canonical reduced form. For indefinite forms ($D>0$) reduction is periodic: the reduced forms repeat in a cycle. The level curve $f(x,y)=1$ is an ellipse for definite forms and a hyperbola for indefinite forms.`,
+  quiz: [
+    { q: 'For f(x,y)=3x^2+2xy+5y^2, the discriminant D=b^2-ac is:', options: ['-14', '1', '-4', '14'], answer: 0 },
+    { q: 'Gauss reduction of a positive definite form requires:', options: ['|b| <= a <= c', 'a <= b <= c', 'D > 0', 'b = 0 always'], answer: 0 }
+  ]
+});
 /* === UI CONTROLLER === */
 
 let active = null;
