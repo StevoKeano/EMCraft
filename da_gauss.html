@@ -933,31 +933,65 @@ modules.push({
         { k: 'sign', v: p === q ? '0 (p=q)' : (sgn > 0 ? '+1' : '-1') },
         { k: 'a mod p', v: `${aMod} (${ap === 1 ? 'QR, x=' + roots.join(',') : ap === -1 ? 'NR' : '0'})` }
       ]);
-    // chart: reciprocity matrix
+    // chart: interactive reciprocity matrix + residue bar for p
     const ctx = chartEl.getContext('2d'), W = chartEl.width, H = chartEl.height;
     ctx.clearRect(0, 0, W, H);
     ctx.fillStyle = '#0b1020'; ctx.fillRect(0, 0, W, H);
     const primes = [3, 5, 7, 11, 13], n = primes.length;
-    const cell = Math.min(W, H) / (n + 1.6), ox = (W - cell * n) / 2, oy = (H - cell * n) / 2 + 10;
-    ctx.font = '12px monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    const cell = Math.min(W * 0.48, H - 56) / (n + 1.2);
+    const ox = 46, oy = 34;
+    ctx.font = 'bold 12px monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     for (let i = 0; i < n; i++) {
-      ctx.fillStyle = '#9fb3d9'; ctx.fillText(String(primes[i]), ox + cell * (i + 0.5), oy - 14);
+      ctx.fillStyle = primes[i] === q ? '#ffb36b' : '#9fb3d9';
+      ctx.fillText(String(primes[i]), ox + cell * (i + 0.5), oy - 13);
+      ctx.fillStyle = primes[i] === p ? '#7fd1ff' : '#9fb3d9';
       ctx.fillText(String(primes[i]), ox - 16, oy + cell * (i + 0.5));
     }
     for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) {
-      const v = leg(primes[i], primes[j]);
+      const pi = primes[i], pj = primes[j];
+      const v = leg(pi, pj);
       const x = ox + cell * j, y = oy + cell * i;
       ctx.fillStyle = v === 1 ? '#2f8f5b' : v === -1 ? '#8f2f4a' : '#333a4a';
       ctx.fillRect(x + 1, y + 1, cell - 2, cell - 2);
-      ctx.fillStyle = '#ffffff'; ctx.fillText(v === 1 ? '+' : v === -1 ? '-' : '0', x + cell / 2, y + cell / 2);
+      const isPQ = (pi === p && pj === q);
+      const isQP = (pi === q && pj === p);
+      if (isPQ || isQP) {
+        ctx.strokeStyle = isPQ ? '#ffffff' : '#ffd166';
+        ctx.lineWidth = 3;
+        ctx.strokeRect(x + 2, y + 2, cell - 4, cell - 4);
+      }
+      ctx.fillStyle = '#ffffff';
+      ctx.fillText(v > 0 ? '+1' : (v < 0 ? '-1' : '0'), x + cell / 2, y + cell / 2);
     }
-    ctx.fillStyle = '#cfe3ff'; ctx.font = '13px monospace';
-    ctx.fillText('(p/q) reciprocity matrix', W / 2, H - 12);
+    ctx.textAlign = 'left'; ctx.fillStyle = '#9fb3d9'; ctx.font = '11px monospace';
+    ctx.fillText(`(${p}/${q})=${pq > 0 ? '+1' : pq}, (${q}/${p})=${qp > 0 ? '+1' : qp}, sign=${sgn > 0 ? '+1' : sgn}`, 16, H - 14);
+
+    // Right panel: Legendre symbol (k/p) for k = 1..p-1 highlighting selected a mod p
+    const rx0 = ox + cell * n + 28, rw = W - rx0 - 18;
+    const midY = oy + (cell * n) * 0.52, barH = (cell * n) * 0.34;
+    ctx.fillStyle = '#7fd1ff'; ctx.font = 'bold 12px monospace';
+    ctx.fillText(`Residues mod p=${p} (a≡${aMod})`, rx0, oy - 13);
+    ctx.strokeStyle = '#334866'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(rx0, midY); ctx.lineTo(rx0 + rw, midY); ctx.stroke();
+    const bw = rw / Math.max(1, p - 1);
+    for (let k = 1; k < p; k++) {
+      const lv = leg(k, p);
+      const bx = rx0 + (k - 1) * bw;
+      const isSel = (k === aMod);
+      ctx.fillStyle = lv === 1 ? '#2f8f5b' : '#8f2f4a';
+      if (lv === 1) ctx.fillRect(bx + 2, midY - barH, bw - 4, barH);
+      else ctx.fillRect(bx + 2, midY, bw - 4, barH);
+      if (isSel) {
+        ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2.5;
+        ctx.strokeRect(bx + 1, lv === 1 ? midY - barH : midY, bw - 2, barH);
+      }
+      ctx.fillStyle = isSel ? '#ffd166' : '#cfe8ff';
+      ctx.font = '11px monospace'; ctx.textAlign = 'center';
+      ctx.fillText(String(k), bx + bw / 2, midY + barH + 14);
+    }
   },
   tick(dt) {
-    this.ringP.rotation.y += dt * 0.35;
-    this.ringQ.rotation.y -= dt * 0.35;
-    this.plane.rotation.z = Math.sin(performance.now() * 0.0006) * 0.08;
+    this.g.rotation.y += dt * 0.15;
   },
   lesson: String.raw`<b>Euler's criterion.</b> For an odd prime $p$ and $a\not\equiv 0\pmod p$, the Legendre symbol is
 $$\left(\frac{a}{p}\right)\equiv a^{\frac{p-1}{2}}\pmod p,\qquad \left(\frac{a}{p}\right)\in\{+1,-1\}.$$
