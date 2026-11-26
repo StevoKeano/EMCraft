@@ -1244,6 +1244,120 @@ modules.push({
     { q: 'In the exclusion sieve, a candidate divisor d survives modulus p when:', options: ['d is prime', 'd^2 ≡ N mod p', 'd divides p-1', 'd ≡ 0 mod p'], answer: 1 }
   ]
 });
+modules.push({
+  id: 'sec7_cyclotomic_17gon',
+  title: '7. Section VII: Cyclotomic Equations & 17-Gon (Arts. 335-366)',
+  controls: [
+    { type: 'select', id: 'n', label: 'n (Fermat prime)', options: [3, 5, 7, 17], value: 17 },
+    { type: 'range', id: 'per', label: 'Gaussian period size', min: 1, max: 8, step: 1, value: 4 },
+    { type: 'check', id: 'arcs', label: 'Show construction arcs', value: true }
+  ],
+  build() {
+    const st = this.state;
+    st.n = 17; st.per = 4; st.arcs = true;
+    st.grp = new THREE.Group(); content.add(st.grp);
+    st.ring = new THREE.Mesh(
+      new THREE.TorusGeometry(3, 0.035, 12, 128),
+      new THREE.MeshStandardMaterial({ color: 0x2a4a6a, metalness: 0.4, roughness: 0.5 })
+    );
+    st.ring.rotation.x = Math.PI / 2; st.grp.add(st.ring);
+    st.verts = new THREE.Group(); st.grp.add(st.verts);
+    st.arcGroup = new THREE.Group(); st.grp.add(st.arcGroup);
+    st.spokes = new THREE.Group(); st.grp.add(st.spokes);
+    st.labels = new THREE.Group(); st.grp.add(st.labels);
+    st.axis = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.02, 0.02, 6.4, 8),
+      new THREE.MeshStandardMaterial({ color: 0x88aacc })
+    );
+    st.axis.rotation.x = Math.PI / 2; st.grp.add(st.axis);
+    st.grp.rotation.x = -0.55;
+    st.grp.position.y = -0.2;
+  },
+  update() {
+    const st = this.state, n = st.n, per = Math.min(st.per, n - 1);
+    const phi = (k) => { let c = 0; for (let i = 1; i <= k; i++) if (k % i === 0) c++; return c; };
+    const phiN = phi(n);
+    const R = 3;
+    // clear
+    [st.verts, st.arcGroup, st.spokes, st.labels].forEach(g => {
+      while (g.children.length) { const c = g.children.pop(); if (c.geometry) c.geometry.dispose(); if (c.material) c.material.dispose(); }
+    });
+    const prim = [];
+    for (let k = 1; k < n; k++) if (gcd(k, n) === 1) prim.push(k);
+    // vertices
+    for (let k = 0; k < n; k++) {
+      const a = 2 * Math.PI * k / n;
+      const isPrim = gcd(k, n) === 1;
+      const m = new THREE.Mesh(
+        new THREE.SphereGeometry(isPrim ? 0.11 : 0.07, 12, 12),
+        new THREE.MeshStandardMaterial({ color: isPrim ? 0xffd166 : 0x6fa8dc, emissive: isPrim ? 0x553300 : 0x112233 })
+      );
+      m.position.set(R * Math.cos(a), R * Math.sin(a), 0);
+      st.verts.add(m);
+      // spoke
+      const g = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 0, 0), m.position.clone()]);
+      st.spokes.add(new THREE.Line(g, new THREE.LineBasicMaterial({ color: 0x335577, transparent: true, opacity: 0.5 })));
+    }
+    // Gaussian periods: group primitive roots by k mod per (periods of size per)
+    const periods = [];
+    for (let j = 0; j < per; j++) {
+      const ks = prim.filter(k => k % per === j);
+      if (ks.length) periods.push({ j, ks, sum: ks.reduce((s, k) => s + Math.cos(2 * Math.PI * k / n), 0) });
+    }
+    // arcs for periods
+    if (st.arcs) {
+      periods.forEach((p, idx) => {
+        const col = new THREE.Color().setHSL(idx / Math.max(periods.length, 1), 0.75, 0.55);
+        p.ks.forEach(k => {
+          const a0 = 2 * Math.PI * k / n, a1 = 2 * Math.PI * (k + 1) / n;
+          const pts = [];
+          for (let t = 0; t <= 12; t++) {
+            const a = a0 + (a1 - a0) * t / 12;
+            pts.push(new THREE.Vector3(R * 1.06 * Math.cos(a), R * 1.06 * Math.sin(a), 0));
+          }
+          const g = new THREE.BufferGeometry().setFromPoints(pts);
+          st.arcGroup.add(new THREE.Line(g, new THREE.LineBasicMaterial({ color: col, linewidth: 2 })));
+        });
+      });
+    }
+    // labels
+    const mkLabel = (txt, x, y, col) => {
+      const cv = document.createElement('canvas'); cv.width = 128; cv.height = 64;
+      const ctx = cv.getContext('2d');
+      ctx.fillStyle = col; ctx.font = 'bold 34px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(txt, 64, 32);
+      const tex = new THREE.CanvasTexture(cv);
+      const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true }));
+      sp.position.set(x, y, 0.15); sp.scale.set(0.9, 0.45, 1);
+      st.labels.add(sp);
+    };
+    for (let k = 0; k < n; k++) {
+      const a = 2 * Math.PI * k / n;
+      mkLabel(String(k), R * 1.28 * Math.cos(a), R * 1.28 * Math.sin(a), gcd(k, n) === 1 ? '#ffd166' : '#9fc5e8');
+    }
+    // HUD
+    const constructible = (n === 3 || n === 5 || n === 17) ? 'yes' : 'no';
+    setHud('Cyclotomic equations', 'x^{n}-1=0,\\quad \\Phi_n(x),\\quad \\cos\\frac{2\\pi}{17}',
+      [{ k: 'n', v: String(n) }, { k: 'phi(n)', v: String(phiN) }, { k: 'period', v: String(per) }, { k: 'constructible', v: constructible }]);
+    st._periods = periods; st._prim = prim; st._phiN = phiN;
+  },
+  tick(dt) {
+    const st = this.state;
+    st.grp.rotation.z += dt * 0.12;
+    st.grp.rotation.x = -0.55 + Math.sin(performance.now() * 0.0004) * 0.08;
+  },
+  lesson: String.raw`<b>Roots of unity and cyclotomic polynomials.</b> The equation $x^{n}-1=0$ has exactly $n$ complex roots $\zeta^{k}=e^{2\pi i k/n}$, $k=0,\dots,n-1$, the $n$-th roots of unity. The primitive roots are those with $\gcd(k,n)=1$, and there are $\varphi(n)$ of them. The cyclotomic polynomial
+$$\Phi_n(x)=\prod_{\gcd(k,n)=1}(x-\zeta^{k})$$
+has degree $\varphi(n)$ and integer coefficients; moreover $x^{n}-1=\prod_{d\mid n}\Phi_d(x)$.
+
+<b>Gaussian periods.</b> Gauss grouped the primitive roots into sums (periods) of equal size. For $n=17$, $\varphi(17)=16$, and the periods of size $4$ give sums such as $\eta_j=\sum_{k\equiv j\pmod 4}\zeta^{k}$. These periods satisfy a chain of quadratic resolvents: the period of size $4$ determines a quadratic over the period of size $8$, which determines a quadratic over $\mathbb{Q}$. Each step is a square root, hence constructible by straightedge and compass.
+
+<b>Fermat primes.</b> A regular $n$-gon is constructible iff $n=2^{a}p_1\cdots p_r$ where the $p_i$ are distinct Fermat primes $p_i=2^{2^{m}}+1$. Since $17=2^{4}+1$ is a Fermat prime, the regular $17$-gon is constructible; Gauss discovered this in 1796. The construction reduces to solving the cyclotomic equation through nested quadratic extensions, exactly the Gaussian period chain shown here.`,
+  quiz: [
+    { q: 'What is the degree of the cyclotomic polynomial Phi_n(x)?', options: ['n', 'phi(n)', 'n-1', '2^n'], answer: 1 },
+    { q: 'Why is the regular 17-gon constructible with straightedge and compass?', options: ['17 is prime', '17 = 2^4 + 1 is a Fermat prime', '17 is odd', 'phi(17) = 16 is a power of 2 only'], answer: 1 }
+  ]
+});
 /* === UI CONTROLLER === */
 
 let active = null;
