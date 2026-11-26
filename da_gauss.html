@@ -342,6 +342,241 @@ Thus congruences may be added, subtracted, and multiplied just like equations.
     { q: 'If $a \\equiv b \\pmod{m}$ and $c \\equiv d \\pmod{m}$, which is always true?', options: ['$ac \\equiv bd \\pmod{m}$', '$a/c \\equiv b/d \\pmod{m}$', '$a^b \\equiv c^d \\pmod{m}$', '$a-b = m$'], answer: 0 }
   ]
 });
+modules.push({
+  id: 'sec2_linear_crt',
+  title: '2. Section II: Linear Congruences & CRT (Arts. 13-44)',
+  controls: [
+    { id: 'a', type: 'range', label: 'a', min: 1, max: 20, step: 1, value: 6 },
+    { id: 'b', type: 'range', label: 'b', min: 0, max: 20, step: 1, value: 8 },
+    { id: 'm', type: 'range', label: 'm', min: 2, max: 24, step: 1, value: 10 },
+    { id: 'm1', type: 'range', label: 'm1', min: 2, max: 12, step: 1, value: 5 },
+    { id: 'm2', type: 'range', label: 'm2', min: 2, max: 12, step: 1, value: 7 }
+  ],
+  build() {
+    const st = this.state;
+    Object.assign(st, { a: 6, b: 8, m: 10, m1: 5, m2: 7 });
+    this.group = new THREE.Group();
+    content.add(this.group);
+
+    // Ring 1: residues mod m1 in the XZ plane
+    this.ring1 = new THREE.Group();
+    this.ring1.position.set(0, 0, 0);
+    this.group.add(this.ring1);
+    this.ring1Dots = [];
+    for (let i = 0; i < 12; i++) {
+      const dot = new THREE.Mesh(
+        new THREE.SphereGeometry(0.09, 12, 12),
+        new THREE.MeshBasicMaterial({ color: 0x7fd1ff })
+      );
+      this.ring1.add(dot);
+      this.ring1Dots.push(dot);
+    }
+    const torus1 = new THREE.Mesh(
+      new THREE.TorusGeometry(2.2, 0.035, 8, 64),
+      new THREE.MeshBasicMaterial({ color: 0x3a6f9a })
+    );
+    torus1.rotation.x = Math.PI / 2;
+    this.ring1.add(torus1);
+
+    // Ring 2: residues mod m2 in the XY plane (orthogonal)
+    this.ring2 = new THREE.Group();
+    this.group.add(this.ring2);
+    this.ring2Dots = [];
+    for (let i = 0; i < 12; i++) {
+      const dot = new THREE.Mesh(
+        new THREE.SphereGeometry(0.09, 12, 12),
+        new THREE.MeshBasicMaterial({ color: 0xffb86b })
+      );
+      this.ring2.add(dot);
+      this.ring2Dots.push(dot);
+    }
+    const torus2 = new THREE.Mesh(
+      new THREE.TorusGeometry(2.2, 0.035, 8, 64),
+      new THREE.MeshBasicMaterial({ color: 0x9a6a3a })
+    );
+    this.ring2.add(torus2);
+
+    // CRT solution marker
+    this.marker = new THREE.Mesh(
+      new THREE.SphereGeometry(0.16, 16, 16),
+      new THREE.MeshBasicMaterial({ color: 0xff5d5d })
+    );
+    this.group.add(this.marker);
+
+    // Lattice grid of CRT solutions mod M
+    this.lattice = new THREE.Group();
+    this.group.add(this.lattice);
+    this.latticeDots = [];
+    for (let i = 0; i < 144; i++) {
+      const d = new THREE.Mesh(
+        new THREE.SphereGeometry(0.045, 8, 8),
+        new THREE.MeshBasicMaterial({ color: 0x8fe388 })
+      );
+      this.lattice.add(d);
+      this.latticeDots.push(d);
+    }
+
+    // Linear congruence solution markers along a line
+    this.solLine = new THREE.Group();
+    this.group.add(this.solLine);
+    this.solDots = [];
+    for (let i = 0; i < 24; i++) {
+      const d = new THREE.Mesh(
+        new THREE.SphereGeometry(0.07, 10, 10),
+        new THREE.MeshBasicMaterial({ color: 0xd8a0ff })
+      );
+      this.solLine.add(d);
+      this.solDots.push(d);
+    }
+    const lineGeo = new THREE.BufferGeometry().setFromPoints([
+      new THREE.Vector3(-3.2, -2.6, 0),
+      new THREE.Vector3(3.2, -2.6, 0)
+    ]);
+    this.solLine.add(new THREE.Line(lineGeo, new THREE.LineBasicMaterial({ color: 0x6a4a8a })));
+
+    camera.position.set(5.5, 4.5, 6.5);
+    camera.lookAt(0, 0, 0);
+  },
+  update() {
+    const st = this.state;
+    const a = st.a, b = st.b, m = st.m, m1 = st.m1, m2 = st.m2;
+    const gcd = (x, y) => { while (y) { const t = x % y; x = y; y = t; } return x; };
+    const g = gcd(a, m);
+    const solvable = b % g === 0;
+    const M = m1 * m2;
+    const coprime = gcd(m1, m2) === 1;
+
+    // Euler totient
+    let phi = 0;
+    for (let k = 1; k <= m; k++) if (gcd(k, m) === 1) phi++;
+
+    // CRT solution: brute force mod M
+    let crt = -1;
+    if (coprime) {
+      for (let x = 0; x < M; x++) {
+        if (x % m1 === 1 && x % m2 === 2) { crt = x; break; }
+      }
+    }
+
+    // Ring 1 dots
+    for (let i = 0; i < 12; i++) {
+      const d = this.ring1Dots[i];
+      if (i < m1) {
+        const ang = (i / m1) * Math.PI * 2;
+        d.position.set(2.2 * Math.cos(ang), 0, 2.2 * Math.sin(ang));
+        d.visible = true;
+        d.material.color.setHex(i === 1 % m1 ? 0xff5d5d : 0x7fd1ff);
+      } else d.visible = false;
+    }
+    // Ring 2 dots
+    for (let i = 0; i < 12; i++) {
+      const d = this.ring2Dots[i];
+      if (i < m2) {
+        const ang = (i / m2) * Math.PI * 2;
+        d.position.set(2.2 * Math.cos(ang), 2.2 * Math.sin(ang), 0);
+        d.visible = true;
+        d.material.color.setHex(i === 2 % m2 ? 0xff5d5d : 0xffb86b);
+      } else d.visible = false;
+    }
+
+    // Marker at CRT intersection (projected)
+    if (coprime && crt >= 0) {
+      const t = crt / M;
+      this.marker.position.set(2.2 * Math.cos(t * Math.PI * 2), 2.2 * Math.sin(t * Math.PI * 2), 0);
+      this.marker.visible = true;
+    } else this.marker.visible = false;
+
+    // Lattice grid: CRT solutions mod M (only one if coprime)
+    let li = 0;
+    for (let x = 0; x < M && li < 144; x++) {
+      if (x % m1 === 1 && x % m2 === 2) {
+        const d = this.latticeDots[li++];
+        const row = Math.floor(x / 12), col = x % 12;
+        d.position.set(-3 + col * 0.5, -3.5 + row * 0.5, -1.5);
+        d.visible = true;
+      }
+    }
+    for (let i = li; i < 144; i++) this.latticeDots[i].visible = false;
+
+    // Linear congruence solutions mod m
+    let si = 0;
+    if (solvable) {
+      for (let x = 0; x < m && si < 24; x++) {
+        if ((a * x - b) % m === 0) {
+          const d = this.solDots[si++];
+          d.position.set(-3 + (x / Math.max(m - 1, 1)) * 6, -2.6, 0);
+          d.visible = true;
+        }
+      }
+    }
+    for (let i = si; i < 24; i++) this.solDots[i].visible = false;
+
+    // Chart
+    const ctx = chartEl.getContext('2d');
+    const W = chartEl.width, H = chartEl.height;
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = '#0b1220'; ctx.fillRect(0, 0, W, H);
+
+    // Left: solution count g vs m
+    ctx.strokeStyle = '#2a3a55'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(40, H - 40); ctx.lineTo(W / 2 - 20, H - 40); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(40, H - 40); ctx.lineTo(40, 40); ctx.stroke();
+    ctx.fillStyle = '#7fd1ff'; ctx.font = '12px monospace';
+    ctx.fillText('g = gcd(a,m) vs m', 50, 30);
+    ctx.strokeStyle = '#7fd1ff'; ctx.lineWidth = 2; ctx.beginPath();
+    for (let mm = 2; mm <= 24; mm++) {
+      const gg = gcd(a, mm);
+      const px = 40 + ((mm - 2) / 22) * (W / 2 - 60);
+      const py = H - 40 - (gg / 24) * (H - 80);
+      if (mm === 2) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+    }
+    ctx.stroke();
+    ctx.fillStyle = '#ff5d5d';
+    ctx.beginPath();
+    ctx.arc(40 + ((m - 2) / 22) * (W / 2 - 60), H - 40 - (g / 24) * (H - 80), 4, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Right: CRT lattice points mod M
+    ctx.fillStyle = '#ffb86b'; ctx.font = '12px monospace';
+    ctx.fillText('CRT lattice mod M = ' + M, W / 2 + 10, 30);
+    ctx.strokeStyle = '#2a3a55';
+    ctx.beginPath(); ctx.moveTo(W / 2 + 10, H - 40); ctx.lineTo(W - 20, H - 40); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(W / 2 + 10, H - 40); ctx.lineTo(W / 2 + 10, 40); ctx.stroke();
+    if (coprime) {
+      for (let x = 0; x < M; x++) {
+        if (x % m1 === 1 && x % m2 === 2) {
+          const px = W / 2 + 10 + (x / Math.max(M - 1, 1)) * (W / 2 - 40);
+          const py = H - 40 - 0.5 * (H - 80);
+          ctx.fillStyle = '#8fe388';
+          ctx.beginPath(); ctx.arc(px, py, 5, 0, Math.PI * 2); ctx.fill();
+        }
+      }
+    } else {
+      ctx.fillStyle = '#ff5d5d'; ctx.font = '12px monospace';
+      ctx.fillText('moduli not coprime', W / 2 + 20, H / 2);
+    }
+
+    setHud('Linear congruences & CRT',
+      'a x \\equiv b \\pmod{m},\\quad x \\equiv r_1 \\pmod{m_1},\\; x \\equiv r_2 \\pmod{m_2}',
+      [
+        { k: 'gcd(a,m)', v: String(g) },
+        { k: 'solutions', v: solvable ? String(g) : '0' },
+        { k: 'M', v: String(M) },
+        { k: 'phi(m)', v: String(phi) }
+      ]);
+  },
+  tick(dt) {
+    this.group.rotation.y += dt * 0.15;
+  },
+  lesson: String.raw`<h3>Linear Congruences & the Chinese Remainder Theorem</h3>
+<p>A linear congruence $a x \equiv b \pmod{m}$ is solvable exactly when $g = \gcd(a,m)$ divides $b$. In that case it has exactly $g$ distinct solutions modulo $m$.</p>
+<p>The Chinese Remainder Theorem: if $\gcd(m_1,m_2)=1$, the system $x \equiv r_1 \pmod{m_1}$, $x \equiv r_2 \pmod{m_2}$ has a unique solution modulo $M = m_1 m_2$. The two orthogonal residue rings intersect at that unique point.</p>
+<p>Euler's totient $\phi(m)$ counts the residues $1 \le k \le m$ with $\gcd(k,m)=1$.</p>`,
+  quiz: [
+    { q: 'When is a x ≡ b (mod m) solvable?', options: ['Always', 'When gcd(a,m) divides b', 'When b is prime', 'When m is prime'], answer: 1 },
+    { q: 'For coprime m1 and m2, the CRT solution is unique modulo:', options: ['m1 + m2', 'm1 - m2', 'm1 * m2', 'gcd(m1,m2)'], answer: 2 }
+  ]
+});
 /* === UI CONTROLLER === */
 
 let active = null;
