@@ -460,41 +460,68 @@ modules.push({
     ctx.fillStyle = '#0b1220'; ctx.fillRect(0, 0, W, H);
 
     const m = st.m;
-    const pad = 40;
-    const x0 = pad, x1 = W - pad, y0 = H - pad, y1 = pad;
-    const N = 12;
-    const vals = [];
-    for (let k = 0; k <= N; k++) vals.push(st.a + k * m);
-    const minV = Math.min(...vals), maxV = Math.max(...vals);
-    const sx = (k) => x0 + (k / N) * (x1 - x0);
-    const sy = (v) => y0 - ((v - minV) / (maxV - minV || 1)) * (y0 - y1);
+    const padL = 44, padR = 20, padT = 30, padB = 34;
+    const x0 = padL, x1 = W - padR, y0 = H - padB, y1 = padT;
+    const nMin = -30, nMax = 30;
+    const rMin = st.conv === 'absolutely least' ? -Math.floor(m / 2) : 0;
+    const rMax = st.conv === 'absolutely least' ? Math.floor(m / 2) : m - 1;
 
-    // axes
+    const sx = (n) => x0 + ((n - nMin) / (nMax - nMin)) * (x1 - x0);
+    const sy = (r) => y0 - ((r - rMin) / (Math.max(1, rMax - rMin))) * (y0 - y1);
+
+    // Axes & zero residue baseline
     ctx.strokeStyle = '#2a4a6a'; ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y0); ctx.moveTo(x0, y0); ctx.lineTo(x0, y1); ctx.stroke();
-
-    // staircase
-    ctx.strokeStyle = '#7fd1ff'; ctx.lineWidth = 2;
     ctx.beginPath();
-    for (let k = 0; k <= N; k++) {
-      const x = sx(k), y = sy(vals[k]);
-      if (k === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    ctx.moveTo(x0, y0); ctx.lineTo(x1, y0);
+    ctx.moveTo(x0, y0); ctx.lineTo(x0, y1);
+    ctx.stroke();
+
+    const yZero = sy(0);
+    ctx.strokeStyle = '#36587a'; ctx.setLineDash([4, 4]);
+    ctx.beginPath(); ctx.moveTo(x0, yZero); ctx.lineTo(x1, yZero); ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Sawtooth residue wave for n in [-30, 30]
+    ctx.strokeStyle = '#3b6d9c'; ctx.lineWidth = 1.6;
+    ctx.beginPath();
+    for (let n = nMin; n <= nMax; n++) {
+      const r = this.residue(n, m, st.conv);
+      const prevR = n > nMin ? this.residue(n - 1, m, st.conv) : r;
+      const x = sx(n), y = sy(r);
+      if (n === nMin || Math.abs(r - prevR) > 1) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
     }
     ctx.stroke();
 
-    // points
-    for (let k = 0; k <= N; k++) {
-      const x = sx(k), y = sy(vals[k]);
-      const isWrap = k > 0 && vals[k] % m === vals[0] % m;
-      ctx.fillStyle = isWrap ? '#ff6b6b' : '#ffb86b';
-      ctx.beginPath(); ctx.arc(x, y, isWrap ? 5 : 3.5, 0, Math.PI * 2); ctx.fill();
+    // Small residue dots for each integer
+    for (let n = nMin; n <= nMax; n++) {
+      const r = this.residue(n, m, st.conv);
+      ctx.fillStyle = (n % m === 0) ? '#ffe08a' : '#4ea8de';
+      ctx.beginPath(); ctx.arc(sx(n), sy(r), n % m === 0 ? 3 : 2, 0, Math.PI * 2); ctx.fill();
     }
 
-    // labels
-    ctx.fillStyle = '#9fb8d0'; ctx.font = '12px monospace';
-    ctx.fillText('a + k m, k = 0..12', x0 + 6, y1 + 14);
-    ctx.fillStyle = congruent ? '#7fffa0' : '#ff8a8a';
-    ctx.fillText(congruent ? 'congruent: wrap hits a' : 'not congruent', x1 - 150, y1 + 14);
+    // Congruence level line if a ≡ b (mod m)
+    const ax = sx(st.a), ay = sy(ra);
+    const bx = sx(st.b), by = sy(rb);
+    if (congruent) {
+      ctx.strokeStyle = '#6bff95'; ctx.lineWidth = 1.5; ctx.setLineDash([5, 4]);
+      ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(bx, by); ctx.stroke();
+      ctx.setLineDash([]);
+    }
+
+    // Marker for a (cyan) and b (amber)
+    ctx.fillStyle = '#7fd1ff';
+    ctx.beginPath(); ctx.arc(ax, ay, 6, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#ffb86b';
+    ctx.beginPath(); ctx.arc(bx, by, 6, 0, Math.PI * 2); ctx.fill();
+
+    // Labels
+    ctx.fillStyle = '#9fb8d0'; ctx.font = '11px monospace';
+    ctx.fillText(`r(n) = n mod ${m} (${st.conv})`, x0 + 4, 18);
+    ctx.fillText(String(rMax), 10, y1 + 4);
+    ctx.fillText(String(rMin), 10, y0);
+    ctx.fillStyle = '#7fd1ff'; ctx.fillText(`a=${st.a}→${ra}`, Math.min(x1 - 72, Math.max(x0 + 4, ax - 24)), ay - 10);
+    ctx.fillStyle = '#ffb86b'; ctx.fillText(`b=${st.b}→${rb}`, Math.min(x1 - 72, Math.max(x0 + 4, bx - 24)), by + 18);
   },
   tick(dt) {
     this.group.rotation.y += dt * 0.15;
