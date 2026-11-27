@@ -574,6 +574,10 @@ modules.push({
     );
     this.group.add(this.marker);
 
+    // 3D CRT coupled helix trajectory through (2.2*cos(2πt/m1), 2.2*sin(2πt/m2), 2.2*sin(2πt/m1))
+    this.crtHelix = new THREE.Group();
+    this.group.add(this.crtHelix);
+
     // Lattice grid of CRT solutions mod M
     this.lattice = new THREE.Group();
     this.group.add(this.lattice);
@@ -657,11 +661,50 @@ modules.push({
     }
 
     // Marker at coupled 3D torus coordinates (ang1 on XZ, ang2 on XY)
+    // Rebuild Section 2 3D CRT helix for t in [0, lcm(m1, m2)]
+    while (this.crtHelix.children.length) {
+      const c = this.crtHelix.children.pop();
+      c.geometry?.dispose?.();
+      c.material?.dispose?.();
+    }
+    const segs = Math.min(720, Math.max(96, lcmM * 18));
+    const hPts = [];
+    for (let s = 0; s <= segs; s++) {
+      const t = (s / segs) * lcmM;
+      const ang1 = (t / m1) * Math.PI * 2;
+      const ang2 = (t / m2) * Math.PI * 2;
+      hPts.push(new THREE.Vector3(2.2 * Math.cos(ang1), 2.2 * Math.sin(ang2), 2.2 * Math.sin(ang1)));
+    }
+    this.crtHelix.add(new THREE.Line(
+      new THREE.BufferGeometry().setFromPoints(hPts),
+      new THREE.LineBasicMaterial({ color: 0x56cfe1, transparent: true, opacity: 0.7 })
+    ));
+
+    // Integer step beads t = 0 .. lcmM - 1 along the helix
+    const stepGeo = new THREE.SphereGeometry(0.055, 8, 8);
+    const stepMat = new THREE.MeshBasicMaterial({ color: 0x8fe388 });
+    for (let t = 0; t < lcmM; t++) {
+      const ang1 = (t / m1) * Math.PI * 2;
+      const ang2 = (t / m2) * Math.PI * 2;
+      const bDot = new THREE.Mesh(stepGeo, stepMat);
+      bDot.position.set(2.2 * Math.cos(ang1), 2.2 * Math.sin(ang2), 2.2 * Math.sin(ang1));
+      this.crtHelix.add(bDot);
+    }
+
     if (crtSolvable && crt >= 0) {
       const a1 = (r1 / m1) * Math.PI * 2;
       const a2 = (r2 / m2) * Math.PI * 2;
-      this.marker.position.set(2.2 * Math.cos(a1), 2.2 * Math.sin(a2), 2.2 * Math.sin(a1));
+      const mx = 2.2 * Math.cos(a1), my = 2.2 * Math.sin(a2), mz = 2.2 * Math.sin(a1);
+      this.marker.position.set(mx, my, mz);
       this.marker.visible = true;
+
+      // Projection guide lines from floating red CRT marker to Ring 1 (y=0) and Ring 2 (z=0)
+      const p1 = new THREE.Vector3(mx, 0, mz);
+      const p2 = new THREE.Vector3(mx, my, 0);
+      this.crtHelix.add(new THREE.Line(
+        new THREE.BufferGeometry().setFromPoints([p1, new THREE.Vector3(mx, my, mz), p2]),
+        new THREE.LineBasicMaterial({ color: 0xff5d5d, transparent: true, opacity: 0.65 })
+      ));
     } else this.marker.visible = false;
 
     // Lattice grid: all CRT solutions mod M = m1*m2
