@@ -778,15 +778,15 @@ modules.push({
     }
 
     setHud('Linear congruences & CRT',
-      'a x \\equiv b \\pmod{m},\\quad x \\equiv ' + r1 + ' \\pmod{' + m1 + '},\\; x \\equiv ' + r2 + ' \\pmod{' + m2 + '}',
-      [
-        { k: 'lin sols', v: solvable ? String(g) + ' (gcd=' + g + ')' : '0 (gcd=' + g + ')' },
-        { k: 'CRT x', v: crtSolvable ? `${crt} (mod ${lcmM})` : 'none' },
-        { k: 'M = m1·m2', v: String(M) },
-        { k: 'phi(m)', v: String(phi) }
-      ]);
-  },
-  tick(dt) {
+        'x \\equiv ' + r1 + ' \\pmod{' + m1 + '},\\quad x \\equiv ' + r2 + ' \\pmod{' + m2 + '}',
+        [
+          { k: 'gcd(m1,m2)', v: `${g12} (${g12 === 1 ? 'coprime — all ' + M + ' states' : 'shared factor — loops early'})` },
+          { k: 'helix period', v: `lcm = ${lcmM} of ${M} steps` },
+          { k: 'CRT x', v: crtSolvable ? `${crt} (mod ${lcmM})` : `none (r1−r2 not div by ${g12})` },
+          { k: 'lin ax≡b', v: solvable ? `${g} sol${g > 1 ? 's' : ''} (gcd=${g})` : `0 sols (gcd=${g})` }
+        ]);
+    },
+    tick(dt) {
     this.group.rotation.y += dt * 0.15;
   },
   lesson: String.raw`<h3>Linear Congruences & the Chinese Remainder Theorem</h3>
