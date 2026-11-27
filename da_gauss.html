@@ -1958,12 +1958,6 @@ if (hideBtn && unhideBtn && hudEl) {
     hudEl.classList.remove('hud-hidden');
     unhideBtn.classList.remove('visible');
   });
-
-let last = performance.now();
-function animate(now) {
-  window.addEventListener('load', () => {
-  if (active) {
-    renderTex(document.getElementById('hudEq'), KATEX_OPTS);
     renderTex(lessonEl, KATEX_OPTS);
     renderTex(quizEl, KATEX_OPTS);
   }
