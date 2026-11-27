@@ -287,6 +287,10 @@ modules.push({
     const hub = new THREE.Mesh(new THREE.SphereGeometry(0.22, 16, 16), new THREE.MeshStandardMaterial({ color: 0x9fb8d0 }));
     this.group.add(hub);
 
+    // 3D modular helix group (lifted integer staircase above the clock)
+    this.helixGroup = new THREE.Group();
+    this.group.add(this.helixGroup);
+
     // lights
     const l1 = new THREE.DirectionalLight(0xffffff, 1.2); l1.position.set(5, 8, 5); content.add(l1);
     const l2 = new THREE.PointLight(0x7fd1ff, 0.8, 20); l2.position.set(-4, 3, -4); content.add(l2);
@@ -379,6 +383,65 @@ modules.push({
     this.arc.rotation.order = 'YXZ';
     this.arc.rotation.set(Math.PI / 2, -startAng, 0);
     this.arc.visible = shortSteps > 0;
+
+    // Rebuild 3D modular helix from min(0, a, b) to max(m, a, b)
+    while (this.helixGroup.children.length) {
+      const c = this.helixGroup.children.pop();
+      c.geometry?.dispose?.();
+      c.material?.dispose?.();
+    }
+    const pitch = 0.95; // vertical rise per full turn of m
+    const rHelix = 3.0;
+    const minN = Math.min(0, st.a, st.b);
+    const maxN = Math.max(m, st.a, st.b);
+    const span = Math.max(1, maxN - minN);
+    const segs = Math.min(480, Math.max(64, span * 16));
+    const pts = [];
+    for (let s = 0; s <= segs; s++) {
+      const t = minN + (s / segs) * span;
+      const ang = (t / m) * Math.PI * 2;
+      const y = (t / m) * pitch;
+      pts.push(new THREE.Vector3(Math.cos(ang) * rHelix, y, Math.sin(ang) * rHelix));
+    }
+    const helixLine = new THREE.Line(
+      new THREE.BufferGeometry().setFromPoints(pts),
+      new THREE.LineBasicMaterial({ color: 0x4ea8de, transparent: true, opacity: 0.75 })
+    );
+    this.helixGroup.add(helixLine);
+
+    // Integer beads along the helix + vertical drop-lines for a and b
+    const beadGeo = new THREE.SphereGeometry(0.065, 10, 10);
+    const beadMat = new THREE.MeshStandardMaterial({ color: 0x6c92b8, emissive: 0x102030 });
+    for (let n = minN; n <= maxN; n++) {
+      const ang = (n / m) * Math.PI * 2;
+      const y = (n / m) * pitch;
+      const bead = new THREE.Mesh(beadGeo, beadMat);
+      bead.position.set(Math.cos(ang) * rHelix, y, Math.sin(ang) * rHelix);
+      this.helixGroup.add(bead);
+    }
+
+    const addLiftedMarker = (val, colorHex, emissiveHex) => {
+      const ang = (val / m) * Math.PI * 2;
+      const y = (val / m) * pitch;
+      const pos = new THREE.Vector3(Math.cos(ang) * rHelix, y, Math.sin(ang) * rHelix);
+      const base = new THREE.Vector3(Math.cos(ang) * rHelix, 0, Math.sin(ang) * rHelix);
+
+      const node = new THREE.Mesh(
+        new THREE.SphereGeometry(0.18, 16, 16),
+        new THREE.MeshStandardMaterial({ color: colorHex, emissive: emissiveHex })
+      );
+      node.position.copy(pos);
+      this.helixGroup.add(node);
+
+      const dropGeo = new THREE.BufferGeometry().setFromPoints([base, pos]);
+      const dropLine = new THREE.Line(
+        dropGeo,
+        new THREE.LineBasicMaterial({ color: colorHex, transparent: true, opacity: 0.7 })
+      );
+      this.helixGroup.add(dropLine);
+    };
+    addLiftedMarker(st.a, 0x7fd1ff, 0x1a4a6a);
+    addLiftedMarker(st.b, 0xffb86b, 0x6a3a1a);
 
     setHud('Congruence', 'a \\equiv b \\pmod{m} \\iff m \\mid (a-b)', [
       { k: 'm', v: String(m) },
