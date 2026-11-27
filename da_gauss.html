@@ -1958,12 +1958,6 @@ if (hideBtn && unhideBtn && hudEl) {
     hudEl.classList.remove('hud-hidden');
     unhideBtn.classList.remove('visible');
   });
-});
-  unhideBtn.addEventListener('click', () => {
-    appEl.classList.remove('sidebar-hidden');
-    resize();
-  });
-}
 
 let last = performance.now();
 function animate(now) {
