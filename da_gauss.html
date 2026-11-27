@@ -156,17 +156,7 @@ controls.enableDamping = true;
 controls.dampingFactor = 0.06;
 controls.minDistance = 0.8;
 controls.maxDistance = 80;
-controls.enableZoom = false;
-
-renderer.domElement.addEventListener('wheel', (e) => {
-  e.preventDefault();
-  const dir = Math.sign(e.deltaY);
-  if (!dir) return;
-  const offset = camera.position.clone().sub(controls.target);
-  const dist = Math.max(controls.minDistance, Math.min(controls.maxDistance, offset.length() * (dir > 0 ? 1.12 : 0.89)));
-  offset.setLength(dist);
-  camera.position.copy(controls.target).add(offset);
-}, { passive: false });
+controls.enableZoom = true;
 
 scene.add(new THREE.AmbientLight(0xffffff, 0.55));
 const key = new THREE.DirectionalLight(0xffffff, 0.9);
