@@ -104,6 +104,20 @@
   #app.hud-collapsed #hudUnhideBtn {
     display: inline-block;
   }
+
+  #quiz { margin-top: 10px; }
+  #quiz .q, #quiz p, #quiz > div { margin-bottom: 10px; line-height: 1.45; }
+  #quiz button, #quiz label {
+    display: block;
+    width: 100%;
+    text-align: left;
+    margin: 6px 0;
+    padding: 8px 10px;
+    line-height: 1.4;
+    font-size: 13px;
+    border-radius: 6px;
+    box-sizing: border-box;
+  }
 </style>
 </head>
 <body>
@@ -900,12 +914,12 @@ modules.push({
   quiz: [
     {
       q: 'Fermat\'s little theorem says that for prime p and a not divisible by p:',
-      options: ['a^{p-1} \\equiv 1 \\pmod{p}', 'a^{p} \\equiv 1 \\pmod{p}', 'a^{p-1} \\equiv -1 \\pmod{p}', 'a^{p+1} \\equiv 1 \\pmod{p}'],
+      options: ['$a^{p-1} \\equiv 1 \\pmod{p}$', '$a^{p} \\equiv 1 \\pmod{p}$', '$a^{p-1} \\equiv -1 \\pmod{p}$', '$a^{p+1} \\equiv 1 \\pmod{p}$'],
       answer: 0
     },
     {
       q: 'A primitive root g modulo p has the property that:',
-      options: ['g^{p-1} \\equiv 1 and its powers generate all nonzero residues', 'g^2 \\equiv 1 \\pmod{p}', 'g^{p} \\equiv -1 \\pmod{p}', 'g divides p-1'],
+      options: ['$g^{p-1} \\equiv 1$ and its powers generate all nonzero residues', '$g^2 \\equiv 1 \\pmod{p}$', '$g^{p} \\equiv -1 \\pmod{p}$', 'g divides p-1'],
       answer: 0
     }
   ]
@@ -1081,8 +1095,8 @@ and $\left(\frac{p}{q}\right)=-\left(\frac{q}{p}\right)$ when both are $3\pmod 4
 
 In the 3D lab the two prime rings show residue arrows (bright = residue, dim = non-residue); the central symmetry plane is green when the reciprocity sign is $+1$ and red when it is $-1$. The chart displays the full matrix of $\left(\frac{p}{q}\right)$ values for the five primes.`,
   quiz: [
-    { q: 'Euler\'s criterion states that (a/p) is congruent mod p to:', options: ['a^{(p-1)/2}', 'a^{p-1}', 'a^{(p+1)/2}', 'a^{2}'], answer: 0 },
-    { q: 'The reciprocity sign (-1)^{((p-1)/2)((q-1)/2)} equals -1 exactly when:', options: ['both p and q are 1 mod 4', 'both p and q are 3 mod 4', 'one prime is 2', 'p = q'], answer: 1 }
+    { q: 'Euler\'s criterion states that (a/p) is congruent mod p to:', options: ['$a^{(p-1)/2}$', '$a^{p-1}$', '$a^{(p+1)/2}$', '$a^{2}$'], answer: 0 },
+    { q: '$The reciprocity sign (-1)^{((p-1)/2)((q-1)/2)} equals -1 exactly when:$', options: ['both p and q are 1 mod 4', 'both p and q are 3 mod 4', 'one prime is 2', 'p = q'], answer: 1 }
   ]
 });
 modules.push({
@@ -1236,7 +1250,7 @@ modules.push({
   tick(dt) { this.group.rotation.z += dt * 0.05; },
   lesson: String.raw`A binary quadratic form is $f(x,y)=a x^{2}+2 b x y+c y^{2}$ with discriminant $D=b^{2}-a c$. Two forms are equivalent if one is obtained from the other by an $SL_2(\mathbb{Z})$ change of variables, which preserves $D$. For positive definite forms ($a>0$, $D<0$) Gauss reduction requires $|b|\le a\le c$, with $b\ge 0$ when $a=c$; this gives a canonical reduced form. For indefinite forms ($D>0$) reduction is periodic: the reduced forms repeat in a cycle. The level curve $f(x,y)=1$ is an ellipse for definite forms and a hyperbola for indefinite forms.`,
   quiz: [
-    { q: 'For f(x,y)=3x^2+2xy+5y^2, the discriminant D=b^2-ac is:', options: ['-14', '1', '-4', '14'], answer: 0 },
+    { q: '$For f(x,y)=3x^2+2xy+5y^2, the discriminant D=b^2-ac$ is:', options: ['-14', '1', '-4', '14'], answer: 0 },
     { q: 'Gauss reduction of a positive definite form requires:', options: ['|b| <= a <= c', 'a <= b <= c', 'D > 0', 'b = 0 always'], answer: 0 }
   ]
 });
@@ -1366,7 +1380,7 @@ modules.push({
   },
   lesson: String.raw`Gauss composition: two primitive forms of the same discriminant $D$ compose into a third form of discriminant $D$, giving the class group of order $h(D)$. The principal genus contains the squares of the class group. Genus characters split the class group into genera, and ternary forms plus the three-triangular-number theorem close Section V.`,
   quiz: [
-    { q: 'Composition of two primitive forms of discriminant D yields a form of discriminant:', options: ['D', '2D', 'D^2', 'D/2'], answer: 0 },
+    { q: 'Composition of two primitive forms of discriminant D yields a form of discriminant:', options: ['D', '2D', '$D^2$', 'D/2'], answer: 0 },
     { q: 'The principal genus consists of:', options: ['the squares of the class group', 'all classes', 'only the identity', 'the non-squares'], answer: 0 }
   ]
 });
@@ -1482,7 +1496,7 @@ modules.push({
   lesson: String.raw`Section VI treats factoring as mechanical exclusion. For a prime $p$ not dividing $10$, the decimal expansion of $1/p$ is purely periodic and its period is $\text{ord}_p(10)$, which divides $p-1$ by Fermat's little theorem. A quadratic exclusion table for modulus $p$ lists residues $r$ with $r^2 \equiv N \pmod{p}$; any candidate divisor $d$ of $N$ must satisfy $d \equiv r \pmod{p}$ for some surviving $r$. Gauss's sieve intersects these residue sets over several small primes, discarding rows of the candidate grid. The surviving candidates are the only divisors worth testing.`,
   quiz: [
     { q: 'For prime p = 7, the period of 1/7 is:', options: ['3', '6', '7', '2'], answer: 1 },
-    { q: 'In the exclusion sieve, a candidate divisor d survives modulus p when:', options: ['d is prime', 'd^2 ≡ N mod p', 'd divides p-1', 'd ≡ 0 mod p'], answer: 1 }
+    { q: 'In the exclusion sieve, a candidate divisor d survives modulus p when:', options: ['d is prime', '$d^2 ≡ N mod p$', 'd divides p-1', 'd ≡ 0 mod p'], answer: 1 }
   ]
 });
 modules.push({
@@ -1629,8 +1643,8 @@ has degree $\varphi(n)$ and integer coefficients; moreover $x^{n}-1=\prod_{d\mid
 
 <b>Fermat primes.</b> A regular $n$-gon is constructible iff $n=2^{a}p_1\cdots p_r$ where the $p_i$ are distinct Fermat primes $p_i=2^{2^{m}}+1$. Since $17=2^{4}+1$ is a Fermat prime, the regular $17$-gon is constructible; Gauss discovered this in 1796. The construction reduces to solving the cyclotomic equation through nested quadratic extensions, exactly the Gaussian period chain shown here.`,
   quiz: [
-    { q: 'What is the degree of the cyclotomic polynomial Phi_n(x)?', options: ['n', 'phi(n)', 'n-1', '2^n'], answer: 1 },
-    { q: 'Why is the regular 17-gon constructible with straightedge and compass?', options: ['17 is prime', '17 = 2^4 + 1 is a Fermat prime', '17 is odd', 'phi(17) = 16 is a power of 2 only'], answer: 1 }
+    { q: '$What is the degree of the cyclotomic polynomial Phi_n(x)?$', options: ['n', 'phi(n)', 'n-1', '$2^n$'], answer: 1 },
+    { q: 'Why is the regular 17-gon constructible with straightedge and compass?', options: ['17 is prime', '$17 = 2^4 + 1 is a Fermat prime$', '17 is odd', 'phi(17) = 16 is a power of 2 only'], answer: 1 }
   ]
 });
 /* === UI CONTROLLER === */
