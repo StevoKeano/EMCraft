@@ -790,9 +790,10 @@ modules.push({
     this.group.rotation.y += dt * 0.15;
   },
   lesson: String.raw`<h3>Linear Congruences & the Chinese Remainder Theorem</h3>
-<p>A linear congruence $a x \equiv b \pmod{m}$ is solvable exactly when $g = \gcd(a,m)$ divides $b$. In that case it has exactly $g$ distinct solutions modulo $m$.</p>
-<p>The Chinese Remainder Theorem: if $\gcd(m_1,m_2)=1$, the system $x \equiv r_1 \pmod{m_1}$, $x \equiv r_2 \pmod{m_2}$ has a unique solution modulo $M = m_1 m_2$. The two orthogonal residue rings intersect at that unique point.</p>
-<p>Euler's totient $\phi(m)$ counts the residues $1 \le k \le m$ with $\gcd(k,m)=1$.</p>`,
+  <p><b>3D Coupled Helix Guide:</b> As an integer $t$ counts from $0$ to $\operatorname{lcm}(m_1, m_2)$, the <b>cyan helix</b> traces both clocks simultaneously—wrapping horizontally around <b>Ring 1</b> ($\bmod m_1$) and oscillating vertically with <b>Ring 2</b> ($\bmod m_2$).</p>
+  <p><b>Green beads</b> mark each integer step $t$. When <b>Greatest Common Divisor</b> $\gcd(m_1, m_2) = 1$, the clocks never lock early and the helix visits all $M = m_1 m_2$ states. When $\gcd(m_1, m_2) > 1$, the helix closes into a shorter loop of $\operatorname{lcm}(m_1, m_2) = \frac{m_1 m_2}{\gcd(m_1, m_2)}$ steps.</p>
+  <p>The <b>floating red sphere</b> marks the CRT solution $x$ on the helix, with red guide lines projecting onto its residues $r_1 \pmod{m_1}$ and $r_2 \pmod{m_2}$ on the two rings.</p>`,
+    
   quiz: [
     { q: 'When is a x ≡ b (mod m) solvable?', options: ['Always', 'When gcd(a,m) divides b', 'When b is prime', 'When m is prime'], answer: 1 },
     { q: 'For coprime m1 and m2, the CRT solution is unique modulo:', options: ['m1 + m2', 'm1 - m2', 'm1 * m2', 'gcd(m1,m2)'], answer: 2 }
