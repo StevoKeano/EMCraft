@@ -2121,5 +2121,194 @@ requestAnimationFrame(animate);
   unhideBtn.addEventListener('click', () => toggle(false));
 })();
 </script>
+
+<!-- Ask Gemini Selection Popover (Single Reused Window) -->
+<style>
+  #askGeminiPill {
+    position: fixed; z-index: 9999; display: none; align-items: center; gap: 6px;
+    padding: 6px 12px; border-radius: 999px; border: 1px solid #5ab0ff;
+    background: linear-gradient(135deg, #132238 0%, #1c3557 100%);
+    color: #eaf4ff; font: 600 12.5px/1 system-ui, -apple-system, sans-serif;
+    box-shadow: 0 6px 20px rgba(0,0,0,0.45); cursor: pointer; user-select: none;
+    transition: transform 0.12s ease, background 0.15s ease;
+  }
+  #askGeminiPill:hover { transform: translateY(-1px); background: #21426d; }
+  #askGeminiBox {
+    position: fixed; z-index: 10000; display: none; flex-direction: column; gap: 8px;
+    width: min(360px, calc(100vw - 24px)); padding: 12px; border-radius: 12px;
+    background: #101927; border: 1px solid #355075; color: #e6eef8;
+    font: 13px/1.4 system-ui, -apple-system, sans-serif;
+    box-shadow: 0 14px 36px rgba(0,0,0,0.6);
+  }
+  #askGeminiBox .ag-head {
+    display: flex; justify-content: space-between; align-items: center;
+    font-weight: 600; color: #7cc0ff; font-size: 12.5px;
+  }
+  #askGeminiBox .ag-close {
+    background: none; border: none; color: #8fa6c4; font-size: 16px;
+    cursor: pointer; padding: 0 4px; line-height: 1;
+  }
+  #askGeminiBox .ag-quote {
+    font-size: 11.5px; color: #b7c8df; background: #0b121c;
+    border-left: 3px solid #5ab0ff; padding: 6px 8px; border-radius: 4px;
+    max-height: 68px; overflow-y: auto; white-space: pre-wrap;
+  }
+  #askGeminiBox textarea {
+    width: 100%; box-sizing: border-box; min-height: 62px; resize: vertical;
+    background: #0b121c; color: #f0f6ff; border: 1px solid #2d4463;
+    border-radius: 8px; padding: 8px; font: 13px/1.35 system-ui, sans-serif;
+    outline: none;
+  }
+  #askGeminiBox textarea:focus { border-color: #5ab0ff; }
+  #askGeminiBox .ag-foot {
+    display: flex; justify-content: space-between; align-items: center; gap: 8px;
+  }
+  #askGeminiBox .ag-hint { font-size: 11px; color: #7e96b5; }
+  #askGeminiBox .ag-send {
+    background: #2b7de9; color: #fff; border: none; border-radius: 7px;
+    padding: 6px 13px; font: 600 12.5px/1 system-ui, sans-serif; cursor: pointer;
+  }
+  #askGeminiBox .ag-send:hover { background: #3b8ef9; }
+</style>
+<button id="askGeminiPill" type="button">✦ Ask Gemini</button>
+<div id="askGeminiBox" role="dialog" aria-label="Ask Gemini">
+  <div class="ag-head">
+    <span>✦ Ask Gemini (Gauss Lab)</span>
+    <button type="button" class="ag-close" id="agClose" title="Close">×</button>
+  </div>
+  <div class="ag-quote" id="agQuote"></div>
+  <textarea id="agInput" placeholder="Add your question or note… (Enter to send, Shift+Enter for newline)"></textarea>
+  <div class="ag-foot">
+    <span class="ag-hint" id="agHint">Copies prompt &amp; reuses Gemini tab</span>
+    <button type="button" class="ag-send" id="agSend">Copy &amp; Open ↗</button>
+  </div>
+</div>
+<script>
+(() => {
+  const pill = document.getElementById('askGeminiPill');
+  const box = document.getElementById('askGeminiBox');
+  const quoteEl = document.getElementById('agQuote');
+  const inputEl = document.getElementById('agInput');
+  const sendBtn = document.getElementById('agSend');
+  const closeBtn = document.getElementById('agClose');
+  const hintEl = document.getElementById('agHint');
+  if (!pill || !box) return;
+
+  let selectedText = '';
+  let lastRect = null;
+  let geminiWin = null;
+
+  function getActiveContext() {
+    const sel = document.querySelector('#moduleSelect option:checked');
+    const secTitle = sel ? sel.textContent.trim() : 'Disquisitiones Arithmeticae';
+    const hudRows = Array.from(document.querySelectorAll('#hudRows > div'))
+      .map(el => el.textContent.replace(/\s+/g, ' ').trim())
+      .filter(Boolean);
+    return hudRows.length ? `${secTitle} [${hudRows.join(' | ')}]` : secTitle;
+  }
+
+  function positionNearRect(el, rect, offsetY = 8) {
+    el.style.display = el === pill ? 'flex' : 'flex';
+    const w = el.offsetWidth || 120;
+    const h = el.offsetHeight || 36;
+    let left = rect.left + rect.width / 2 - w / 2;
+    left = Math.max(12, Math.min(window.innerWidth - w - 12, left));
+    let top = rect.top - h - offsetY;
+    if (top < 12) top = Math.min(window.innerHeight - h - 12, rect.bottom + offsetY);
+    el.style.left = `${Math.round(left)}px`;
+    el.style.top = `${Math.round(top)}px`;
+  }
+
+  function checkSelection() {
+    if (box.style.display === 'flex') return;
+    const sel = window.getSelection();
+    const txt = sel ? sel.toString().trim() : '';
+    if (!txt || txt.length < 2 || !sel.rangeCount) {
+      pill.style.display = 'none';
+      return;
+    }
+    const anchorNode = sel.anchorNode && (sel.anchorNode.nodeType === 3 ? sel.anchorNode.parentElement : sel.anchorNode);
+    if (anchorNode && box.contains(anchorNode)) return;
+    const rect = sel.getRangeAt(0).getBoundingClientRect();
+    if (!rect || (rect.width === 0 && rect.height === 0)) {
+      pill.style.display = 'none';
+      return;
+    }
+    selectedText = txt;
+    lastRect = rect;
+    positionNearRect(pill, rect, 8);
+  }
+
+  document.addEventListener('mouseup', () => setTimeout(checkSelection, 10));
+  document.addEventListener('touchend', () => setTimeout(checkSelection, 30));
+  document.addEventListener('keyup', (e) => { if (e.shiftKey) setTimeout(checkSelection, 10); });
+
+  pill.addEventListener('mousedown', (e) => e.preventDefault());
+  pill.addEventListener('click', () => {
+    pill.style.display = 'none';
+    quoteEl.textContent = selectedText.length > 260 ? selectedText.slice(0, 257) + '…' : selectedText;
+    inputEl.value = '';
+    const hasOpenThread = geminiWin && !geminiWin.closed;
+    hintEl.textContent = hasOpenThread
+      ? 'Copies & focuses your open Gemini thread (Ctrl+V)'
+      : 'Copies prompt & opens Gemini tab';
+    positionNearRect(box, lastRect || { left: 40, top: 80, width: 200, height: 24 }, 10);
+    setTimeout(() => inputEl.focus(), 20);
+  });
+
+  function closeBox() {
+    box.style.display = 'none';
+    pill.style.display = 'none';
+  }
+  closeBtn.addEventListener('click', closeBox);
+  document.addEventListener('mousedown', (e) => {
+    if (box.style.display === 'flex' && !box.contains(e.target) && e.target !== pill) {
+      closeBox();
+    }
+  });
+
+  async function submitToGemini() {
+    const extra = inputEl.value.trim();
+    const ctx = getActiveContext();
+    const prompt = [
+      `Context: Gauss's Disquisitiones Arithmeticae — ${ctx}`,
+      `Highlighted passage:\n"${selectedText}"`,
+      extra ? `Question: ${extra}` : `Question: Explain this passage clearly in the context of the current simulation parameters.`
+    ].join('\n\n');
+
+    try {
+      await navigator.clipboard.writeText(prompt);
+    } catch (_) {
+      const ta = document.createElement('textarea');
+      ta.value = prompt;
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      ta.remove();
+    }
+
+    const alreadyOpen = geminiWin && !geminiWin.closed;
+    if (alreadyOpen) {
+      window.open('', 'gauss_gemini_helper');
+      geminiWin.focus();
+    } else {
+      geminiWin = window.open('https://gemini.google.com/app', 'gauss_gemini_helper');
+      if (geminiWin) geminiWin.focus();
+    }
+    closeBox();
+  }
+
+  sendBtn.addEventListener('click', submitToGemini);
+  inputEl.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      submitToGemini();
+    } else if (e.key === 'Escape') {
+      closeBox();
+    }
+  });
+})();
+</script>
+
 </body>
 </html>
