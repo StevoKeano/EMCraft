@@ -19,6 +19,10 @@
                font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
   #app { display:grid; grid-template-columns: 340px 1fr; height:100%; }
   #sidebar { background:var(--panel); border-right:1px solid #1e2a3d; padding:14px; overflow:auto; }
+  @media (max-width: 768px) {
+    #chart { width:220px; height:140px; }
+    #chartLabel { bottom:156px; }
+  }
   #sidebar h1 { font-size:16px; margin:0 0 4px; }
   #sidebar .sub { color:var(--muted); font-size:12px; margin-bottom:8px; }
   .help-bar { display:flex; gap:6px; margin-bottom:12px; }
@@ -48,7 +52,14 @@
   .ctrl select, .ctrl input[type=text] { background:#0e1726; color:var(--ink);
         border:1px solid #24344d; border-radius:6px; padding:4px 6px; }
   #hud { background:#0e1726; border:1px solid #24344d; border-radius:8px; padding:10px; margin-bottom:12px; }
-  #hudTitle { font-weight:600; font-size:13px; margin-bottom:6px; }
+  #hudHeader { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:6px; }
+  #hud.hud-hidden { display:none; }
+  #unhideBtn { display:none; width:100%; margin:8px 0;
+               background:#16233a; color:var(--accent); border:1px solid var(--accent);
+               border-radius:8px; padding:7px 11px; font-size:12px; font-weight:700;
+               cursor:pointer; text-align:center; }
+  #unhideBtn.visible { display:block; }
+  #hudTitle { font-weight:600; font-size:13px; margin:0; }
   #hudEq { font-size:13px; margin-bottom:8px; }
   #hudRows { display:grid; grid-template-columns:1fr 1fr; gap:4px 10px; font-size:12px; }
   #hudRows .k { color:var(--muted); }
@@ -82,10 +93,14 @@
     <select id="moduleSelect" aria-label="Select Disquisitiones Arithmeticae section"></select>
     <div id="controls"></div>
     <div id="hud">
-      <div id="hudTitle"></div>
+      <div id="hudHeader">
+        <div id="hudTitle"></div>
+        <button id="hideBtn" class="help-btn" type="button" title="Hide HUD box" style="padding:3px 8px; font-size:11px; white-space:nowrap;">Hide &lt;&lt;&lt;</button>
+      </div>
       <div id="hudEq"></div>
       <div id="hudRows"></div>
     </div>
+    <button id="unhideBtn" type="button" title="Show HUD box">Unhide HUD &gt;&gt;&gt;</button>
     <div id="lesson"></div>
     <div id="quiz"></div>
   </aside>
@@ -1931,12 +1946,18 @@ if (controlsContainer) {
 }
 
 window.addEventListener('resize', resize);
-
-let last = performance.now();
-function animate(now) {
-  window.addEventListener('load', () => {
-  if (active) {
-    renderTex(document.getElementById('hudEq'), KATEX_OPTS);
+const hudEl = document.getElementById('hud');
+const hideBtn = document.getElementById('hideBtn');
+const unhideBtn = document.getElementById('unhideBtn');
+if (hideBtn && unhideBtn && hudEl) {
+  hideBtn.addEventListener('click', () => {
+    hudEl.classList.add('hud-hidden');
+    unhideBtn.classList.add('visible');
+  });
+  unhideBtn.addEventListener('click', () => {
+    hudEl.classList.remove('hud-hidden');
+    unhideBtn.classList.remove('visible');
+  });
     renderTex(lessonEl, KATEX_OPTS);
     renderTex(quizEl, KATEX_OPTS);
   }
