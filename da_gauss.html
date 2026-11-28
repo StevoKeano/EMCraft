@@ -119,7 +119,7 @@
     box-sizing: border-box;
   }
 </style>
-  <meta name="app-version" content="2026.11.27.181739">
+  <meta name="app-version" content="2026.11.27.182428">
 </head>
 <body>
 <div id="app">
@@ -1608,21 +1608,92 @@ modules.push({
     ]);
     const ctx = chartEl.getContext('2d');
     const W = chartEl.width, H = chartEl.height;
+    const dpr = Math.max(1, W / Math.max(1, chartEl.clientWidth || 320));
+    const fs = (px) => `${Math.round(px * dpr)}px monospace`;
+    const bfs = (px) => `bold ${Math.round(px * dpr)}px monospace`;
+
     ctx.clearRect(0, 0, W, H);
-    ctx.fillStyle = '#0b1018'; ctx.fillRect(0, 0, W, H);
-    ctx.strokeStyle = '#2a3b4d'; ctx.beginPath(); ctx.moveTo(40, H - 40); ctx.lineTo(W - 20, H - 40); ctx.moveTo(40, H - 40); ctx.lineTo(40, 20); ctx.stroke();
-    ctx.fillStyle = '#7fd1ff'; ctx.font = '12px monospace';
-    ctx.fillText('survivors vs sieve depth', 50, 30);
-    const maxC = Math.max(1, counts[0] || 1);
-    counts.forEach((c, i) => {
-      const x = 60 + i * (W - 100) / Math.max(1, counts.length - 1);
-      const y = H - 50 - (c / maxC) * (H - 100);
-      ctx.fillStyle = '#7fd1ff'; ctx.beginPath(); ctx.arc(x, y, 4, 0, Math.PI * 2); ctx.fill();
-      if (i) { ctx.strokeStyle = '#7fd1ff'; ctx.beginPath(); ctx.moveTo(prevX, prevY); ctx.lineTo(x, y); ctx.stroke(); }
-      ctx.fillStyle = '#9fb3c8'; ctx.fillText(String(c), x - 6, y - 8);
-      var prevX = x, prevY = y;
+    ctx.fillStyle = '#0b1018';
+    ctx.fillRect(0, 0, W, H);
+
+    const padL = 44 * dpr, padR = 20 * dpr, padT = 36 * dpr, padB = 42 * dpr;
+    const x0 = padL, x1 = W - padR, y0 = H - padB, y1 = padT;
+    const plotW = x1 - x0, plotH = y0 - y1;
+
+    // Horizontal reference grid lines at 0, 50, 100
+    ctx.font = fs(11);
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'middle';
+    [0, 50, 100].forEach(val => {
+      const gy = y0 - (val / 100) * plotH;
+      ctx.strokeStyle = val === 0 ? '#36506b' : '#1b2c3f';
+      ctx.lineWidth = dpr;
+      ctx.beginPath(); ctx.moveTo(x0, gy); ctx.lineTo(x1, gy); ctx.stroke();
+      ctx.fillStyle = '#8fa9c4';
+      ctx.fillText(String(val), x0 - 8 * dpr, gy);
     });
-    ctx.fillStyle = '#ffb347'; ctx.fillText('period of 1/' + p + ' = ' + period, W - 190, 30);
+
+    // Build stages: Start (100) followed by each active sieve prime q
+    const stages = [{ label: 'start', count: 100 }];
+    counts.forEach((c, i) => stages.push({ label: `mod ${sievePrimes[i]}`, count: c }));
+
+    const stepW = plotW / stages.length;
+    const barW = Math.min(44 * dpr, stepW * 0.56);
+    const pts = [];
+
+    stages.forEach((stItem, i) => {
+      const cx = x0 + stepW * (i + 0.5);
+      const barH = (stItem.count / 100) * plotH;
+      const by = y0 - barH;
+      pts.push({ x: cx, y: by });
+
+      // Translucent bar
+      ctx.fillStyle = i === 0 ? 'rgba(90, 140, 190, 0.25)' : 'rgba(65, 175, 235, 0.28)';
+      ctx.fillRect(cx - barW / 2, by, barW, barH);
+      ctx.strokeStyle = i === 0 ? '#5a8cbe' : '#41afeb';
+      ctx.lineWidth = 1.2 * dpr;
+      ctx.strokeRect(cx - barW / 2, by, barW, barH);
+
+      // X-axis prime label
+      ctx.fillStyle = i === 0 ? '#9fb8d0' : '#ffd166';
+      ctx.font = fs(11);
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'top';
+      ctx.fillText(stItem.label, cx, y0 + 8 * dpr);
+    });
+
+    // Connecting survivor curve + crisp nodes + count badges
+    ctx.strokeStyle = '#7fd1ff';
+    ctx.lineWidth = 2.4 * dpr;
+    ctx.beginPath();
+    pts.forEach((pt, i) => { if (i === 0) ctx.moveTo(pt.x, pt.y); else ctx.lineTo(pt.x, pt.y); });
+    ctx.stroke();
+
+    pts.forEach((pt, i) => {
+      ctx.fillStyle = i === pts.length - 1 ? '#55ff99' : '#7fd1ff';
+      ctx.beginPath();
+      ctx.arc(pt.x, pt.y, 4.5 * dpr, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.fillStyle = '#ffffff';
+      ctx.font = bfs(12);
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'bottom';
+      ctx.fillText(String(stages[i].count), pt.x, pt.y - 7 * dpr);
+    });
+
+    // Header title + period & surviving x preview
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    ctx.fillStyle = '#7fd1ff';
+    ctx.font = bfs(12);
+    ctx.fillText(`Sieve survivors (N=${N})`, x0, 10 * dpr);
+
+    ctx.textAlign = 'right';
+    ctx.fillStyle = '#ffb347';
+    ctx.font = fs(11);
+    const preview = survivors.slice(0, 5).join(', ') + (survivors.length > 5 ? '…' : '');
+    ctx.fillText(`1/${p} per=${period} | x: ${preview || 'none'}`, x1, 11 * dpr);
   },
   tick(dt) {
     this.ring.rotation.y += dt * 0.25;
