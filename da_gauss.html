@@ -63,9 +63,12 @@
   #quiz button.wrong { border-color:#ff6b6b; }
   #stage { position:relative; }
   #stage > canvas:not(#chart) { width:100%; height:100%; display:block; touch-action:none; outline:none; }
-  #chart { position:absolute; right:12px; bottom:12px; width:320px; height:200px;
-           background:#0e1726; border:1px solid #24344d; border-radius:8px; }
-  #chartLabel { position:absolute; right:12px; bottom:216px; font-size:11px; color:var(--muted); }
+  #chart { position:fixed; right:12px; bottom:12px; z-index:45; box-sizing:border-box;
+           width:min(360px, calc(100vw - 24px)); height:min(210px, 34vh);
+           background:#0e1726; border:1px solid #24344d; border-radius:8px;
+           box-shadow:0 8px 24px rgba(0,0,0,0.45); }
+  #chartLabel { position:fixed; right:14px; bottom:calc(min(210px, 34vh) + 16px); z-index:45;
+                font-size:11px; color:var(--muted); pointer-events:none; }
 
   #hudHideBtn {
     float: right;
@@ -119,7 +122,7 @@
     box-sizing: border-box;
   }
 </style>
-  <meta name="app-version" content="2026.11.27.185110">
+  <meta name="app-version" content="2026.11.27.185539">
 </head>
 <body>
 <div id="app">
