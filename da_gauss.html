@@ -122,7 +122,7 @@
     box-sizing: border-box;
   }
 </style>
-  <meta name="app-version" content="2026.11.27.192602">
+  <meta name="app-version" content="2026.11.27.193046">
 </head>
 <body>
 <div id="app">
@@ -1782,11 +1782,63 @@ modules.push({
   update() {
     const st = this.state;
     this.group.clear(); this.nodes = []; this.edges = []; this.genusPlanes = [];
+
     // Snap D to a valid negative discriminant (D < 0 and D ≡ 0 or 1 mod 4)
     let D = Math.min(-3, Math.round(Number(st.D)));
     while (((D % 4) + 4) % 4 !== 0 && ((D % 4) + 4) % 4 !== 1) D--;
-    // Exact count of primitive reduced binary quadratic forms ax^2 + bxy + cy^2 of discriminant D
-    const forms = [];
+
+    // Reduce a positive-definite binary quadratic form (a, b, c) of discriminant D = b^2 - 4ac
+    const reduceForm = (a, b, c) => {
+      while (true) {
+        if (a > c || (a === c && b < 0)) {
+          const t = a; a = c; c = t; b = -b;
+        }
+        if (b > a || b <= -a) {
+          let r = ((b % (2 * a)) + 2 * a) % (2 * a);
+          if (r > a) r -= 2 * a;
+          const k = (b - r) / (2 * a);
+          c = c - k * b + k * k * a;
+          b = r;
+        } else {
+          break;
+        }
+      }
+      if (a === c && b < 0) b = -b;
+      return [a, b, c];
+    };
+
+    // Extended Euclidean algorithm returning [g, x, y] with a*x + b*y = g
+    const extGcd = (a, b) => {
+      let oldR = a, r = b, oldS = 1, s = 0, oldT = 0, t = 1;
+      while (r !== 0) {
+        const q = Math.trunc(oldR / r);
+        [oldR, r] = [r, oldR - q * r];
+        [oldS, s] = [s, oldS - q * s];
+        [oldT, t] = [t, oldT - q * t];
+      }
+      if (oldR < 0) return [-oldR, -oldS, -oldT];
+      return [oldR, oldS, oldT];
+    };
+
+    // Exact Gauss composition of two primitive forms f1=(a1,b1,c1), f2=(a2,b2,c2) of discriminant D
+    const composeForms = (f1, f2) => {
+      const [a1, b1] = f1, [a2, b2] = f2;
+      const s = (b1 + b2) / 2;
+      const n = (b1 - b2) / 2;
+      const [d1, u1, v1] = extGcd(a1, a2);
+      const [d, u2, v2] = extGcd(d1, s);
+      const v = v1 * u2, w = v2;
+      const a3 = (a1 * a2) / (d * d);
+      const modStep = a3;
+      const rawB = b2 + (2 * a2 / d) * (v * n - w * ((b2 * b2 - D) / (4 * a2)));
+      let b3 = ((rawB % (2 * modStep)) + 2 * modStep) % (2 * modStep);
+      if (b3 > modStep) b3 -= 2 * modStep;
+      const c3 = (b3 * b3 - D) / (4 * a3);
+      return reduceForm(a3, b3, c3);
+    };
+
+    // Enumerate all primitive reduced forms of discriminant D
+    const rawForms = [];
     const maxA = Math.floor(Math.sqrt(Math.abs(D) / 3));
     for (let a = 1; a <= maxA; a++) {
       for (let b = -a; b <= a; b++) {
@@ -1794,66 +1846,153 @@ modules.push({
         const c = (b * b - D) / (4 * a);
         if (c < a) continue;
         if ((Math.abs(b) === a || a === c) && b < 0) continue;
-        if (gcd(gcd(a, Math.abs(b)), c) === 1) forms.push(`(${a},${b},${c})`);
+        if (gcd(gcd(a, Math.abs(b)), c) === 1) rawForms.push([a, b, c]);
       }
     }
-    const h = Math.max(1, forms.length);
+    if (!rawForms.length) rawForms.push(reduceForm(1, D & 1, ((D & 1) - D) / 4));
+
+    const keyOf = (f) => `${f[0]},${f[1]},${f[2]}`;
+    const h = rawForms.length;
+
+    // Order forms by powers of a generator if Cl(D) is cyclic (e.g. D=-71 -> C_7)
+    let orderedForms = rawForms.slice();
+    let isCyclic = false;
+    for (const cand of rawForms) {
+      const chain = [];
+      const seen = new Set();
+      let cur = cand;
+      while (!seen.has(keyOf(cur)) && chain.length <= h) {
+        seen.add(keyOf(cur));
+        chain.push(cur);
+        cur = composeForms(cur, cand);
+      }
+      if (chain.length === h) {
+        const idIdx = chain.findIndex(f => f[0] === 1);
+        orderedForms = idIdx >= 0
+          ? chain.slice(idIdx).concat(chain.slice(0, idIdx))
+          : chain;
+        isCyclic = true;
+        break;
+      }
+    }
+
+    const indexMap = new Map(orderedForms.map((f, idx) => [keyOf(f), idx]));
+    const multTable = Array.from({ length: h }, (_, i) =>
+      Array.from({ length: h }, (_, j) => {
+        const prod = composeForms(orderedForms[i], orderedForms[j]);
+        return indexMap.get(keyOf(prod)) ?? 0;
+      })
+    );
+
+    // Compute true Gauss genus signature via Legendre characters for odd primes p | D
+    const oddPrimes = [];
+    let tmpD = Math.abs(D);
+    while (tmpD % 2 === 0) tmpD /= 2;
+    for (let p = 3; p * p <= tmpD; p += 2) {
+      if (tmpD % p === 0) {
+        oddPrimes.push(p);
+        while (tmpD % p === 0) tmpD /= p;
+      }
+    }
+    if (tmpD > 1) oddPrimes.push(tmpD);
+
+    const leg = (x, p) => {
+      x = ((x % p) + p) % p;
+      if (x === 0) return 0;
+      let r = 1, b = x, e = (p - 1) >> 1;
+      while (e > 0) { if (e & 1) r = (r * b) % p; b = (b * b) % p; e >>= 1; }
+      return r === 1 ? 1 : -1;
+    };
+
+    const genusKeys = orderedForms.map(([a, b, c]) => {
+      const sig = oddPrimes.map(p => {
+        const rep = (a % p !== 0) ? a : (c % p !== 0 ? c : a + b + c);
+        return leg(rep, p) === 1 ? '+' : '-';
+      });
+      if (D % 8 === 0) {
+        const rep = (a % 2 === 1) ? a : c;
+        sig.push((rep % 8 === 1 || rep % 8 === 7) ? '+' : '-');
+      } else if (D % 4 === 0 && (((-D / 4) % 4 + 4) % 4 === 1)) {
+        const rep = (a % 2 === 1) ? a : c;
+        sig.push(rep % 4 === 1 ? '+' : '-');
+      }
+      return sig.join('') || '+';
+    });
+
+    const uniqueGenera = Array.from(new Set(genusKeys));
+    const genusIndex = genusKeys.map(k => uniqueGenera.indexOf(k));
+    const genusCount = uniqueGenera.length;
+    const genusPaletteHex = [0x7fd1ff, 0xff9ad7, 0x8fe388, 0xffd166];
+    const genusPaletteCss = ['#7fd1ff', '#ff9ad7', '#8fe388', '#ffd166'];
+
+    // 3D ring placement
     const n = h;
     const R = 1.6;
     const pts = [];
     for (let i = 0; i < n; i++) {
-      const a = (i / n) * Math.PI * 2;
-      pts.push(new THREE.Vector3(Math.cos(a) * R, Math.sin(a) * R * 0.55, 0));
+      const ang = (i / n) * Math.PI * 2;
+      pts.push(new THREE.Vector3(Math.cos(ang) * R, Math.sin(ang) * R * 0.55, 0));
     }
-    // genus planes: split into 2 genera by parity of index
-    const genusCount = n > 1 ? 2 : 1;
+
     for (let g = 0; g < genusCount; g++) {
       const pl = new THREE.Mesh(new THREE.PlaneGeometry(3.2, 1.6), this.planeMat.clone());
-      pl.material.color.setHex(g === 0 ? 0x2a6f9e : 0x8a4f9e);
-      pl.position.set(0, g === 0 ? -0.9 : 0.9, -0.4);
+      pl.material.color.setHex(genusPaletteHex[g % genusPaletteHex.length]);
+      const yOff = genusCount === 1 ? -0.55 : -0.9 + (g / (genusCount - 1)) * 1.8;
+      pl.position.set(0, yOff, -0.4);
       pl.rotation.x = -Math.PI / 2;
       pl.visible = st.genus;
-      this.group.add(pl); this.genusPlanes.push(pl);
+      this.group.add(pl);
+      this.genusPlanes.push(pl);
     }
-    // nodes
+
     for (let i = 0; i < n; i++) {
       const m = new THREE.Mesh(this.nodeGeo, this.nodeMat.clone());
       m.position.copy(pts[i]);
       m.userData.idx = i;
-      this.group.add(m); this.nodes.push(m);
+      this.group.add(m);
+      this.nodes.push(m);
     }
-    // composition arrows: i + j -> (i+j) mod n
+
+    // Composition arrows: F_i -> F_i ∘ F_1 (generator step)
     const steps = st.steps;
+    const genIdx = n > 1 ? 1 : 0;
     for (let s = 0; s < steps; s++) {
       for (let i = 0; i < n; i++) {
-        const j = (i + 1) % n;
+        const j = multTable[i][genIdx];
+        if (i === j) continue;
         const a = pts[i], b = pts[j];
         const mid = a.clone().add(b).multiplyScalar(0.5);
         const dir = b.clone().sub(a).normalize();
-        const len = a.distanceTo(b) * 0.85;
         const geo = new THREE.BufferGeometry().setFromPoints([a, b]);
         const line = new THREE.Line(geo, this.edgeMat.clone());
         line.material.opacity = 0.25 + 0.1 * s;
-        this.group.add(line); this.edges.push(line);
-        // arrow head
+        this.group.add(line);
+        this.edges.push(line);
+
         const head = new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.18, 8), this.nodeMat.clone());
         head.position.copy(mid);
         head.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
         this.group.add(head);
       }
     }
-    // genus character labels via small colored rings
+
     if (st.genus) {
       for (let i = 0; i < n; i++) {
-        const ring = new THREE.Mesh(new THREE.TorusGeometry(0.22, 0.025, 8, 24), new THREE.MeshBasicMaterial({ color: i % 2 === 0 ? 0x7fd1ff : 0xff9ad7 }));
-        ring.position.copy(pts[i]); ring.position.z = 0.05;
+        const gIdx = genusIndex[i];
+        const ring = new THREE.Mesh(
+          new THREE.TorusGeometry(0.22, 0.025, 8, 24),
+          new THREE.MeshBasicMaterial({ color: genusPaletteHex[gIdx % genusPaletteHex.length] })
+        );
+        ring.position.copy(pts[i]);
+        ring.position.z = 0.05;
         this.group.add(ring);
       }
     }
-    // chart: DPR-scaled Cayley multiplication table + reduced forms list
+
+    // Chart: DPR-scaled true Cayley composition table + generator-ordered forms list
     const ctx = chartEl.getContext('2d');
     const W = chartEl.width, H = chartEl.height;
-    const dpr = Math.max(1, W / Math.max(1, chartEl.clientWidth || 320));
+    const dpr = Math.max(1, W / Math.max(1, chartEl.clientWidth || 360));
     const fs = (px) => `${Math.round(px * dpr)}px monospace`;
     const bfs = (px) => `bold ${Math.round(px * dpr)}px monospace`;
 
@@ -1869,60 +2008,68 @@ modules.push({
     const ox = padLeft + (availW - cell * n) / 2;
     const oy = padTop + (availH - cell * n) / 2;
 
-    // Row & column headers (F0, F1, ...)
     ctx.font = fs(10);
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     for (let idx = 0; idx < n; idx++) {
-      ctx.fillStyle = idx % 2 === 0 ? '#7fd1ff' : '#ff9ad7';
+      const colCss = genusPaletteCss[genusIndex[idx] % genusPaletteCss.length];
+      ctx.fillStyle = colCss;
       ctx.fillText(`F${idx}`, ox + (idx + 0.5) * cell, oy - 10 * dpr);
       ctx.fillText(`F${idx}`, ox - 14 * dpr, oy + (idx + 0.5) * cell);
     }
 
-    // Multiplication table cells
-    ctx.font = bfs(n <= 4 ? 12 : 10);
+    ctx.font = bfs(n <= 4 ? 12 : (n >= 7 ? 9.5 : 10.5));
     for (let i = 0; i < n; i++) {
       for (let j = 0; j < n; j++) {
-        const k = (i + j) % n;
-        ctx.fillStyle = k % 2 === 0 ? '#1b3a5c' : '#3a2a5c';
+        const k = multTable[i][j];
+        const gIdx = genusIndex[k];
+        ctx.fillStyle = gIdx === 0 ? '#1b3a5c' : (gIdx === 1 ? '#3a2a5c' : '#1f4438');
         ctx.fillRect(ox + j * cell, oy + i * cell, cell - 2 * dpr, cell - 2 * dpr);
         ctx.fillStyle = '#e6f3ff';
         ctx.fillText(`F${k}`, ox + (j + 0.5) * cell, oy + (i + 0.5) * cell);
       }
     }
 
-    // Right panel: reduced forms list for D
+    // Right panel: forms ordered by powers g^k (when cyclic)
     const rx = leftW + 8 * dpr;
     ctx.textAlign = 'left';
     ctx.textBaseline = 'top';
     ctx.fillStyle = '#ffd166';
     ctx.font = bfs(11);
-    ctx.fillText(`D = ${D}  (h = ${n})`, rx, 10 * dpr);
+    ctx.fillText(`D = ${D}  (h=${n}, g=${genusCount})`, rx, 10 * dpr);
 
     ctx.font = fs(10.5);
-    const maxList = Math.min(forms.length, 7);
+    const maxList = Math.min(orderedForms.length, 7);
     for (let i = 0; i < maxList; i++) {
       const y = (32 + i * 18) * dpr;
-      ctx.fillStyle = i % 2 === 0 ? '#7fd1ff' : '#ff9ad7';
-      ctx.fillText(`F${i}: ${forms[i]}`, rx, y);
+      ctx.fillStyle = genusPaletteCss[genusIndex[i] % genusPaletteCss.length];
+      const f = orderedForms[i];
+      ctx.fillText(`F${i}: (${f[0]},${f[1]},${f[2]})`, rx, y);
     }
-    if (forms.length > maxList) {
+    if (orderedForms.length > maxList) {
       ctx.fillStyle = '#9fb8d0';
-      ctx.fillText(`+${forms.length - maxList} more…`, rx, (32 + maxList * 18) * dpr);
+      ctx.fillText(`+${orderedForms.length - maxList} more…`, rx, (32 + maxList * 18) * dpr);
     }
 
-    // Top-left & bottom-left captions
     ctx.fillStyle = '#7fd1ff';
     ctx.font = bfs(11);
-    ctx.fillText('Composition table (Fi ∘ Fj)', 10 * dpr, 10 * dpr);
+    ctx.fillText(isCyclic ? 'Cayley table (Fi = g^i)' : 'Cayley table (Fi ∘ Fj)', 10 * dpr, 10 * dpr);
     ctx.fillStyle = '#9fb8d0';
     ctx.font = fs(10);
-    ctx.fillText('Blue = principal genus, Pink = 2nd genus', 10 * dpr, H - 16 * dpr);
-    setHud('Form composition & genera', 'f_1 \\circ f_2 = f_3,\\quad h(D)=\\#\\text{classes}', [
+    ctx.fillText(
+      genusCount === 1
+        ? `1 genus (${uniqueGenera[0]}) — all forms principal`
+        : `${genusCount} genera (${uniqueGenera.join(', ')})`,
+      10 * dpr,
+      H - 16 * dpr
+    );
+
+    const formStrings = orderedForms.map(f => `(${f[0]},${f[1]},${f[2]})`);
+    setHud('Form composition & genera', 'f_1 \circ f_2 = f_3,\quad h(D)=\#\text{classes}', [
       { k: 'valid D', v: String(D) },
-      { k: 'h(D)', v: String(h) },
-      { k: 'genera', v: String(genusCount) },
-      { k: 'forms', v: forms.slice(0, 3).join(' ') || '(1,0,1)' }
+      { k: 'h(D)', v: `${h} (${isCyclic ? 'C_' + h : 'non-cyclic'})` },
+      { k: 'genera', v: `${genusCount} (${uniqueGenera.join(', ')})` },
+      { k: 'forms', v: formStrings.slice(0, 3).join(' ') }
     ]);
   },
   tick(dt) {
