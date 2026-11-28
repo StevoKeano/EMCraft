@@ -119,7 +119,7 @@
     box-sizing: border-box;
   }
 </style>
-  <meta name="app-version" content="2026.11.27.183946">
+  <meta name="app-version" content="2026.11.27.184821">
 </head>
 <body>
 <div id="app">
@@ -457,11 +457,15 @@ modules.push({
     const st = this.state;
     const ctx = chartEl.getContext('2d');
     const W = chartEl.width, H = chartEl.height;
+    const dpr = Math.max(1, W / Math.max(1, chartEl.clientWidth || 320));
+    const fs = (px) => `${Math.round(px * dpr)}px monospace`;
+    const bfs = (px) => `bold ${Math.round(px * dpr)}px monospace`;
+
     ctx.clearRect(0, 0, W, H);
     ctx.fillStyle = '#0b1220'; ctx.fillRect(0, 0, W, H);
 
     const m = st.m;
-    const padL = 44, padR = 20, padT = 30, padB = 34;
+    const padL = 42 * dpr, padR = 20 * dpr, padT = 36 * dpr, padB = 34 * dpr;
     const x0 = padL, x1 = W - padR, y0 = H - padB, y1 = padT;
     const nMin = -30, nMax = 30;
     const rMin = st.conv === 'absolutely least' ? -Math.floor(m / 2) : 0;
@@ -471,19 +475,19 @@ modules.push({
     const sy = (r) => y0 - ((r - rMin) / (Math.max(1, rMax - rMin))) * (y0 - y1);
 
     // Axes & zero residue baseline
-    ctx.strokeStyle = '#2a4a6a'; ctx.lineWidth = 1;
+    ctx.strokeStyle = '#2a4a6a'; ctx.lineWidth = dpr;
     ctx.beginPath();
     ctx.moveTo(x0, y0); ctx.lineTo(x1, y0);
     ctx.moveTo(x0, y0); ctx.lineTo(x0, y1);
     ctx.stroke();
 
     const yZero = sy(0);
-    ctx.strokeStyle = '#36587a'; ctx.setLineDash([4, 4]);
+    ctx.strokeStyle = '#36587a'; ctx.setLineDash([4 * dpr, 4 * dpr]);
     ctx.beginPath(); ctx.moveTo(x0, yZero); ctx.lineTo(x1, yZero); ctx.stroke();
     ctx.setLineDash([]);
 
     // Sawtooth residue wave for n in [-30, 30]
-    ctx.strokeStyle = '#3b6d9c'; ctx.lineWidth = 1.6;
+    ctx.strokeStyle = '#3b6d9c'; ctx.lineWidth = 1.6 * dpr;
     ctx.beginPath();
     for (let n = nMin; n <= nMax; n++) {
       const r = this.residue(n, m, st.conv);
@@ -498,31 +502,55 @@ modules.push({
     for (let n = nMin; n <= nMax; n++) {
       const r = this.residue(n, m, st.conv);
       ctx.fillStyle = (n % m === 0) ? '#ffe08a' : '#4ea8de';
-      ctx.beginPath(); ctx.arc(sx(n), sy(r), n % m === 0 ? 3 : 2, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(sx(n), sy(r), (n % m === 0 ? 3.2 : 2) * dpr, 0, Math.PI * 2); ctx.fill();
     }
 
     // Congruence level line if a ≡ b (mod m)
     const ax = sx(st.a), ay = sy(ra);
     const bx = sx(st.b), by = sy(rb);
     if (congruent) {
-      ctx.strokeStyle = '#6bff95'; ctx.lineWidth = 1.5; ctx.setLineDash([5, 4]);
+      ctx.strokeStyle = '#6bff95'; ctx.lineWidth = 1.8 * dpr; ctx.setLineDash([5 * dpr, 4 * dpr]);
       ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(bx, by); ctx.stroke();
       ctx.setLineDash([]);
     }
 
     // Marker for a (cyan) and b (amber)
     ctx.fillStyle = '#7fd1ff';
-    ctx.beginPath(); ctx.arc(ax, ay, 6, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(ax, ay, 5.5 * dpr, 0, Math.PI * 2); ctx.fill();
     ctx.fillStyle = '#ffb86b';
-    ctx.beginPath(); ctx.arc(bx, by, 6, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(bx, by, 5.5 * dpr, 0, Math.PI * 2); ctx.fill();
 
-    // Labels
-    ctx.fillStyle = '#9fb8d0'; ctx.font = '11px monospace';
-    ctx.fillText(`r(n) = n mod ${m} (${st.conv})`, x0 + 4, 18);
-    ctx.fillText(String(rMax), 10, y1 + 4);
-    ctx.fillText(String(rMin), 10, y0);
-    ctx.fillStyle = '#7fd1ff'; ctx.fillText(`a=${st.a}→${ra}`, Math.min(x1 - 72, Math.max(x0 + 4, ax - 24)), ay - 10);
-    ctx.fillStyle = '#ffb86b'; ctx.fillText(`b=${st.b}→${rb}`, Math.min(x1 - 72, Math.max(x0 + 4, bx - 24)), by + 18);
+    // DPR-scaled labels
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    ctx.fillStyle = '#7fd1ff';
+    ctx.font = bfs(11.5);
+    ctx.fillText(`r(n) = n mod ${m} (${st.conv})`, x0, 10 * dpr);
+
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#9fb8d0';
+    ctx.font = fs(10.5);
+    ctx.fillText(String(rMax), x0 - 7 * dpr, y1);
+    ctx.fillText(String(rMin), x0 - 7 * dpr, y0);
+
+    // X-axis ticks (-30, 0, 30)
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    [-30, 0, 30].forEach(tick => {
+      ctx.fillText(String(tick), sx(tick), y0 + 6 * dpr);
+    });
+
+    // Callouts for a and b clamped cleanly inside plot bounds
+    ctx.font = bfs(11);
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'bottom';
+    ctx.fillStyle = '#7fd1ff';
+    ctx.fillText(`a=${st.a}→${ra}`, Math.min(x1 - 76 * dpr, Math.max(x0 + 4 * dpr, ax - 24 * dpr)), Math.max(y1 + 14 * dpr, ay - 8 * dpr));
+
+    ctx.textBaseline = 'top';
+    ctx.fillStyle = '#ffb86b';
+    ctx.fillText(`b=${st.b}→${rb}`, Math.min(x1 - 76 * dpr, Math.max(x0 + 4 * dpr, bx - 24 * dpr)), Math.min(y0 - 15 * dpr, by + 8 * dpr));
   },
   tick(dt) {
     this.group.rotation.y += dt * 0.15;
@@ -1269,61 +1297,70 @@ modules.push({
         { k: 'sign', v: p === q ? '0 (p=q)' : (sgn > 0 ? '+1' : '-1') },
         { k: 'a mod p', v: `${aMod} (${ap === 1 ? 'QR, x=' + roots.join(',') : ap === -1 ? 'NR' : '0'})` }
       ]);
-    // chart: interactive reciprocity matrix + residue bar for p
+    // chart: DPR-scaled reciprocity matrix + residue bar for p
     const ctx = chartEl.getContext('2d'), W = chartEl.width, H = chartEl.height;
+    const dpr = Math.max(1, W / Math.max(1, chartEl.clientWidth || 320));
+    const fs = (px) => `${Math.round(px * dpr)}px monospace`;
+    const bfs = (px) => `bold ${Math.round(px * dpr)}px monospace`;
+
     ctx.clearRect(0, 0, W, H);
     ctx.fillStyle = '#0b1020'; ctx.fillRect(0, 0, W, H);
     const primes = [3, 5, 7, 11, 13], n = primes.length;
-    const cell = Math.min(W * 0.48, H - 56) / (n + 1.2);
-    const ox = 46, oy = 34;
-    ctx.font = 'bold 12px monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    const cell = Math.min(W * 0.44, H - 64 * dpr) / (n + 0.8);
+    const ox = 42 * dpr, oy = 36 * dpr;
+
+    ctx.font = bfs(11.5); ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     for (let i = 0; i < n; i++) {
       ctx.fillStyle = primes[i] === q ? '#ffb36b' : '#9fb3d9';
-      ctx.fillText(String(primes[i]), ox + cell * (i + 0.5), oy - 13);
+      ctx.fillText(String(primes[i]), ox + cell * (i + 0.5), oy - 13 * dpr);
       ctx.fillStyle = primes[i] === p ? '#7fd1ff' : '#9fb3d9';
-      ctx.fillText(String(primes[i]), ox - 16, oy + cell * (i + 0.5));
+      ctx.fillText(String(primes[i]), ox - 16 * dpr, oy + cell * (i + 0.5));
     }
     for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) {
       const pi = primes[i], pj = primes[j];
       const v = leg(pi, pj);
       const x = ox + cell * j, y = oy + cell * i;
       ctx.fillStyle = v === 1 ? '#2f8f5b' : v === -1 ? '#8f2f4a' : '#333a4a';
-      ctx.fillRect(x + 1, y + 1, cell - 2, cell - 2);
+      ctx.fillRect(x + dpr, y + dpr, cell - 2 * dpr, cell - 2 * dpr);
       const isPQ = (pi === p && pj === q);
       const isQP = (pi === q && pj === p);
       if (isPQ || isQP) {
         ctx.strokeStyle = isPQ ? '#ffffff' : '#ffd166';
-        ctx.lineWidth = 3;
-        ctx.strokeRect(x + 2, y + 2, cell - 4, cell - 4);
+        ctx.lineWidth = 2.6 * dpr;
+        ctx.strokeRect(x + 2 * dpr, y + 2 * dpr, cell - 4 * dpr, cell - 4 * dpr);
       }
       ctx.fillStyle = '#ffffff';
       ctx.fillText(v > 0 ? '+1' : (v < 0 ? '-1' : '0'), x + cell / 2, y + cell / 2);
     }
-    ctx.textAlign = 'left'; ctx.fillStyle = '#9fb3d9'; ctx.font = '11px monospace';
-    ctx.fillText(`(${p}/${q})=${pq > 0 ? '+1' : pq}, (${q}/${p})=${qp > 0 ? '+1' : qp}, sign=${sgn > 0 ? '+1' : sgn}`, 16, H - 14);
+
+    ctx.textAlign = 'left'; ctx.textBaseline = 'bottom';
+    ctx.fillStyle = '#cfe8ff'; ctx.font = fs(10.5);
+    ctx.fillText(`(${p}/${q})=${pq > 0 ? '+1' : pq}, (${q}/${p})=${qp > 0 ? '+1' : qp}, sign=${sgn > 0 ? '+1' : sgn}`, 14 * dpr, H - 8 * dpr);
 
     // Right panel: Legendre symbol (k/p) for k = 1..p-1 highlighting selected a mod p
-    const rx0 = ox + cell * n + 28, rw = W - rx0 - 18;
-    const midY = oy + (cell * n) * 0.52, barH = (cell * n) * 0.34;
-    ctx.fillStyle = '#7fd1ff'; ctx.font = 'bold 12px monospace';
-    ctx.fillText(`Residues mod p=${p} (a≡${aMod})`, rx0, oy - 13);
-    ctx.strokeStyle = '#334866'; ctx.lineWidth = 1;
+    const rx0 = ox + cell * n + 24 * dpr, rw = W - rx0 - 16 * dpr;
+    const midY = oy + (cell * n) * 0.50, barH = (cell * n) * 0.34;
+    ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#7fd1ff'; ctx.font = bfs(11.5);
+    ctx.fillText(`Residues mod p=${p} (a≡${aMod})`, rx0, oy - 13 * dpr);
+    ctx.strokeStyle = '#334866'; ctx.lineWidth = dpr;
     ctx.beginPath(); ctx.moveTo(rx0, midY); ctx.lineTo(rx0 + rw, midY); ctx.stroke();
+
     const bw = rw / Math.max(1, p - 1);
     for (let k = 1; k < p; k++) {
       const lv = leg(k, p);
       const bx = rx0 + (k - 1) * bw;
       const isSel = (k === aMod);
       ctx.fillStyle = lv === 1 ? '#2f8f5b' : '#8f2f4a';
-      if (lv === 1) ctx.fillRect(bx + 2, midY - barH, bw - 4, barH);
-      else ctx.fillRect(bx + 2, midY, bw - 4, barH);
+      if (lv === 1) ctx.fillRect(bx + 2 * dpr, midY - barH, bw - 4 * dpr, barH);
+      else ctx.fillRect(bx + 2 * dpr, midY, bw - 4 * dpr, barH);
       if (isSel) {
-        ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2.5;
-        ctx.strokeRect(bx + 1, lv === 1 ? midY - barH : midY, bw - 2, barH);
+        ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2.4 * dpr;
+        ctx.strokeRect(bx + dpr, lv === 1 ? midY - barH : midY, bw - 2 * dpr, barH);
       }
       ctx.fillStyle = isSel ? '#ffd166' : '#cfe8ff';
-      ctx.font = '11px monospace'; ctx.textAlign = 'center';
-      ctx.fillText(String(k), bx + bw / 2, midY + barH + 14);
+      ctx.font = bfs(p > 11 ? 9.5 : 11); ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+      ctx.fillText(String(k), bx + bw / 2, midY + barH + 6 * dpr);
     }
   },
   tick(dt) {
