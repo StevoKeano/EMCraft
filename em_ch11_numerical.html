@@ -50,6 +50,16 @@
   #chart { position:absolute; right:12px; bottom:12px; width:320px; height:200px;
            background:#0e1726; border:1px solid #24344d; border-radius:8px; }
   #chartLabel { position:absolute; right:12px; bottom:216px; font-size:11px; color:var(--muted); }
+  #mapKey { position:absolute; top:12px; right:12px; width:240px; background:rgba(14,23,38,0.92);
+            border:1px solid #24344d; border-radius:8px; padding:8px 10px; font-size:11px;
+            color:var(--ink); backdrop-filter:blur(4px); z-index:5; }
+  #mapKey .mk-title { font-weight:600; font-size:12px; color:var(--accent); margin-bottom:6px;
+                      display:flex; justify-content:space-between; align-items:center; }
+  #mapKey .mk-row { display:flex; align-items:center; gap:7px; margin-bottom:4px; color:#c9d6e8; }
+  #mapKey .mk-row:last-child { margin-bottom:0; }
+  #mapKey .mk-swatch { width:12px; height:12px; border-radius:2px; flex-shrink:0; border:1px solid rgba(255,255,255,0.2); }
+  #mapKey .mk-grad { height:8px; border-radius:3px; background:linear-gradient(90deg,#2563eb,#06b6d4,#eab308); margin:4px 0 2px; }
+  #mapKey .mk-scale { display:flex; justify-content:space-between; font-size:10px; color:var(--muted); }
 </style>
 </head>
 <body>
@@ -68,6 +78,10 @@
     <div id="quiz"></div>
   </aside>
   <main id="stage">
+    <div id="mapKey" aria-label="Map and Chart Key">
+      <div class="mk-title"><span>Map &amp; Chart Key</span><span id="mkMode">3D / 2D</span></div>
+      <div id="mkBody"></div>
+    </div>
     <canvas id="chart"></canvas>
     <div id="chartLabel">2D analytical plot</div>
   </main>
@@ -157,6 +171,26 @@ const KATEX_OPTS = {
   throwOnError: false,
   strict: false
 };
+
+function renderMapKey(mod) {
+  const body = document.getElementById('mkBody');
+  const mode = document.getElementById('mkMode');
+  if (!body || !mod) return;
+  if (mod.id === 'fem') {
+    if (mode) mode.textContent = 'FEM Mesh';
+    body.innerHTML = `
+      <div class="mk-grad"></div>
+      <div class="mk-scale"><span>Low V</span><span>Potential V(x,y)</span><span>High V</span></div>
+      <div class="mk-row" style="margin-top:6px;"><span class="mk-swatch" style="background:#9fb8d8;"></span><span>Triangular element edges &amp; z-elevation &#8733; V</span></div>
+      <div class="mk-row"><span class="mk-swatch" style="background:#7fd1ff;"></span><span>2D chart: V(x) profile along top cut y = +0.5</span></div>`;
+    return;
+  }
+  if (mode) mode.textContent = '3D / 2D';
+  body.innerHTML = `
+    <div class="mk-row"><span class="mk-swatch" style="background:#7fd1ff;"></span><span>3D field / potential &amp; primary 2D curve</span></div>
+    <div class="mk-row"><span class="mk-swatch" style="background:#ffb347;"></span><span>Field vectors / reference or secondary 2D curve</span></div>
+    <div class="mk-row"><span class="mk-swatch" style="background:#94a3b8;"></span><span>Drag to orbit &middot; Scroll to zoom</span></div>`;
+}
 
 function setHud(titleStr, latexEqStr, rows) {
   document.getElementById('hudTitle').textContent = titleStr;
@@ -1725,7 +1759,7 @@ modules.push({
     }
     st.V = Array.from(V);
     st.cut = [];
-    for (let i = 0; i <= n; i++) st.cut.push([st.nodes[idxCut(i, n, n)][0], V[idxCut(i, n, n)]]);
+    for (let i = 0; i <= n; i++) { const k = i * (n + 1) + n; st.cut.push([st.nodes[k][0], V[k]]); }
     this.updateGeometry();
   },
   updateGeometry() {
@@ -2113,6 +2147,7 @@ function loadModule(mod) {
   }
   mod.build();
   mod.update();
+  renderMapKey(mod);
   lessonEl.innerHTML = mod.lesson;
   renderTex(lessonEl, KATEX_OPTS);
   buildControls(mod);
