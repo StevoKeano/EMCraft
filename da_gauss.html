@@ -119,7 +119,7 @@
     box-sizing: border-box;
   }
 </style>
-  <meta name="app-version" content="2026.11.27.183242">
+  <meta name="app-version" content="2026.11.27.183714">
 </head>
 <body>
 <div id="app">
@@ -760,50 +760,161 @@ modules.push({
     }
     for (let i = si; i < 24; i++) this.solDots[i].visible = false;
 
-    // Chart
+    // Chart: DPR-scaled Linear Congruence Residue Plot (left) & CRT Remainder Grid (right)
     const ctx = chartEl.getContext('2d');
     const W = chartEl.width, H = chartEl.height;
+    const dpr = Math.max(1, W / Math.max(1, chartEl.clientWidth || 320));
+    const fs = (px) => `${Math.round(px * dpr)}px monospace`;
+    const bfs = (px) => `bold ${Math.round(px * dpr)}px monospace`;
+
     ctx.clearRect(0, 0, W, H);
-    ctx.fillStyle = '#0b1220'; ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = '#0b1220';
+    ctx.fillRect(0, 0, W, H);
 
-    // Left: solution count g vs m
-    ctx.strokeStyle = '#2a3a55'; ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.moveTo(40, H - 40); ctx.lineTo(W / 2 - 20, H - 40); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(40, H - 40); ctx.lineTo(40, 40); ctx.stroke();
-    ctx.fillStyle = '#7fd1ff'; ctx.font = '12px monospace';
-    ctx.fillText('g = gcd(a,m) vs m', 50, 30);
-    ctx.strokeStyle = '#7fd1ff'; ctx.lineWidth = 2; ctx.beginPath();
-    for (let mm = 2; mm <= 24; mm++) {
-      const gg = gcd(a, mm);
-      const px = 40 + ((mm - 2) / 22) * (W / 2 - 60);
-      const py = H - 40 - (gg / 24) * (H - 80);
-      if (mm === 2) ctx.moveTo(px, py); else ctx.lineTo(px, py);
-    }
-    ctx.stroke();
-    ctx.fillStyle = '#ff5d5d';
+    // --- LEFT PANEL: Linear Congruence ax ≡ b (mod m) ---
+    const lx0 = 38 * dpr, lx1 = W * 0.46;
+    const ly0 = H - 30 * dpr, ly1 = 36 * dpr;
+    const lW = lx1 - lx0, lH = ly0 - ly1;
+    const targetB = ((b % m) + m) % m;
+
+    // Axes & horizontal target line y = b mod m
+    ctx.strokeStyle = '#2d4563';
+    ctx.lineWidth = dpr;
     ctx.beginPath();
-    ctx.arc(40 + ((m - 2) / 22) * (W / 2 - 60), H - 40 - (g / 24) * (H - 80), 4, 0, Math.PI * 2);
-    ctx.fill();
+    ctx.moveTo(lx0, ly1); ctx.lineTo(lx0, ly0); ctx.lineTo(lx1, ly0);
+    ctx.stroke();
 
-    // Right: CRT lattice points mod M
-    ctx.fillStyle = '#ffb86b'; ctx.font = '12px monospace';
-    ctx.fillText('CRT lattice mod M = ' + M, W / 2 + 10, 30);
-    ctx.strokeStyle = '#2a3a55';
-    ctx.beginPath(); ctx.moveTo(W / 2 + 10, H - 40); ctx.lineTo(W - 20, H - 40); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(W / 2 + 10, H - 40); ctx.lineTo(W / 2 + 10, 40); ctx.stroke();
-    if (crtSolvable) {
-      for (let x = 0; x < M; x++) {
-        if (x % m1 === r1 && x % m2 === r2) {
-          const px = W / 2 + 10 + (x / Math.max(M - 1, 1)) * (W / 2 - 40);
-          const py = H - 40 - 0.5 * (H - 80);
-          ctx.fillStyle = '#8fe388';
-          ctx.beginPath(); ctx.arc(px, py, 5, 0, Math.PI * 2); ctx.fill();
+    const targetY = ly0 - (targetB / Math.max(1, m - 1)) * lH;
+    ctx.strokeStyle = '#ff7b7b';
+    ctx.setLineDash([4 * dpr, 3 * dpr]);
+    ctx.beginPath(); ctx.moveTo(lx0, targetY); ctx.lineTo(lx1, targetY); ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Axis ticks (0, targetB, m-1)
+    ctx.font = fs(10);
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#8fa9c4';
+    ctx.fillText('0', lx0 - 6 * dpr, ly0);
+    ctx.fillText(String(m - 1), lx0 - 6 * dpr, ly1);
+    ctx.fillStyle = '#ff9494';
+    ctx.fillText(`b=${targetB}`, lx0 - 6 * dpr, targetY);
+
+    // Plot all residues (x, ax mod m)
+    const linSols = [];
+    for (let x = 0; x < m; x++) {
+      const rem = ((a * x) % m + m) % m;
+      const hit = rem === targetB;
+      if (hit) linSols.push(x);
+      const px = lx0 + (x / Math.max(1, m - 1)) * lW;
+      const py = ly0 - (rem / Math.max(1, m - 1)) * lH;
+
+      ctx.fillStyle = hit ? '#55ff99' : '#58a6ff';
+      ctx.beginPath();
+      ctx.arc(px, py, (hit ? 5 : 3) * dpr, 0, Math.PI * 2);
+      ctx.fill();
+
+      if (hit) {
+        ctx.fillStyle = '#ffffff';
+        ctx.font = bfs(10.5);
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'bottom';
+        ctx.fillText(`x=${x}`, px, py - 6 * dpr);
+      }
+    }
+
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    ctx.fillStyle = '#7fd1ff';
+    ctx.font = bfs(11);
+    ctx.fillText(`${a}x ≡ ${b} (mod ${m})`, 10 * dpr, 10 * dpr);
+
+    ctx.fillStyle = linSols.length ? '#55ff99' : '#ff7b7b';
+    ctx.font = fs(10);
+    ctx.fillText(
+      linSols.length ? `x ≡ ${linSols.join(', ')} (mod ${m})` : `No sol (gcd=${g} ∤ ${b})`,
+      lx0,
+      H - 17 * dpr
+    );
+
+    // --- RIGHT PANEL: CRT Remainder Grid (x mod m1 vs x mod m2) ---
+    const rxBase = W * 0.54;
+    const gridLeft = rxBase + 26 * dpr;
+    const gridTop = 44 * dpr;
+    const gridW = W - gridLeft - 14 * dpr;
+    const gridH = H - gridTop - 28 * dpr;
+    const cellW = gridW / m1;
+    const cellH = gridH / m2;
+
+    // Map each reachable pair (u, v) to x in [0, lcmM)
+    const crtMap = new Map();
+    for (let x = 0; x < lcmM; x++) {
+      crtMap.set(`${x % m1},${x % m2}`, x);
+    }
+
+    // Column headers (mod m1)
+    ctx.font = fs(9.5);
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'bottom';
+    for (let u = 0; u < m1; u++) {
+      ctx.fillStyle = u === r1 ? '#ff6b6b' : '#7fd1ff';
+      ctx.fillText(String(u), gridLeft + (u + 0.5) * cellW, gridTop - 3 * dpr);
+    }
+
+    // Row headers (mod m2) & grid cells
+    for (let v = 0; v < m2; v++) {
+      const rowY = gridTop + (m2 - 1 - v) * cellH;
+      ctx.textAlign = 'right';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = v === r2 ? '#ff6b6b' : '#ffb86b';
+      ctx.font = fs(9.5);
+      ctx.fillText(String(v), gridLeft - 5 * dpr, rowY + cellH / 2);
+
+      for (let u = 0; u < m1; u++) {
+        const colX = gridLeft + u * cellW;
+        const val = crtMap.get(`${u},${v}`);
+        const isTarget = (u === r1 && v === r2);
+
+        if (isTarget && crtSolvable) {
+          ctx.fillStyle = '#d9383a';
+        } else if (isTarget && !crtSolvable) {
+          ctx.fillStyle = '#5a1e24';
+        } else if (val !== undefined) {
+          ctx.fillStyle = '#15283d';
+        } else {
+          ctx.fillStyle = '#0e1622';
+        }
+        ctx.fillRect(colX + dpr, rowY + dpr, cellW - 2 * dpr, cellH - 2 * dpr);
+
+        if (isTarget) {
+          ctx.strokeStyle = '#ffd166';
+          ctx.lineWidth = 1.6 * dpr;
+          ctx.strokeRect(colX + dpr, rowY + dpr, cellW - 2 * dpr, cellH - 2 * dpr);
+        }
+
+        if (val !== undefined && cellW >= 18 * dpr && cellH >= 14 * dpr) {
+          ctx.fillStyle = isTarget ? '#ffffff' : '#8fb3d9';
+          ctx.font = isTarget ? bfs(10) : fs(9);
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(String(val), colX + cellW / 2, rowY + cellH / 2);
         }
       }
-    } else {
-      ctx.fillStyle = '#ff5d5d'; ctx.font = '12px monospace';
-      ctx.fillText('no CRT sol (gcd=' + g12 + ')', W / 2 + 20, H / 2);
     }
+
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    ctx.fillStyle = '#ffb86b';
+    ctx.font = bfs(11);
+    ctx.fillText(`CRT (mod ${m1}, mod ${m2})`, rxBase, 10 * dpr);
+
+    ctx.font = fs(10);
+    ctx.fillStyle = crtSolvable ? '#8fe388' : '#ff7b7b';
+    ctx.fillText(
+      crtSolvable ? `x ≡ ${crt} (mod ${lcmM})  [r1=${r1}, r2=${r2}]` : `Conflict: ${r1} ≢ ${r2} (mod ${g12})`,
+      gridLeft,
+      H - 17 * dpr
+    );
 
     setHud('Linear congruences & CRT',
         'x \\equiv ' + r1 + ' \\pmod{' + m1 + '},\\quad x \\equiv ' + r2 + ' \\pmod{' + m2 + '}',
