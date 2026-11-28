@@ -119,7 +119,7 @@
     box-sizing: border-box;
   }
 </style>
-  <meta name="app-version" content="2026.11.27.184821">
+  <meta name="app-version" content="2026.11.27.185110">
 </head>
 <body>
 <div id="app">
@@ -1095,56 +1095,137 @@ modules.push({
     }
     st.trail.geometry.setFromPoints(orbit);
 
-    // chart
+    // chart: DPR-scaled Discrete Log Index Table (left) & Multiplicative Order Distribution (right)
     const ctx = chartEl.getContext('2d');
     const W = chartEl.width, H = chartEl.height;
+    const dpr = Math.max(1, W / Math.max(1, chartEl.clientWidth || 320));
+    const fs = (px) => `${Math.round(px * dpr)}px monospace`;
+    const bfs = (px) => `bold ${Math.round(px * dpr)}px monospace`;
+
     ctx.clearRect(0, 0, W, H);
     ctx.fillStyle = '#0b1220';
     ctx.fillRect(0, 0, W, H);
 
-    const pad = 40;
-    const plotW = W - 2 * pad, plotH = H - 2 * pad;
+    const aMod = ((a % p) + p) % p;
+    const topY = 38 * dpr, botY = H - 30 * dpr;
+    const plotH = botY - topY;
+    const labelFont = p > 13 ? 8.5 : 10;
 
-    // axes
+    // --- LEFT PANEL: Discrete Log k = ind_g(r) ---
+    const lx0 = 32 * dpr, lx1 = W * 0.47;
+    const lW = lx1 - lx0;
     ctx.strokeStyle = '#2a4a66';
-    ctx.lineWidth = 1;
+    ctx.lineWidth = dpr;
     ctx.beginPath();
-    ctx.moveTo(pad, pad);
-    ctx.lineTo(pad, H - pad);
-    ctx.lineTo(W - pad, H - pad);
+    ctx.moveTo(lx0, topY); ctx.lineTo(lx0, botY); ctx.lineTo(lx1, botY);
     ctx.stroke();
 
-    // index table bars: k = ind_g(a) for each residue
-    const barW = plotW / n;
+    // Y-axis ticks (0 and p-2)
+    ctx.font = fs(9.5);
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#8fa9c4';
+    ctx.fillText('0', lx0 - 5 * dpr, botY);
+    ctx.fillText(String(Math.max(1, n - 1)), lx0 - 5 * dpr, topY);
+
+    const lBarW = lW / n;
+    let reachableCount = 0;
     for (let r = 1; r < p; r++) {
       let k = -1, yv = 1;
       for (let j = 0; j < n; j++) {
         if (yv === r) { k = j; break; }
         yv = (yv * g) % p;
       }
-      const h = k >= 0 ? (k / n) * plotH : 0;
-      ctx.fillStyle = r === a % p ? '#ffb347' : '#3a7ca5';
-      ctx.fillRect(pad + (r - 1) * barW + 2, H - pad - h, barW - 4, h);
+      if (k >= 0) reachableCount++;
+      const bx = lx0 + (r - 1) * lBarW;
+      const isA = (r === aMod);
+      if (k >= 0) {
+        const h = ((k + 0.4) / n) * plotH;
+        ctx.fillStyle = isA ? '#ffb347' : '#3a7ca5';
+        ctx.fillRect(bx + 1.5 * dpr, botY - h, Math.max(2 * dpr, lBarW - 3 * dpr), h);
+        if (isA) {
+          ctx.strokeStyle = '#ffffff';
+          ctx.lineWidth = 1.6 * dpr;
+          ctx.strokeRect(bx + 1.5 * dpr, botY - h, Math.max(2 * dpr, lBarW - 3 * dpr), h);
+        }
+      } else {
+        // Unreachable residue when g is not a primitive root
+        ctx.fillStyle = '#6b3344';
+        ctx.font = fs(labelFont);
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'bottom';
+        ctx.fillText('×', bx + lBarW / 2, botY - 2 * dpr);
+      }
+
+      ctx.fillStyle = isA ? '#ffd166' : '#9fb8d0';
+      ctx.font = isA ? bfs(labelFont) : fs(labelFont);
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'top';
+      ctx.fillText(String(r), bx + lBarW / 2, botY + 5 * dpr);
     }
 
-    // orbit line
-    ctx.strokeStyle = '#7fd1ff';
-    ctx.lineWidth = 2;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    ctx.fillStyle = '#7fd1ff';
+    ctx.font = bfs(11);
+    ctx.fillText(`Index k = ind_${g}(r) (mod ${p})`, 10 * dpr, 10 * dpr);
+
+    // --- RIGHT PANEL: Multiplicative Order ord_p(r) ---
+    const rx0 = W * 0.55, rx1 = W - 14 * dpr;
+    const rW = rx1 - rx0;
+    ctx.strokeStyle = '#2a4a66';
+    ctx.lineWidth = dpr;
     ctx.beginPath();
-    let ov = 1;
-    for (let k = 0; k <= n; k++) {
-      const px = pad + (k / n) * plotW;
-      const py = H - pad - ((ov - 1) / n) * plotH;
-      if (k === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
-      ov = (ov * g) % p;
-    }
+    ctx.moveTo(rx0, topY); ctx.lineTo(rx0, botY); ctx.lineTo(rx1, botY);
     ctx.stroke();
 
-    // labels
-    ctx.fillStyle = '#9fc7e8';
-    ctx.font = '12px monospace';
-    ctx.fillText('index table k = ind_g(r)', pad, pad - 12);
-    ctx.fillText('orbit g^k mod p', W - pad - 150, pad - 12);
+    // Dashed target line at order = p - 1 (primitive roots)
+    const primY = topY + 2 * dpr;
+    ctx.strokeStyle = '#3d8b63';
+    ctx.setLineDash([4 * dpr, 3 * dpr]);
+    ctx.beginPath(); ctx.moveTo(rx0, primY); ctx.lineTo(rx1, primY); ctx.stroke();
+    ctx.setLineDash([]);
+
+    ctx.font = fs(9.5);
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#6bff95';
+    ctx.fillText(String(n), rx0 - 5 * dpr, primY);
+    ctx.fillStyle = '#8fa9c4';
+    ctx.fillText('1', rx0 - 5 * dpr, botY - (1 / n) * plotH);
+
+    const rBarW = rW / n;
+    let primCount = 0;
+    for (let r = 1; r < p; r++) {
+      let rOrd = 1, cur = r % p;
+      while (cur !== 1 && rOrd < n) { cur = (cur * r) % p; rOrd++; }
+      const isPrim = (rOrd === n);
+      if (isPrim) primCount++;
+      const isA = (r === aMod);
+      const bx = rx0 + (r - 1) * rBarW;
+      const h = (rOrd / n) * (plotH - 2 * dpr);
+
+      ctx.fillStyle = isPrim ? '#2f9e66' : '#4a6fa5';
+      ctx.fillRect(bx + 1.5 * dpr, botY - h, Math.max(2 * dpr, rBarW - 3 * dpr), h);
+
+      if (isA) {
+        ctx.strokeStyle = '#ffd166';
+        ctx.lineWidth = 2 * dpr;
+        ctx.strokeRect(bx + 1.5 * dpr, botY - h, Math.max(2 * dpr, rBarW - 3 * dpr), h);
+      }
+
+      ctx.fillStyle = isA ? '#ffd166' : (isPrim ? '#8fe388' : '#9fb8d0');
+      ctx.font = isA ? bfs(labelFont) : fs(labelFont);
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'top';
+      ctx.fillText(String(r), bx + rBarW / 2, botY + 5 * dpr);
+    }
+
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    ctx.fillStyle = '#8fe388';
+    ctx.font = bfs(11);
+    ctx.fillText(`Order ord_${p}(r) — ${primCount} prim. roots`, rx0 - 10 * dpr, 10 * dpr);
 
     // 3D residue labels around ring
     this.lblGrp.clear();
