@@ -20,7 +20,18 @@
   #app { display:grid; grid-template-columns: 340px 1fr; height:100%; }
   #sidebar { background:var(--panel); border-right:1px solid #1e2a3d; padding:14px; overflow:auto; }
   #sidebar h1 { font-size:16px; margin:0 0 4px; }
-  #sidebar .sub { color:var(--muted); font-size:12px; margin-bottom:8px; }
+  #sidebar .sub { color:var(--muted); font-size:12px; margin-bottom:8px; display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
+  .info-circle-link {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 16px; height: 16px; border-radius: 50%;
+    border: 1px solid var(--accent); color: var(--accent);
+    font-size: 11px; font-weight: 700; font-style: italic; font-family: Georgia, serif;
+    text-decoration: none; line-height: 1; flex-shrink: 0;
+    transition: background 0.15s ease, color 0.15s ease, transform 0.12s ease;
+  }
+  .info-circle-link:hover {
+    background: var(--accent); color: #0b1220; transform: scale(1.08);
+  }
   .help-bar { display:flex; gap:6px; margin-bottom:12px; }
   .help-btn { background:#16233a; color:var(--accent); border:1px solid #2b4466; border-radius:6px;
               padding:5px 10px; font-size:12px; cursor:pointer; font-weight:600; }
@@ -67,6 +78,44 @@
            width:min(360px, calc(100vw - 24px)); height:min(210px, 34vh);
            background:#0e1726; border:1px solid #24344d; border-radius:8px;
            box-shadow:0 8px 24px rgba(0,0,0,0.45); }
+  #stageLegend {
+    position: fixed; top: 12px; right: 12px; z-index: 46; box-sizing: border-box;
+    width: min(360px, calc(100vw - 24px));
+    max-height: max(120px, calc(100vh - min(210px, 34vh) - 46px));
+    overflow-y: auto;
+    background: rgba(12, 20, 34, 0.94);
+    border: 1px solid #2b4466; border-radius: 8px;
+    padding: 9px 11px; color: var(--ink);
+    font-size: 11.5px; line-height: 1.45;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+    user-select: text;
+  }
+  #stageLegend .lg-head {
+    display: flex; justify-content: space-between; align-items: center;
+    font-weight: 700; font-size: 12px; color: var(--accent);
+    margin-bottom: 6px; user-select: none;
+  }
+  #stageLegend .lg-toggle {
+    background: #16233a; color: var(--accent); border: 1px solid #2b4466;
+    border-radius: 5px; padding: 2px 7px; font-size: 10.5px; cursor: pointer;
+  }
+  #stageLegend.collapsed { width: auto; max-height: none; padding: 6px 10px; }
+  #stageLegend.collapsed .lg-head { margin-bottom: 0; gap: 8px; }
+  #stageLegend.collapsed .lg-body { display: none; }
+  #stageLegend .lg-sec { margin-top: 6px; padding-top: 6px; border-top: 1px solid #1e2f47; }
+  #stageLegend .lg-sec:first-child { margin-top: 0; padding-top: 0; border-top: none; }
+  #stageLegend .lg-lbl { font-weight: 700; color: #ffd166; font-size: 11px; text-transform: uppercase; letter-spacing: 0.03em; }
+  #stageLegend .lg-item { display: flex; align-items: flex-start; gap: 6px; margin-top: 4px; color: #d5e2f2; }
+  #stageLegend .lg-note { margin-top: 4px; color: #c7d8ee; font-size: 11.2px; line-height: 1.45; }
+  #stageLegend .lg-live {
+    background: rgba(22, 38, 62, 0.78); border: 1px solid #29466b;
+    border-radius: 6px; padding: 6px 8px; margin-top: 6px;
+    color: #e4f0ff; font-size: 11.2px;
+  }
+  #stageLegend .sw {
+    display: inline-block; width: 9px; height: 9px; border-radius: 2px;
+    margin-top: 3px; flex-shrink: 0;
+  }
   #chartLabel { position:fixed; right:14px; bottom:calc(min(210px, 34vh) + 16px); z-index:45;
                 font-size:11px; color:var(--muted); pointer-events:none; }
 
@@ -122,14 +171,14 @@
     box-sizing: border-box;
   }
 </style>
-  <meta name="app-version" content="2026.11.27.193046">
+  <meta name="app-version" content="2026.11.27.212540">
 </head>
 <body>
 <div id="app">
   <aside id="sidebar">
     <button id="hudHideBtn" type="button" title="Hide side panel">Hide &lt;&lt;&lt;</button>
     <h1>Disquisitiones Arithmeticae (1801)</h1>
-    <div class="sub">Carl Friedrich Gauss — Number Theory Interactive Lab</div>
+    <div class="sub"><span>Carl Friedrich Gauss — Number Theory Interactive Lab</span><a class="info-circle-link" href="https://github.com/StevoKeano/EMCraft/commits/main/da_gauss.html?before=501f3feee076fb6542bca353cc9c8822d50b5d2a+35" target="_blank" rel="noopener noreferrer" title="View da_gauss.html commit history on GitHub" aria-label="View da_gauss.html commit history on GitHub">i</a></div>
     <div class="help-bar" style="flex-wrap:wrap;">
       <button id="helpToggleBtn" class="help-btn" type="button">? Plain-English Guide</button>
       <button id="teenToggleBtn" class="help-btn" type="button" style="color:#ffd166; border-color:#5c4b1e;">🎓 Teen / Student Guide</button>
@@ -148,6 +197,13 @@
   </aside>
   <main id="stage">
     <button id="hudUnhideBtn" type="button" title="Show side panel">Unhide &gt;&gt;&gt;</button>
+    <div id="stageLegend" aria-label="3D and 2D Visual Key">
+      <div class="lg-head">
+        <span>Map &amp; Chart Key <span style="font-weight:400; color:#8fa3bf; font-size:10.5px;">(highlight to Ask Gemini)</span></span>
+        <button type="button" class="lg-toggle" id="lgToggleBtn">Hide</button>
+      </div>
+      <div class="lg-body" id="lgBody"></div>
+    </div>
     <canvas id="chart" width="640" height="400"></canvas>
     <div id="chartLabel">2D analytical plot</div>
   </main>
@@ -171,10 +227,19 @@ camera.position.set(6, 5, 8);
 
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
-controls.dampingFactor = 0.06;
-controls.minDistance = 0.8;
-controls.maxDistance = 80;
-controls.enableZoom = true;
+controls.dampingFactor = 0.07;
+controls.minDistance = 1.8;
+controls.maxDistance = 35;
+controls.enableZoom = false; // Handled smoothly below without raw deltaY spikes
+
+let pendingZoomScale = 1.0;
+renderer.domElement.addEventListener('wheel', (e) => {
+  if (e.ctrlKey || e.metaKey) return; // Allow normal browser page zoom
+  e.preventDefault();
+  const raw = e.deltaMode === 1 ? e.deltaY * 16 : (e.deltaMode === 2 ? e.deltaY * 100 : e.deltaY);
+  const step = Math.max(-1, Math.min(1, raw / 100));
+  pendingZoomScale = Math.max(0.25, Math.min(4.0, pendingZoomScale * Math.pow(1.07, step)));
+}, { passive: false });
 
 scene.add(new THREE.AmbientLight(0xffffff, 0.55));
 const key = new THREE.DirectionalLight(0xffffff, 0.9);
@@ -2532,6 +2597,170 @@ has degree $\varphi(n)$ and integer coefficients; moreover $x^{n}-1=\prod_{d\mid
 });
 /* === UI CONTROLLER === */
 
+const SECTION_LEGENDS = {
+  sec1_congruences: {
+    space: "Quotient ring $\\mathbb{Z}/m\\mathbb{Z}$ lifted onto a 3D cylindrical helix",
+    d3: [
+      ["#7fd1ff", "<b>Cyan cone & lifted bead:</b> Integer $a$ at height $a/m$ and its projected clock residue $a \\bmod m$."],
+      ["#ffb86b", "<b>Orange cone & lifted bead:</b> Integer $b$ at height $b/m$ and its projected clock residue $b \\bmod m$."],
+      ["#ff6b6b", "<b>Red rim arc:</b> Shortest modular distance $\\min(|a-b| \\bmod m,\; m - (|a-b| \\bmod m))$ on the clock."],
+      ["#4ea8de", "<b>Blue helix:</b> Covering map $t \\mapsto (\\cos(2\\pi t/m),\; t/m,\; \\sin(2\\pi t/m))$. Vertical alignment of the cyan and orange drop-lines means $m \\mid (a - b)$."]
+    ],
+    d2: [
+      ["#4ea8de", "<b>Sawtooth wave:</b> Remainder function $r(n) = n \\bmod m$ over $n \\in [-30, 30]$ (discontinuities mark multiples of $m$)."],
+      ["#6bff95", "<b>Green dashed tie-line:</b> Appears if and only if $a \\equiv b \\pmod m$."]
+    ],
+    deep: "<b>Algebraic Structure:</b> Partitioning $\\mathbb{Z}$ into $m$ congruence classes turns infinite integer arithmetic into a finite ring $\\mathbb{Z}/m\\mathbb{Z}$ of size $m$. Switching to <i>absolutely least</i> residues centers the representative window on $(-m/2, m/2]$ instead of $[0, m-1]$."
+  },
+  sec2_linear_crt: {
+    space: "Product torus $\\mathbb{Z}/m_1\\mathbb{Z} \\times \\mathbb{Z}/m_2\\mathbb{Z}$ embedded in $\\mathbb{R}^3$",
+    d3: [
+      ["#7fd1ff", "<b>Horizontal XZ ring ($\\bmod m_1$):</b> First clock modulus; red dot marks target residue $r_1 = a \\bmod m_1$."],
+      ["#ffb86b", "<b>Vertical XY ring ($\\bmod m_2$):</b> Second clock modulus; red dot marks target residue $r_2 = b \\bmod m_2$."],
+      ["#56cfe1", "<b>Coupled cyan helix & red beacon:</b> Traces $(t \\bmod m_1, t \\bmod m_2)$ for $t = 0 \\dots \\operatorname{lcm}(m_1, m_2)$. When $\\gcd(m_1, m_2) = 1$, the curve is dense across all $m_1 m_2$ pairs."]
+    ],
+    d2: [
+      ["#55ff99", "<b>Left panel ($ax \\equiv b \\pmod m$):</b> Plots $y = ax \\bmod m$; green hits on the red target line occur iff $\\gcd(a,m) \\mid b$ (yielding $\\gcd(a,m)$ solutions)."],
+      ["#d9383a", "<b>Right panel (CRT remainder grid):</b> Maps each reachable pair $(x \\bmod m_1, x \\bmod m_2)$ to its unique $x < \\operatorname{lcm}(m_1, m_2)$."]
+    ],
+    deep: "<b>Why Coprimality Matters:</b> By the Chinese Remainder Theorem, the canonical ring homomorphism $\\mathbb{Z}/(m_1 m_2)\\mathbb{Z} \\to (\\mathbb{Z}/m_1\\mathbb{Z}) \\times (\\mathbb{Z}/m_2\\mathbb{Z})$ is an isomorphism if and only if $\\gcd(m_1, m_2) = 1$."
+  },
+  sec3_power_residues: {
+    space: "Cyclic multiplicative group $(\\mathbb{Z}/p\\mathbb{Z})^\\times$ of order $p - 1$",
+    d3: [
+      ["#ffb347", "<b>Orange laser orbit & cone:</b> Multiplicative walk $1 \\to g^1 \\to g^2 \\to \\dots \\pmod p$. A primitive root $g$ visits all $p-1$ vertices in a single Hamiltonian cycle."],
+      ["#7fd1ff", "<b>Ring vertices $1 \\dots p-1$:</b> Enlarged orange sphere marks the selected base $a$."]
+    ],
+    d2: [
+      ["#3a7ca5", "<b>Left panel ($k = \\operatorname{ind}_g(r)$):</b> Discrete logarithm exponent $k$ solving $g^k \\equiv r \\pmod p$. `×` marks residues outside the subgroup $\\langle g \\rangle$."],
+      ["#2f9e66", "<b>Right panel ($\\operatorname{ord}_p(r)$):</b> Multiplicative order of every residue (always dividing $p-1$). Green bars reach full height $p-1$, counting $\\varphi(p-1)$ primitive roots."]
+    ],
+    deep: "<b>Group Isomorphism:</b> Choosing a primitive root $g$ builds an explicit isomorphism $(\\mathbb{Z}/(p-1)\\mathbb{Z}, +) \\xrightarrow{\\sim} ((\\mathbb{Z}/p\\mathbb{Z})^\\times, \\times)$ via $k \\mapsto g^k \\bmod p$, turning multiplication into addition of indices."
+  },
+  sec4_quadratic_reciprocity: {
+    space: "Dual prime residue rings $(\\mathbb{Z}/p\\mathbb{Z})^\\times$ and $(\\mathbb{Z}/q\\mathbb{Z})^\\times$",
+    d3: [
+      ["#7fd1ff", "<b>Left ring ($p$) & right ring ($q$):</b> Tall glowing spokes mark quadratic residues ($x^2 \\equiv k$ solvable); short dim spokes mark non-residues."],
+      ["#7fffa0", "<b>Central reciprocity plane:</b> Green when $\\left(\\frac{p}{q}\\right) = \\left(\\frac{q}{p}\\right)$; red when $p \\equiv q \\equiv 3 \\pmod 4$ forces $\\left(\\frac{p}{q}\\right) = -\\left(\\frac{q}{p}\\right)$."]
+    ],
+    d2: [
+      ["#2f8f5b", "<b>Left matrix:</b> Full Legendre table $\\left(\\frac{p}{q}\\right) \\in \\{+1,-1\\}$ for odd primes $\\{3,5,7,11,13\\}$. White/gold borders compare $(p/q)$ with its transpose $(q/p)$."],
+      ["#ffd166", "<b>Right bars:</b> Upward green ($+1$, QR) vs. downward red ($-1$, NR) for $k = 1 \\dots p-1$."]
+    ],
+    deep: "<b>Gauss's Theorema Aureum:</b> Exactly half of the $p-1$ nonzero residues mod $p$ are squares. Quadratic reciprocity links solvability mod $q$ to solvability mod $p$ via $(-1)^{\\frac{p-1}{2}\\frac{q-1}{2}}$."
+  },
+  sec5a_binary_forms: {
+    space: "Real quadratic surface $z = f(x,y) = ax^2 + 2bxy + cy^2$ over $(x,y) \\in \\mathbb{R}^2$",
+    d3: [
+      ["#2667a8", "<b>3D surface:</b> Elliptic paraboloid bowl when $D = b^2 - ac < 0$ (positive definite); hyperbolic saddle when $D > 0$ (indefinite)."],
+      ["#ffe08a", "<b>Slice curve & gold dots:</b> Level conic $f(x,y) = 1$ (ellipse vs. hyperbola) with integer solutions $(x,y) \\in \\mathbb{Z}^2$."]
+    ],
+    d2: [
+      ["#7fd1ff", "<b>Left panel:</b> Top-down conic $f(x,y) = 1$ on the $(x, y)$ integer grid."],
+      ["#a0e08a", "<b>Right panel:</b> Gauss reduction trajectory applying $\\operatorname{SL}_2(\\mathbb{Z})$ unimodular shears until $|b| \\le a \\le c$."]
+    ],
+    deep: "<b>Implicit Complex Upper Half-Plane Link:</b> For $D < 0$, $f(x,y)$ factors over $\\mathbb{C}$ as $a(x - \\tau y)(x - \\bar{\\tau} y)$ with $\\tau = \\frac{-b + i\\sqrt{|D|}}{a} \\in \\mathbb{H}$. Gauss reduction moves $\\tau$ into the fundamental domain $|\\operatorname{Re}(\\tau)| \\le \\frac{1}{2},\; |\\tau| \\ge 1$."
+  },
+  sec5b_composition_genera: {
+    space: "Finite abelian ideal class group $\\operatorname{Cl}(D)$ of discriminant $D$",
+    d3: [
+      ["#7fd1ff", "<b>Group ring orbs & arrows:</b> Each orb represents an $\\operatorname{SL}_2(\\mathbb{Z})$ equivalence class $F_i$; arrows step by composing with generator $F_1$."],
+      ["#ff9ad7", "<b>Horizontal genus planes & halos:</b> Partition $\\operatorname{Cl}(D)$ into $2^{\\mu-1}$ genera using Legendre characters $\\chi_p(f)$ for primes $p \\mid D$."]
+    ],
+    d2: [
+      ["#1b3a5c", "<b>Left Cayley table:</b> Exact Gauss composition $F_i \\circ F_j$ (followed by reduction), shaded by genus."],
+      ["#ffd166", "<b>Right list:</b> Canonical reduced forms $(a, b, c)$ ordered by generator powers $g^i$."]
+    ],
+    deep: "<b>Principal Genus Theorem:</b> Squares in the class group ($F_i^2$) always land in the principal genus (`+` or `++`). When $h(D)$ is odd (e.g. $D = -71$, $h = 7$), every class is a square and all forms belong to a single genus."
+  },
+  sec6_factoring_sieve: {
+    space: "Difference-of-squares search space $x^2 - N = y^2$ over $x \\ge \\lceil\\sqrt{N}\\rceil$",
+    d3: [
+      ["#55ff99", "<b>10×10 candidate board:</b> Sunken dark tiles fail $x^2 - N \\in \\operatorname{QR}(q)$; raised bright-green tiles hit an exact integer square $y^2$, factoring $N = (x-y)(x+y)$."],
+      ["#ffb347", "<b>Upper ring:</b> Decimal period $\\operatorname{ord}_p(10) \\mid p-1$ of $1/p$."]
+    ],
+    d2: [
+      ["#41afeb", "<b>Survivor curve & bars:</b> Tracks surviving $x$ candidates out of $100$ after sequential quadratic-residue filters mod $3, 5, 7, 11, 13, 17$."]
+    ],
+    deep: "<b>Exponential Sieve Pruning:</b> Each odd prime modulus $q$ eliminates roughly $(q-1)/2q \\approx 50\\%$ of false $x$ candidates without a single trial division; $6$ primes leave only $\\sim (1/2)^6 \\approx 1.5\\%$ of the grid."
+  },
+  sec7_cyclotomic_17gon: {
+    space: "Complex plane $\\mathbb{C}$ ($\\operatorname{Re}$ horizontal, $\\operatorname{Im}$ vertical) + period elevation $z$",
+    d3: [
+      ["#ffd166", "<b>Unit circle ($z = 0$):</b> Roots of unity $\\zeta^k = e^{2\\pi i k/n} = \\cos(2\\pi k/n) + i\\sin(2\\pi k/n)$. Gold = primitive roots ($\\gcd(k,n)=1$); blue = non-primitive."],
+      ["#6bff95", "<b>Lifted chords & octahedra ($z \\ne 0$):</b> Colored polygons connect roots bundled into each Gaussian period $\\eta_j$; diamond markers sit at each period's complex centroid $\\frac{1}{|S_j|}\\sum \\zeta^k$."]
+    ],
+    d2: [
+      ["#7fd1ff", "<b>Left panel ($\\mathbb{C}$ plane):</b> Tip-to-tail complex vector addition $\\eta_j = \\sum_{k \\in S_j} \\zeta^k$ inside the unit circle."],
+      ["#ffd166", "<b>Right panel (Real axis):</b> Resolvent projections $\\operatorname{Re}(\\eta_j) = \\sum \\cos(2\\pi k/n)$ satisfying Gauss's nested quadratic equations."]
+    ],
+    deep: "<b>Why $\\mathbb{C}$ Unlocks the 17-Gon:</b> Ordering the $16$ primitive $17$-th roots by powers of $g = 3 \\pmod{17}$ and taking every $4$-th step yields the subgroup $\\{1, 4, 16, 13\\} \\pmod{17}$ ($1 \\xrightarrow{\\times 4} 4 \\xrightarrow{\\times 4} 16 \\xrightarrow{\\times 4} 13 \\xrightarrow{\\times 4} 1$). Because $16 \\equiv -1$ and $13 \\equiv -4$, complex conjugates pair up so $\\eta_0 = 2\\cos(2\\pi/17) + 2\\cos(8\\pi/17) \\in \\mathbb{R}$ lies purely on the real axis and solves a quadratic resolvent."
+  }
+};
+
+function getLiveLegendNote(mod) {
+  if (!mod || !mod.state) return '';
+  const st = mod.state;
+  if (mod.id === 'sec7_cyclotomic_17gon') {
+    const n = Number(st.n) || 17;
+    const per = Math.min(Number(st.per) || 4, n - 1);
+    const periods = st._periods || [];
+    const p0 = periods[0];
+    const loopStr = p0 ? `${p0.ks.join(' → ')} → ${p0.ks[0]}` : '';
+    const isReal = p0 && Math.abs(p0.cy) < 1e-6;
+    return `<b>Live $\\mathbb{C}$ Readout ($n=${n}$, period size $${per}$):</b> Partitioning $\\varphi(${n})=${st._phiN || n-1}$ primitive roots into $${periods.length}$ periods gives $\\eta_0 = \\sum_{k \\in \\{${p0 ? p0.ks.join(',') : ''}\\}} \\zeta^k$ (loop <code>${loopStr}</code>), evaluating to $\\eta_0 = ${p0 ? p0.cx.toFixed(4) : '0'}${p0 && !isReal ? (p0.cy >= 0 ? ' + ' : ' - ') + Math.abs(p0.cy).toFixed(4) + 'i' : ' \\in \\mathbb{R}$ (purely real!)'}$.`;
+  }
+  if (mod.id === 'sec5b_composition_genera') {
+    return `<b>Live Class Group Readout:</b> At $D = ${st.D}$, every cell $(i, j)$ in the 2D Cayley table computes exact Gauss form composition + reduction $F_i \\circ F_j$.`;
+  }
+  if (mod.id === 'sec4_quadratic_reciprocity') {
+    const p = Number(st.p), q = Number(st.q);
+    const flip = (p !== q) && (p % 4 === 3) && (q % 4 === 3);
+    return `<b>Live Reciprocity Check ($p=${p}, q=${q}$):</b> $${p} \\equiv ${p % 4} \\pmod 4$ and $${q} \\equiv ${q % 4} \\pmod 4$, so $\\left(\\frac{${p}}{${q}}\\right)$ and $\\left(\\frac{${q}}{${p}}\\right)$ <b>${p === q ? 'vanish (p=q)' : (flip ? 'have OPPOSITE signs (-1)' : 'are IDENTICAL (+1)')}</b>.`;
+  }
+  return '';
+}
+
+function renderStageLegend(modId) {
+  const body = document.getElementById('lgBody');
+  const data = SECTION_LEGENDS[modId];
+  if (!body || !data) return;
+  const renderList = (items) => items.map(([col, txt]) =>
+    `<div class="lg-item"><span class="sw" style="background:${col};"></span><span>${txt}</span></div>`
+  ).join('');
+  const liveNote = getLiveLegendNote(active);
+  body.innerHTML = `
+    <div class="lg-sec">
+      <div class="lg-lbl">Coordinate Space</div>
+      <div class="lg-item" style="margin-top:2px;"><span>${data.space}</span></div>
+    </div>
+    <div class="lg-sec">
+      <div class="lg-lbl">3D Scene</div>
+      ${renderList(data.d3)}
+    </div>
+    <div class="lg-sec">
+      <div class="lg-lbl">2D Analytical Chart</div>
+      ${renderList(data.d2)}
+    </div>
+    <div class="lg-sec">
+      <div class="lg-lbl">Mathematical Insight</div>
+      <div class="lg-note">${data.deep}</div>
+      ${liveNote ? `<div class="lg-live">${liveNote}</div>` : ''}
+    </div>
+  `;
+  renderTex(body, KATEX_OPTS);
+}
+const lgToggleBtn = document.getElementById('lgToggleBtn');
+const stageLegendEl = document.getElementById('stageLegend');
+if (lgToggleBtn && stageLegendEl) {
+  lgToggleBtn.addEventListener('click', () => {
+    const collapsed = stageLegendEl.classList.toggle('collapsed');
+    lgToggleBtn.textContent = collapsed ? 'Show' : 'Hide';
+  });
+}
+
+
+
 let active = null;
 const selectEl = document.getElementById('moduleSelect');
 const controlsEl = document.getElementById('controls');
@@ -2554,6 +2783,7 @@ function buildControls(mod) {
       input.addEventListener('input', () => {
         mod.state[c.id] = parseFloat(input.value);
         mod.update();
+        renderStageLegend(mod.id);
       });
     } else if (c.type === 'select') {
       input = document.createElement('select');
@@ -2567,6 +2797,7 @@ function buildControls(mod) {
       input.addEventListener('change', () => {
         mod.state[c.id] = input.value;
         mod.update();
+        renderStageLegend(mod.id);
       });
     } else if (c.type === 'check') {
       input = document.createElement('input');
@@ -2575,6 +2806,7 @@ function buildControls(mod) {
       input.addEventListener('change', () => {
         mod.state[c.id] = input.checked;
         mod.update();
+        renderStageLegend(mod.id);
       });
     }
     wrap.appendChild(input);
@@ -2793,6 +3025,7 @@ function loadModule(mod) {
   }
   mod.build();
   mod.update();
+  renderStageLegend(mod.id);
   lessonEl.innerHTML = mod.lesson;
   renderTex(lessonEl, KATEX_OPTS);
   buildControls(mod);
@@ -2862,20 +3095,32 @@ if (controlsContainer) {
 
 window.addEventListener('resize', resize);
 
-let last = performance.now();
-function animate(now) {
-  window.addEventListener('load', () => {
+window.addEventListener('load', () => {
   if (active) {
     renderTex(document.getElementById('hudEq'), KATEX_OPTS);
     renderTex(lessonEl, KATEX_OPTS);
     renderTex(quizEl, KATEX_OPTS);
+    renderStageLegend(active.id);
   }
 });
-requestAnimationFrame(animate);
+
+let last = performance.now();
+function animate(now) {
+  requestAnimationFrame(animate);
   const dt = Math.min((now - last) / 1000, 0.05);
   last = now;
   if (active && typeof active.tick === 'function') {
     try { active.tick(dt); } catch (e) { console.error('tick error:', e); active.tick = null; }
+  }
+  if (Math.abs(pendingZoomScale - 1.0) > 1e-4) {
+    const frameScale = Math.pow(pendingZoomScale, 0.25);
+    pendingZoomScale /= frameScale;
+    const offset = camera.position.clone().sub(controls.target);
+    const dist = offset.length();
+    const newDist = Math.max(controls.minDistance, Math.min(controls.maxDistance, dist * frameScale));
+    if (dist > 1e-6) {
+      camera.position.copy(controls.target).addScaledVector(offset, newDist / dist);
+    }
   }
   controls.update();
   renderer.render(scene, camera);
