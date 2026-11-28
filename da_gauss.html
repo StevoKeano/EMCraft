@@ -119,6 +119,7 @@
     box-sizing: border-box;
   }
 </style>
+  <meta name="app-version" content="2026.11.27.180429">
 </head>
 <body>
 <div id="app">
@@ -2422,6 +2423,77 @@ requestAnimationFrame(animate);
     } else if (e.key === 'Escape') {
       closeBox();
     }
+  });
+})();
+</script>
+<!-- Auto Version Check & Update Banner -->
+<style>
+  #appUpdateBanner {
+    position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%);
+    z-index: 10001; display: none; align-items: center; gap: 12px;
+    padding: 10px 16px; border-radius: 999px;
+    background: linear-gradient(135deg, #132842 0%, #1d3f6b 100%);
+    border: 1px solid #5ab0ff; color: #eef6ff;
+    font: 500 13px/1.2 system-ui, -apple-system, sans-serif;
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.6);
+  }
+  #appUpdateBanner button.upd-now {
+    background: #2b7de9; color: #fff; border: none; border-radius: 999px;
+    padding: 6px 14px; font: 600 12.5px/1 system-ui, sans-serif; cursor: pointer;
+  }
+  #appUpdateBanner button.upd-later {
+    background: none; border: none; color: #9bb6d6; font-size: 16px;
+    cursor: pointer; padding: 0 4px; line-height: 1;
+  }
+</style>
+<div id="appUpdateBanner" role="status">
+  <span>✦ A newer version of Gauss Lab is live.</span>
+  <button type="button" class="upd-now" id="updNowBtn">Update now</button>
+  <button type="button" class="upd-later" id="updLaterBtn" aria-label="Dismiss">×</button>
+</div>
+<script>
+(() => {
+  const meta = document.querySelector('meta[name="app-version"]');
+  if (!meta) return;
+  const CURRENT_VERSION = meta.content.trim();
+  const banner = document.getElementById('appUpdateBanner');
+  const nowBtn = document.getElementById('updNowBtn');
+  const laterBtn = document.getElementById('updLaterBtn');
+  let latestVersion = CURRENT_VERSION;
+  let dismissed = false;
+
+  function hardReloadToVersion(ver) {
+    const url = new URL(window.location.href);
+    url.searchParams.set('v', ver);
+    window.location.replace(url.toString());
+  }
+
+  nowBtn.addEventListener('click', () => hardReloadToVersion(latestVersion));
+  laterBtn.addEventListener('click', () => {
+    dismissed = true;
+    banner.style.display = 'none';
+  });
+
+  async function checkForUpdate() {
+    if (dismissed || window.location.protocol === 'file:') return;
+    try {
+      const checkUrl = `${window.location.pathname}?_chk=${Date.now()}`;
+      const resp = await fetch(checkUrl, { cache: 'no-store' });
+      if (!resp.ok) return;
+      const text = await resp.text();
+      const match = text.match(/<meta\s+name=["']app-version["']\s+content=["']([^"']+)["']/i);
+      if (match && match[1].trim() !== CURRENT_VERSION) {
+        latestVersion = match[1].trim();
+        banner.style.display = 'flex';
+      }
+    } catch (_) {
+      // Ignore offline/network blips
+    }
+  }
+
+  setInterval(checkForUpdate, 60000);
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') checkForUpdate();
   });
 })();
 </script>
